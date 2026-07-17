@@ -146,3 +146,14 @@ C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net10.0\dashboardapi.pdb
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net10.0\dashboardapi.genruntimeconfig.cache
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net10.0\ref\dashboardapi.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net10.0\dashboardapi.sourcelink.json
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\BCrypt-Net-Next.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.Bcl.Cryptography.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.IdentityModel.Abstractions.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.IdentityModel.JsonWebTokens.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.IdentityModel.Logging.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.IdentityModel.Tokens.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\System.IdentityModel.Tokens.Jwt.dll

@@ -1,4 +1,31 @@
-PRAGMA foreign_keys = ON;
+-- SQLite ayarlarını etkinleştirelim
+PRAGMA foreign_keys = OFF; -- Oluşturma esnasında FK çakışmalarını önlemek için geçici olarak kapatıyoruz
+
+-- VARSA ESKİ YAPILARI SİLELİM (Temiz başlangıç için)
+DROP VIEW IF EXISTS vw_evm;
+DROP VIEW IF EXISTS vw_pir;
+DROP VIEW IF EXISTS vw_risk;
+DROP VIEW IF EXISTS vw_dashboard;
+
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS management_decisions;
+DROP TABLE IF EXISTS evm_records;
+DROP TABLE IF EXISTS actions;
+DROP TABLE IF EXISTS issues;
+DROP TABLE IF EXISTS risks;
+DROP TABLE IF EXISTS milestones;
+DROP TABLE IF EXISTS pir_reports;
+DROP TABLE IF EXISTS project_users;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS customers;
+DROP TABLE IF EXISTS programs;
+DROP TABLE IF EXISTS users;
+
+PRAGMA foreign_keys = ON; -- Yabancı anahtarları tekrar etkinleştiriyoruz
+
+-- ==========================================
+-- 1. TABLOLARIN OLUŞTURULMASI (DDL)
+-- ==========================================
 
 CREATE TABLE users (
     user_id TEXT NOT NULL,
@@ -312,6 +339,10 @@ CREATE TABLE audit_logs (
     CONSTRAINT ck_audit_logs_action_type CHECK (action_type IN ('INSERT','UPDATE','DELETE'))
 );
 
+-- ==========================================
+-- 2. TETİKLEYİCİLERİN OLUŞTURULMASI (TRIGGERS)
+-- ==========================================
+
 CREATE TRIGGER trg_users_updated_at AFTER UPDATE ON users FOR EACH ROW WHEN NEW.updated_at <= OLD.updated_at
 BEGIN UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE user_id = OLD.user_id; END;
 
@@ -358,6 +389,10 @@ BEGIN
     UPDATE risks SET risk_score = NEW.risk_probability * NEW.risk_impact WHERE risk_id = NEW.risk_id;
 END;
 
+-- ==========================================
+-- 3. İNDEKSLERİN OLUŞTURULMASI (INDEXES)
+-- ==========================================
+
 CREATE INDEX idx_projects_program_id ON projects (program_id);
 CREATE INDEX idx_projects_customer_id ON projects (customer_id);
 CREATE INDEX idx_projects_project_manager_user_id ON projects (project_manager_user_id);
@@ -373,12 +408,16 @@ CREATE INDEX idx_risks_owner_due ON risks (risk_owner_user_id, risk_due_date) WH
 CREATE INDEX idx_issues_project_status_priority ON issues (project_id, issue_status, issue_priority);
 CREATE INDEX idx_issues_owner_due ON issues (issue_owner_user_id, issue_due_date) WHERE issue_status <> 'Kapalı';
 CREATE INDEX idx_actions_project_status_due ON actions (project_id, action_status, action_due_date);
-CREATE INDEX idx_actions_owner_due ON actions (action_owner_user_id, action_due_date) WHERE action_status <> 'Tamamlandı';
+CREATE INDEX INDEX_actions_owner_due ON actions (action_owner_user_id, action_due_date) WHERE action_status <> 'Tamamlandı';
 CREATE INDEX idx_evm_records_project_period_desc ON evm_records (project_id, period DESC);
 CREATE INDEX idx_management_decisions_project_status_due ON management_decisions (project_id, decision_status, decision_due_date);
 CREATE INDEX idx_audit_logs_entity ON audit_logs (entity_name, entity_id, changed_at DESC);
 CREATE INDEX idx_audit_logs_user_changed_at ON audit_logs (user_id, changed_at DESC);
 CREATE INDEX idx_audit_logs_changed_at ON audit_logs (changed_at); 
+
+-- ==========================================
+-- 4. GÖRÜNÜMLERİN OLUŞTURULMASI (VIEWS)
+-- ==========================================
 
 CREATE VIEW vw_dashboard AS
 SELECT
@@ -472,7 +511,109 @@ FROM evm_records e
 JOIN projects p ON p.project_id = e.project_id;
 
 
-INSERT INTO users (user_id, email, password_hash, full_name, user_role) 
-VALUES ('U-001', 'test@sirket.com', 'hash_sifre_buraya', 'Ahmet Yılmaz', 'Sistem Yöneticisi');
+-- ==========================================
+-- 5. DEMO VERİLERİNİN DOLDURULMASI (INSERTS)
+-- ==========================================
 
-SELECT * FROM users;
+-- A. KULLANICILAR (Şifreler 'Demo123!' olarak hashlenmiştir)
+INSERT INTO users (user_id, email, password_hash, full_name, user_role, user_status) VALUES 
+('USR-ADMIN', 'admin@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Sistem Yöneticisi', 'Sistem Yöneticisi', 'Aktif'),
+('USR-PM1', 'pm1@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Ahmet Yılmaz', 'Proje Yöneticisi', 'Aktif'),
+('USR-PM2', 'pm2@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Canan Kaya', 'Proje Yöneticisi', 'Aktif'),
+('USR-YONETIM', 'yonetim@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Bülent Koç', 'Üst Yönetim İzleyicisi', 'Aktif');
+
+-- B. PROGRAMLAR
+INSERT INTO programs (program_id, program_name, program_description, program_status) VALUES 
+('PRG-001', 'Güvenlik Sistemleri', 'Havalimanı, sınır kapısı ve askeri entegre sınır güvenlik sistemleri.', 'Aktif'),
+('PRG-002', 'Yazılım Ürünleri', 'Bulut tabanlı kurumsal ürünleştirme ve web/mobil uygulama projeleri.', 'Aktif'),
+('PRG-003', 'Savunma Teknolojileri', 'Sınır ötesi güvenlik, İHA/SİHA entegrasyonu ve radar savunma sistemleri.', 'Aktif');
+
+-- C. MÜŞTERİLER
+INSERT INTO customers (customer_id, customer_name, customer_type, customer_status) VALUES 
+('CST-001', 'Savunma Sanayii Başkanlığı', 'Kamu', 'Aktif'),
+('CST-002', 'ERİSİS Entegrasyon A.Ş.', 'Özel', 'Aktif'),
+('CST-003', 'İç Geliştirme Departmanı', 'İç Müşteri', 'Aktif');
+
+-- D. PROJELER
+INSERT INTO projects (
+    project_id, project_code, project_name, program_id, customer_id, project_manager_user_id, 
+    start_date, baseline_finish_date, forecast_finish_date, actual_finish_date, project_status, 
+    manual_health, planned_progress, actual_progress, bac, currency, reporting_frequency, 
+    confidentiality, project_description, is_active, created_by_user_id, updated_by_user_id
+) VALUES 
+('PRJ-001', 'PRJ-001', 'ÜBYES Entegre Güvenlik Sistemi', 'PRG-001', 'CST-001', 'USR-PM1', '2026-01-01', '2026-12-31', '2026-12-31', NULL, 'Devam Ediyor', 'Kırmızı', 50.00, 38.00, 250000.00, 'USD', 'Aylık', 'Gizli', 'Ülke genelindeki sınır kapılarının entegre yazılım alt yapısı.', 1, 'USR-ADMIN', 'USR-ADMIN'),
+('PRJ-002', 'PRJ-002', 'ERİSİS PSIM Ürünleştirme', 'PRG-002', 'CST-002', 'USR-PM2', '2026-03-01', '2026-09-30', '2026-10-15', NULL, 'Devam Ediyor', 'Sarı', 70.00, 62.00, 800000.00, 'TRY', 'Aylık', 'Normal', 'Farklı güvenlik kamera ve sensörlerini ortak çatı altında birleştiren yazılım.', 1, 'USR-ADMIN', 'USR-ADMIN'),
+('PRJ-003', 'PRJ-003', 'AKSİ FPV İHA Tespit Sistemi', 'PRG-003', 'CST-003', 'USR-PM1', '2026-02-15', '2027-02-15', '2027-02-15', NULL, 'Devam Ediyor', 'Yeşil', 40.00, 42.00, 450000.00, 'EUR', 'Aylık', 'Özel', 'Düşman mini kamikaze İHA''larını ses ve görüntüyle algılayan radar projesi.', 1, 'USR-ADMIN', 'USR-ADMIN');
+
+-- E. PROJE KULLANICILARI (Project Assignments)
+INSERT INTO project_users (project_user_id, project_id, user_id, assigned_by_user_id, assignment_status) VALUES 
+('PU-001', 'PRJ-001', 'USR-PM1', 'USR-ADMIN', 'Aktif'),
+('PU-002', 'PRJ-001', 'USR-YONETIM', 'USR-ADMIN', 'Aktif'),
+('PU-003', 'PRJ-002', 'USR-PM2', 'USR-ADMIN', 'Aktif'),
+('PU-004', 'PRJ-003', 'USR-PM1', 'USR-ADMIN', 'Aktif');
+
+-- F. PIR STATUS RAPORLARI
+INSERT INTO pir_reports (
+    pir_report_id, project_id, period, report_date, executive_summary, completed_work, 
+    delays, next_period_plan, management_expectations, manual_health, report_status, 
+    published_by_user_id, published_at, created_by_user_id, updated_by_user_id
+) VALUES 
+('PIR-01', 'PRJ-001', '2026-06', '2026-06-30', 'Kritik sunucu donanımlarının gümrükte kalması nedeniyle gecikmeler yaşanmaktadır.', 'Sunucu mimari çizimleri tamamlandı, DB taslakları onaylandı.', 'Gümrük işlemleri ve gümrük vergisi muafiyeti belgesi gecikmiştir.', 'Alternatif yerli donanım testlerinin yapılması ve veri merkezinin hazırlanması.', 'Gümrük evrakları için bakanlık nezdinde acil destek talep edilmektedir.', 'Kırmızı', 'Yayımlandı', 'USR-YONETIM', '2026-07-01 14:00:00', 'USR-PM1', 'USR-PM1'),
+('PIR-02', 'PRJ-002', '2026-06', '2026-06-30', 'Genel olarak planlanan takvime uygun gidilmektedir, tasarım ekibi ek destek vermektedir.', 'Web arayüz kodlamaları tamamlandı, API entegrasyonu başladı.', 'Mobil tasarım tarafında 1 haftalık bir gecikme gözlemlendi.', 'Mobil API''ların bağlanması ve ilk beta sürümün müşteriye sunulması.', 'Önemli bir üst yönetim kararı bulunmamaktadır.', 'Sarı', 'Yayımlandı', 'USR-YONETIM', '2026-07-01 15:30:00', 'USR-PM2', 'USR-PM2');
+
+-- G. KİLOMETRE TAŞLARI (Milestones)
+INSERT INTO milestones (
+    milestone_id, project_id, milestone_name, planned_date, forecast_date, actual_date, 
+    milestone_status, critical, milestone_owner_user_id, acceptance_criteria, milestone_description, 
+    created_by_user_id, updated_by_user_id
+) VALUES 
+('MS-101', 'PRJ-001', 'Kritik Tasarım Onayı (CDR)', '2026-04-15', '2026-04-15', '2026-04-15', 'Tamamlandı', 1, 'USR-PM1', 'Tüm paydaşların imzaladığı CDR belgesi.', 'Yazılım ve donanım mimari tasarımı.', 'USR-ADMIN', 'USR-ADMIN'),
+('MS-102', 'PRJ-001', 'Fabrika Kabul Testleri (FAT)', '2026-08-01', '2026-08-15', NULL, 'Devam Ediyor', 1, 'USR-PM1', 'Test senaryolarının %98 başarı oranıyla geçilmesi.', 'Donanım entegrasyonlarının laboratuvarda test edilmesi.', 'USR-ADMIN', 'USR-ADMIN'),
+('MS-201', 'PRJ-002', 'Veritabanı Tasarım Kilidi', '2026-04-01', '2026-04-05', '2026-04-05', 'Tamamlandı', 0, 'USR-PM2', 'SQLite şemasının test sunucusunda kilitlenmesi.', 'EF Core şema eşleme ve migration süreci.', 'USR-ADMIN', 'USR-ADMIN');
+
+-- H. RİSKLER (Tetikleyiciler risk_score''u otomatik hesaplayacak)
+INSERT INTO risks (
+    risk_id, project_id, risk_title, risk_category, risk_probability, risk_impact, 
+    risk_owner_user_id, risk_mitigation, risk_due_date, risk_status, opened_date, 
+    closed_date, created_by_user_id, updated_by_user_id
+) VALUES 
+('RSK-001', 'PRJ-001', 'Gümrük Sürecinde Ekipman Gecikmesi', 'Tedarik', 4, 5, 'USR-PM1', 'Yerli yedek tedarikçilerle geçici kiralama görüşmesi yapılması.', '2026-08-30', 'Açık', '2026-02-10', NULL, 'USR-PM1', 'USR-PM1'),
+('RSK-002', 'PRJ-002', 'Kilit Personelin Ayrılma Riski', 'İnsan Kaynakları', 3, 4, 'USR-PM2', 'Bilgi transferi (handover) toplantıları ve ikame personel planlaması.', '2026-09-01', 'İzleniyor', '2026-03-15', NULL, 'USR-PM2', 'USR-PM2');
+
+-- I. SORUNLAR (Issues)
+INSERT INTO issues (
+    issue_id, project_id, issue_title, issue_priority, issue_owner_user_id, issue_due_date, 
+    issue_status, issue_impact, root_cause, issue_resolution, opened_date, closed_date, 
+    created_by_user_id, updated_by_user_id
+) VALUES 
+('ISS-001', 'PRJ-001', 'Geliştirme Sunucusunun Yanması', 'Kritik', 'USR-PM1', '2026-07-20', 'Açık', 'Kritik', 'Veri merkezindeki aşırı voltaj dalgalanması.', NULL, '2026-07-15', NULL, 'USR-PM1', 'USR-PM1'),
+('ISS-002', 'PRJ-002', 'Mobil Harita API Lisans Uyuşmazlığı', 'Orta', 'USR-PM2', '2026-05-30', 'Kapalı', 'Orta', 'Lisans sözleşmesindeki yanlış kullanım kapsamı seçimi.', 'Açık kaynaklı alternatif Leaflet.js kütüphanesine geçildi.', '2026-05-10', '2026-05-28', 'USR-PM2', 'USR-PM2');
+
+-- J. AKSİYONLAR (Actions)
+INSERT INTO actions (
+    action_id, project_id, action_description, source_type, source_reference, 
+    action_owner_user_id, action_due_date, action_status, action_progress, 
+    action_priority, completed_date, created_by_user_id, updated_by_user_id
+) VALUES 
+('ACT-101', 'PRJ-001', 'Bakanlığa vergi muafiyet yazısının yazılması ve elden takip edilmesi.', 'PIR', 'PIR-01', 'USR-PM1', '2026-07-10', 'Devam Ediyor', 40.00, 'Yüksek', NULL, 'USR-PM1', 'USR-PM1'),
+('ACT-201', 'PRJ-002', 'Leaflet mobil kütüphane testlerinin yapılması.', 'Sorun', 'ISS-002', 'USR-PM2', '2026-05-25', 'Tamamlandı', 100.00, 'Orta', '2026-05-24', 'USR-PM2', 'USR-PM2');
+
+-- K. KAZANILMIŞ DEĞER ANALİZİ (EVM Records)
+INSERT INTO evm_records (
+    evm_record_id, project_id, period, bac, pv, ev, ac, sv, cv, spi, cpi, eac, vac, 
+    created_by_user_id, updated_by_user_id
+) VALUES 
+('EVM-001', 'PRJ-001', '2026-06', 250000.00, 125000.00, 95000.00, 110000.00, -30000.00, -15000.00, 0.7600, 0.8636, 289489.00, -39489.00, 'USR-ADMIN', 'USR-ADMIN'),
+('EVM-002', 'PRJ-002', '2026-06', 800000.00, 560000.00, 496000.00, 510000.00, -64000.00, -14000.00, 0.8857, 0.9725, 822622.00, -22622.00, 'USR-ADMIN', 'USR-ADMIN');
+
+-- L. YÖNETİM KARARLARI (Management Decisions)
+INSERT INTO management_decisions (
+    management_decision_id, project_id, decision_title, decision, decision_owner_user_id, 
+    decision_due_date, decision_status, decision_impact, if_delayed, recommendation, 
+    decision_date, created_by_user_id, updated_by_user_id
+) VALUES 
+('DEC-001', 'PRJ-001', 'Yedek Geliştirme Sunucusunun Alınması', 'Bulut tabanlı bir yedekleme ve geliştirme ortamının acilen kiralanması.', 'USR-PM1', '2026-07-22', 'Uygulanıyor', 'Yüksek', 'Geliştiricilerin 1 hafta boyunca boşta kalması ve teslimatın 2 hafta sarkması.', 'AWS veya Azure üzerinden anında ortam kiralanmalıdır.', '2026-07-16', 'USR-YONETIM', 'USR-YONETIM');
+
+-- M. DENETİM LOGLARI (Audit Logs)
+INSERT INTO audit_logs (audit_log_id, user_id, entity_name, entity_id, action_type, old_values, new_values, changed_at, ip_address) VALUES 
+('LOG-001', 'USR-ADMIN', 'users', 'USR-PM1', 'INSERT', NULL, '{"user_id":"USR-PM1","email":"pm1@pir.local","full_name":"Ahmet Yılmaz"}', '2026-07-17 10:00:00', '127.0.0.1');
