@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using dashboardapi.Data;
 using dashboardapi.Endpoints; // Artık bu klasörü kullanıyoruz!
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +51,21 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    // "LoginLimiter" adında bir politika oluşturuyoruz
+    options.AddFixedWindowLimiter(policyName: "LoginLimiter", fixedWindowOptions =>
+    {
+        fixedWindowOptions.PermitLimit = 5; // 1 dakika içinde en fazla 5 isteğe izin ver
+        fixedWindowOptions.Window = TimeSpan.FromMinutes(1); // Zaman penceresi: 1 dakika
+        fixedWindowOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        fixedWindowOptions.QueueLimit = 0; // Sınır aşılırsa istekleri kuyruğa alma, direkt reddet
+    });
+
+    // Sınırı aşan kullanıcılara döneceğimiz hata kodunu ayarlıyoruz
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests; 
+});
+
 // 5. Yetkilendirme (Authorization) Servisi
 builder.Services.AddAuthorization();
 
@@ -70,6 +87,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 
 // --- API ENDPOINT'LERİ (GİRİŞ NOKTALARI) ---
 app.MapAuthEndpoints();
