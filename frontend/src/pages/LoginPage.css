@@ -1,0 +1,164 @@
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(320px, 360px) 1fr;
+  gap: 24px;
+  background: rgb(226, 225, 225);
+}
+
+.login-sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 40px 32px;
+  overflow: hidden;
+  border-radius: 0 32px 32px 0;
+  background-image: url('../login.jpg');
+  background-size: cover;
+  background-position: center;
+  color: #ffffff;
+}
+
+.login-sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 56, 104, 0.85);
+  mix-blend-mode: multiply;
+}
+
+.login-sidebar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(14, 56, 104, 0.95) 100%);
+}
+
+.login-sidebar-content,
+.login-sidebar-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.login-sidebar-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.16);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.login-sidebar-logo .material-symbols-outlined {
+    width: 200px;
+    height: 200px;
+    margin: 200px auto 0;
+    background-position: top center; 
+    background-size: contain;
+    background-image: url('../htr_logo.jpg');
+
+}
+
+.login-sidebar-content h1 {
+  margin: 24px 0 8px;
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.login-sidebar-content p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.login-sidebar-footer p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+}
+
+.login-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(520px, 100%);
+  padding: 36px;
+  border-radius: 28px;
+  background: var(--sidebar-bg);
+  border: 1px solid rgba(255, 255, 255, 0.432);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 28px;
+}
+
+.login-intro {
+  margin: 0;
+  color: white;
+  font-size: 2rem;
+}
+
+.login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 8px;
+  color: white;
+  font-weight: 500;
+}
+
+.login-form input {
+  width: 90%;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.login-form input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(133, 185, 255, 0.16);
+}
+
+.login-button {
+  display: block;
+  width: 50%;
+  margin: 0 auto;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 14px;
+  background: rgb(30, 113, 168);
+  color: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, filter 0.2s;
+}
+
+.login-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+@media (max-width: 960px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .login-sidebar {
+    min-height: 280px;
+    border-radius: 0 0 28px 28px;
+  }
+}

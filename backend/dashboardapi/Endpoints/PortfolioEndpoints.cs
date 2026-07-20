@@ -1,0 +1,87 @@
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
+using dashboardapi.Data;
+using dashboardapi.DTOs;
+using dashboardapi.Models; // Customer için
+// Program için dashboardapi.Models.Program kullanacağız!
+
+namespace dashboardapi.Endpoints;
+
+public static class PortfolioEndpoints
+{
+    public static void MapPortfolioEndpoints(this IEndpointRouteBuilder app)
+    {
+        // ==========================================
+        // 1. MÜŞTERİ (CUSTOMER) UÇ NOKTALARI
+        // ==========================================
+        
+        app.MapGet("customers", async (AppDbContext db) =>
+        {
+            var customers = await db.Set<Customer>().ToListAsync();
+            var result = customers.Select(c => new CustomerDto(
+                c.CustomerId, c.CustomerName, c.CustomerType, c.CustomerStatus
+            )).ToList();
+
+            return Results.Ok(result);
+        });
+
+        app.MapPost("customers", async (CreateCustomerRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
+            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+                return Results.Json(new { message = "Müşteri ekleme yetkiniz yok!" }, statusCode: 403);
+
+            var newCustomer = new Customer
+            {
+                CustomerId = Guid.NewGuid().ToString(),
+                CustomerName = request.CustomerName,
+                CustomerType = request.CustomerType,
+                CustomerStatus = request.CustomerStatus,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            db.Set<Customer>().Add(newCustomer);
+            await db.SaveChangesAsync();
+
+            return Results.Json(new { message = "Müşteri başarıyla eklendi.", customerId = newCustomer.CustomerId }, statusCode: 201);
+        });
+
+        // ==========================================
+        // 2. PROGRAM (PORTFÖY) UÇ NOKTALARI
+        // ==========================================
+
+        app.MapGet("programs", async (AppDbContext db) =>
+        {
+            // DİKKAT: dashboardapi.Models.Program ile uygulamanın kendi Program.cs çakışmasını önlüyoruz
+            var programs = await db.Set<dashboardapi.Models.Program>().ToListAsync();
+            var result = programs.Select(p => new ProgramDto(
+                p.ProgramId, p.ProgramName, p.ProgramDescription, p.ProgramStatus
+            )).ToList();
+
+            return Results.Ok(result);
+        });
+
+        app.MapPost("programs", async (CreateProgramRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
+            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+                return Results.Json(new { message = "Program/Portföy ekleme yetkiniz yok!" }, statusCode: 403);
+
+            var newProgram = new dashboardapi.Models.Program
+            {
+                ProgramId = Guid.NewGuid().ToString(),
+                ProgramName = request.ProgramName,
+                ProgramDescription = request.ProgramDescription,
+                ProgramStatus = request.ProgramStatus,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            db.Set<dashboardapi.Models.Program>().Add(newProgram);
+            await db.SaveChangesAsync();
+
+            return Results.Json(new { message = "Program başarıyla oluşturuldu.", programId = newProgram.ProgramId }, statusCode: 201);
+        });
+    }
+}

@@ -57,6 +57,8 @@ var app = builder.Build();
 // 6. CORS Aktifleştirme (Giriş noktalarından ÖNCE olmalıdır)
 app.UseCors("AllowReactApp");
 
+app.UseCors("ReactPolicy");
+
 // 7. Kimlik Doğrulama ve Yetkilendirme Middleware'leri (CORS'tan sonra, Endpoint'lerden önce olmalı!)
 app.UseAuthentication();
 app.UseAuthorization();
@@ -75,4 +77,11 @@ app.MapUserEndpoints();
 app.MapProjectEndpoints();
 app.MapDashboardEndpoints();
 app.MapRiskEndpoints();
+app.MapIssueEndpoints();
+app.MapActionEndpoints();
+app.MapMilestoneEndpoints();
+app.MapPortfolioEndpoints();
+app.MapGovernanceEndpoints();
+app.MapSystemEndpoints();
+
 app.Run();
