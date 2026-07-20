@@ -10,7 +10,7 @@
   --accent-bg: rgb(27, 106, 209);
   --accent-border: rgba(44, 162, 170, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
---shadow: rgba(0, 0, 0, 0.05) 0 8px 12px -6px,
+  --shadow: rgba(0, 0, 0, 0.05) 0 8px 12px -6px,
             rgba(0, 0, 0, 0.03) 0 4px 6px -2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;

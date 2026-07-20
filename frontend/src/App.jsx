@@ -31,13 +31,15 @@ const pageInfo = {
 // 🛡️ KORUMALI ŞABLON (LAYOUT): Sadece giriş yapanların görebileceği Dashboard iskeleti
 const ProtectedLayout = () => {
   const token = localStorage.getItem('token')
+
+
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Token yoksa zorla Login'e gönder
-  if (!token) {
+  // login disable
+  /*if (!token) {
     return <Navigate to="/login" replace />
-  }
+  }*/
 
   const handleLogout = () => {
     localStorage.removeItem('token')

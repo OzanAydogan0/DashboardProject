@@ -45,28 +45,94 @@
 
 .dashboard-card p {
   margin: 0;
+  font-size: 0.95rem;
   color: var(--text);
 }
 
-.projects-search {
+.projects-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
   margin-top: 20px;
+  padding: 16px;
+  border-radius: 18px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
 }
 
-.projects-search input {
+.filter-item {
+  display: grid;
+  gap: 8px;
+  min-width: 160px;
+  flex: 1 1 180px;
+}
+
+.filter-item label {
+  font-size: 0.85rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.filter-item input,
+.filter-item select {
   width: 100%;
-  max-width: 480px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: #f8fafc;
-  color: var(--text);
+  background: white;
+  color: black;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.projects-search input:focus {
+.filter-item input:focus,
+.filter-item select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px rgba(133, 185, 255, 0.16);
+}
+
+.projects-filter-actions {
+  display: flex;
+  gap: 12px;
+  flex: 1 1 220px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.filter-button,
+.reset-button {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.filter-button {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.reset-button {
+  background: rgba(14, 56, 104, 0.08);
+  color: var(--text);
+}
+
+@media (max-width: 960px) {
+  .projects-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-item,
+  .projects-filter-actions {
+    flex: 1 1 100%;
+  }
+
+  .projects-filter-actions {
+    justify-content: flex-start;
+  }
 }
 
 .dashboard-card table {
@@ -76,12 +142,20 @@
   margin-top: 20px;
 }
 
-.dashboard-card th,
+.dashboard-card th
+{
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+
 .dashboard-card td {
   border: 1px solid var(--border);
   padding: 12px 16px;
   text-align: left;
   white-space: nowrap;
+  color: black;
 }
 
 .dashboard-card th {

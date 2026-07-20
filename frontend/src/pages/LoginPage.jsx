@@ -5,6 +5,7 @@ import './LoginPage.css'
 function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false) // Şifre görünürlüğü için yeni state
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
@@ -29,11 +30,7 @@ function LoginPage() {
       }
 
       const data = await response.json()
-      
-      // Token'ı kaydet
       localStorage.setItem("token", data.token)
-      
-      // Ana sayfaya yönlendir
       navigate("/") 
 
     } catch (error) {
@@ -77,17 +74,33 @@ function LoginPage() {
                 disabled={isLoading}
               />
             </label>
+            
             <label>
               <span>Şifre</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Şifre"
-                required
-                disabled={isLoading}
-              />
+              {/* input ve butonu bir arada tutan CSS sınıfı */}
+              <div className="password-field">
+                <input
+                  type={showPassword ? "text" : "password"} // State true ise text, false ise password
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Şifre"
+                  required
+                  disabled={isLoading}
+                />
+                <button
+                  type="button" // Formu göndermemesi için tipi kesinlikle 'button' olmalı
+                  className="toggle-password"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
+                >
+                  {/* Duruma göre değişen göz ikonu */}
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px', verticalAlign: 'middle' }}>
+                    {showPassword ? "Gizle" : "Göster"}
+                  </span>
+                </button>
+              </div>
             </label>
+
             <button type="submit" className="login-button" disabled={isLoading}>
               {isLoading ? "Giriş Yapılıyor..." : "Giriş Yap"}
             </button>
