@@ -30,3 +30,8 @@ public record CreateRiskRequest(
     DateTime RiskDueDate,
     string RiskStatus
 );
+
+public record UpdateRiskRequest(
+    string? RiskTitle, string? RiskCategory, int? RiskProbability, 
+    int? RiskImpact, string? RiskStatus, string? RiskMitigation, DateTime? RiskDueDate
+);

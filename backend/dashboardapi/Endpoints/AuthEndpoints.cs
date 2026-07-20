@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
+using BCrypt.Net; // BCrypt kütüphanesini ekledik
 
 namespace dashboardapi.Endpoints;
 
@@ -20,8 +21,8 @@ public static class AuthEndpoints
             // Veritabanından kullanıcıyı e-posta ile buluyoruz
             var user = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
             
-            // Basit şifre kontrolü (Şifrelerin düz metin olarak karşılaştırıldığını varsayıyoruz, BCrypt varsa hash'leyip kontrol edebilirsin)
-            if (user == null || user.PasswordHash != request.Password)
+            // 🛡️ BCrypt ile Şifre Doğrulama (Düz metin yerine hash kontrolü yapıyoruz)
+            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 return Results.Json(new { message = "E-posta veya şifre hatalı!" }, statusCode: 401);
 
             if (user.UserStatus != "Aktif")
@@ -53,7 +54,7 @@ public static class AuthEndpoints
             var tokenString = tokenHandler.WriteToken(token);
 
             return Results.Ok(new LoginResponse(tokenString, user.UserId, user.FullName, user.UserRole));
-        });
+        }).RequireRateLimiting("LoginLimiter"); // 🛡️ Hız sınırını bu endpoint'e bağladık!
 
         // GET /auth/me
         group.MapGet("me", async (ClaimsPrincipal userClaims, AppDbContext db) =>
@@ -68,5 +69,11 @@ public static class AuthEndpoints
 
             return Results.Ok(new MeResponse(user.UserId, user.Email, user.FullName, user.UserRole, user.UserStatus));
         }).RequireAuthorization(); // JWT koruması ekledik
+
+        group.MapGet("generate-hash", (string password) =>
+        {
+            var hash = BCrypt.Net.BCrypt.HashPassword(password);
+            return Results.Ok(new { PlainText = password, BcryptHash = hash });
+        });
     }
 }
