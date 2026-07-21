@@ -44,5 +44,59 @@ export const projectService = {
       responseType: 'blob',
     });
     return response.data;
+  },
+
+  // ---------------------------------------------------------
+  // TEK PROJE DETAYI: ALT SEKME VERİLERİ (GET & POST)
+  // ---------------------------------------------------------
+
+  // PİR Dönemleri (Raporlar)
+  getProjectReports: async (projectId) => {
+    const response = await api.get(`/projects/${projectId}/reports`);
+    return response.data;
+  },
+  createProjectReport: async (projectId, reportData) => {
+    const response = await api.post(`/projects/${projectId}/reports`, reportData);
+    return response.data;
+  },
+
+  // Kilometre Taşları (Milestones)
+  getProjectMilestones: async (projectId) => {
+    const response = await api.get(`/projects/${projectId}/milestones`);
+    return response.data;
+  },
+  createProjectMilestone: async (projectId, milestoneData) => {
+    const response = await api.post(`/projects/${projectId}/milestones`, milestoneData);
+    return response.data;
+  },
+
+  // Riskler (Risks)
+  getProjectRisks: async (projectId) => {
+    const response = await api.get(`/projects/${projectId}/risks`);
+    return response.data;
+  },
+  createProjectRisk: async (projectId, riskData) => {
+    const response = await api.post(`/projects/${projectId}/risks`, riskData);
+    return response.data;
+  },
+
+  // Sorunlar (Issues)
+  getProjectIssues: async (projectId) => {
+    const response = await api.get(`/projects/${projectId}/issues`);
+    return response.data;
+  },
+  createProjectIssue: async (projectId, issueData) => {
+    const response = await api.post(`/projects/${projectId}/issues`, issueData);
+    return response.data;
+  },
+
+  // Aksiyonlar (Actions)
+  getProjectActions: async (projectId) => {
+    const response = await api.get(`/projects/${projectId}/actions`);
+    return response.data;
+  },
+  createProjectAction: async (projectId, actionData) => {
+    const response = await api.post(`/projects/${projectId}/actions`, actionData);
+    return response.data;
   }
 };

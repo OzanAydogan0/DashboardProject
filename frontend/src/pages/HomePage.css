@@ -76,15 +76,6 @@
   cursor: pointer;
 }
 
-.user-avatar img {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
 /* 🔍 FİLTRE ÇUBUĞU */
 .dashboard-filter-bar {
   display: flex;

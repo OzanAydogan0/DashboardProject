@@ -164,4 +164,14 @@
 
 .dashboard-card {
   overflow-x: auto;
+
+  .clickable-row {
+  cursor: pointer; /* İmleci el (click) işaretine çevirir */
+  transition: background-color 0.2s ease; /* Renk geçişini yumuşatır */
+}
+
+/* Mouse ile satırın üzerine gelindiğinde arka plan rengini hafifçe değiştirir */
+.clickable-row:hover {
+  background-color: #f1f5f9; /* Hafif gri/mavi bir arkaplan rengi (isteğinize göre değiştirebilirsiniz) */
+}
 }

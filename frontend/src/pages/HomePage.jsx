@@ -158,20 +158,8 @@ function HomePage() {
       {/* 🔴 ÜST BAŞLIK VE SEKME ALANI */}
       <div className="top-header-bar">
         <div className="header-title-tabs">
-          <h1>PİR - Proje İlerleme Raporu</h1>
           <div className="header-tabs">
-            <button
-              className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-              onClick={() => setActiveTab('overview')}
-            >
-              Genel Bakış
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-              onClick={() => setActiveTab('analytics')}
-            >
-              Analizler
-            </button>
+
           </div>
         </div>
 
@@ -179,9 +167,6 @@ function HomePage() {
           <button className="icon-btn" title="Yenile" onClick={handleRefetch}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
           </button>
-          <div className="user-avatar" title="Kullanıcı Profil">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80" alt="Profile" />
-          </div>
         </div>
       </div>
 
@@ -245,7 +230,7 @@ function HomePage() {
 
         <div className="kpi-card">
           <div className="kpi-info">
-            <span className="kpi-title">Kırmızı Proje</span>
+            <span className="kpi-title">Riskli Proje</span>
             <span className="kpi-value text-red">{loading ? '...' : kpis.redProjects}</span>
           </div>
           <div className="kpi-icon red">
