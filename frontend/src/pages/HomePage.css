@@ -1,45 +1,102 @@
 .page-content {
-  display: grid;
-  gap: 24px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px); /* 48px yerine 64px yaptık (Gerekirse 70px de yapabilirsiniz) */
+  gap: 8px;                    /* Satırlar arası dikey boşluğu daralttık */
+  padding-bottom: 4px;         /* Alt border'ların kesilmemesi için güvenlik payı */
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-.dashboard-header {
+/* 🟢 1. SATIR: 5 Adet Küçük Kare Kart */
+.top-grid {
+  display: flex;               /* 🟢 Grid yerine Flex kullandık */
+  justify-content: center;     /* 🟢 Kartları yatay eksende tam ortaya hizalar */
+  flex-wrap: wrap;             /* Ekran küçülürse kartların alt satıra geçmesine izin verir */
+  gap: 54px;                   /* Yan yana duran küçük kartların kendi aralarındaki boşluk */
+  flex: 0 0 auto;
+  margin-bottom: -1000px;
+}
+
+.small-card {
   background: #ffffff;
-  padding: 24px 28px;
-  border-radius: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
   box-shadow: var(--shadow);
+  
+  width: 200px;
+  height: 140px; /* 🟢 Sabit yükseklik vererek dikeyde kısalttık (Örn: 70px - 90px yapabilirsiniz) */
+  /* NOT: 'aspect-ratio: 20 / 15;' satırını sildik veya devre dışı bıraktık */
+
+  padding: 8px 12px; /* 🟢 Dikey iç boşluğu 10px'den 8px'e indirdik */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  cursor: pointer;
 }
 
-.dashboard-header h1 {
-  margin: 0 0 12px;
+/* Masaüstü Hover Etkileşimi */
+.small-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.small-card h3 {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
   color: var(--text);
+  opacity: 0.85;
 }
 
-.dashboard-header p {
+.small-card .stat-number {
   margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
   color: var(--text);
 }
 
-.dashboard-grid {
+/* 🔵 🟣 2. VE 3. SATIRLAR: Esnek Yükseklikteki Orta Kartlar */
+.medium-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Min genişliği 360px'den 300px'e çektik */
+  gap: 16px; /* Satır/Sütun arası boşluğu 24px'den 16px'e düşürdük */
+  flex: 1;
+  min-height: 0;
 }
 
 .dashboard-card {
-  padding: 24px;
-  border-radius: 24px;
+  padding: 12px 16px;          /* 16px 20px olan boşluğu 12px 16px'e indirdik */
+  border-radius: 16px;
   background: #ffffff;
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;     /* Border ve padding yüksekliğe dahil edilir */
+  overflow: auto;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
 .dashboard-card h2 {
-  margin: 0 0 12px;
+  margin: 0 0 6px;
+  font-size: 1.05rem; /* Başlık punto boyutunu biraz küçülttük */
   color: var(--text);
 }
 
 .dashboard-card p {
   margin: 0;
+  font-size: 0.88rem; /* Açıklama metnini küçülttük */
   color: var(--text);
 }
