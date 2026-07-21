@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\ozan.aydogan\\Desktop\\DashboardProject\\backend\\dashboardapi\\dashboardapi.csproj": {}
+    "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj": {}
   },
   "projects": {
-    "C:\\Users\\ozan.aydogan\\Desktop\\DashboardProject\\backend\\dashboardapi\\dashboardapi.csproj": {
+    "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ozan.aydogan\\Desktop\\DashboardProject\\backend\\dashboardapi\\dashboardapi.csproj",
+        "projectUniqueName": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",
         "projectName": "dashboardapi",
-        "projectPath": "C:\\Users\\ozan.aydogan\\Desktop\\DashboardProject\\backend\\dashboardapi\\dashboardapi.csproj",
-        "packagesPath": "C:\\Users\\ozan.aydogan\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ozan.aydogan\\Desktop\\DashboardProject\\backend\\dashboardapi\\obj\\",
+        "projectPath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",
+        "packagesPath": "C:\\Users\\adnan.goksu\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\ozan.aydogan\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "C:\\Users\\adnan.goksu\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"
@@ -50,6 +50,10 @@
               "target": "Package",
               "version": "[4.2.0, )"
             },
+            "EPPlus": {
+              "target": "Package",
+              "version": "[8.6.1, )"
+            },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
               "target": "Package",
               "version": "[10.0.10, )"
@@ -73,6 +77,10 @@
               "suppressParent": "All",
               "target": "Package",
               "version": "[10.0.10, )"
+            },
+            "QuestPDF": {
+              "target": "Package",
+              "version": "[2026.7.1, )"
             }
           },
           "imports": [

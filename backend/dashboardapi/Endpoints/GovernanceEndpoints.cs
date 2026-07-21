@@ -23,9 +23,9 @@ public static class GovernanceEndpoints
             // Sadece Yönetici/Üst Yönetim veya projeye dahil olanlar görebilir
             if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
             {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == id && 
+                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == id &&
                     (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-                
+
                 if (!hasAccess) return Results.Json(new { message = "Yetkiniz yok!" }, statusCode: 403);
             }
 
@@ -126,5 +126,73 @@ public static class GovernanceEndpoints
 
             return Results.Json(new { message = "PIR Raporu oluşturuldu.", pirId = newPir.PirReportId }, statusCode: 201);
         });
+
+        // 5. PIR Raporunu PDF olarak dışa aktarma
+        app.MapGet("pirs/{id}/export/pdf", async (string id, AppDbContext db) =>
+{
+    // 1. PIR Raporunu View üzerinden çek
+    var reportData = await db.Set<VwPir>().FirstOrDefaultAsync(p => p.PirReportId == id);
+    if (reportData == null) 
+        return Results.NotFound(new { message = "Rapor bulunamadı." });
+
+    // 2. İlişkili Proje verilerini (Bütçe ve İlerleme) çek
+    var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == reportData.ProjectId);
+
+    // 3. Varsa logo dosyasını oku (Örn: wwwroot/images/logo.png içinden)
+    byte[]? logoBytes = null;
+    string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "logo.png");
+    if (File.Exists(logoPath))
+    {
+        logoBytes = await File.ReadAllBytesAsync(logoPath);
+    }
+
+    // 4. PDF Veri Paketini Hazırla
+    var pdfData = new Services.PirPdfData(
+        Report: reportData,
+        Bac: project?.Bac ?? 0,
+        PlannedProgress: project?.PlannedProgress ?? 0,
+        ActualProgress: project?.ActualProgress ?? 0,
+        Cpi: 1.00m, // Varsa EVM tablosundan anlık değer çekilebilir
+        Spi: 1.00m,
+        Currency: project?.Currency ?? "TRY",
+        LogoBytes: logoBytes
+    );
+
+    // 5. PDF'i Üret ve Fırlat
+    byte[] pdfBytes = Services.PirPdfGenerator.Generate(pdfData);
+    string fileName = $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.pdf";
+
+    return Results.File(pdfBytes, "application/pdf", fileName);
+});
+
+// 6. PIR Raporunu Excel olarak dışa aktarma
+        app.MapGet("pirs/{id}/export/excel", async (string id, AppDbContext db) =>
+{
+    var reportData = await db.Set<VwPir>().FirstOrDefaultAsync(p => p.PirReportId == id);
+    if (reportData == null) 
+        return Results.NotFound(new { message = "Rapor bulunamadı." });
+
+    var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == reportData.ProjectId);
+
+    // Aynı veri yapısını kullanıyoruz
+    var excelData = new Services.PirPdfData(
+        Report: reportData,
+        Bac: project?.Bac ?? 0,
+        PlannedProgress: project?.PlannedProgress ?? 0,
+        ActualProgress: project?.ActualProgress ?? 0,
+        Cpi: 1.00m,
+        Spi: 1.00m,
+        Currency: project?.Currency ?? "TRY"
+    );
+
+    byte[] excelBytes = dashboardapi.Services.PirExcelGenerator.Generate(excelData);
+    string fileName = $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.xlsx";
+
+    return Results.File(
+        fileContents: excelBytes, 
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+        fileDownloadName: fileName
+    );
+});
     }
 }

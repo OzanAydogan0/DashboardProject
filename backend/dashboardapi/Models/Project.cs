@@ -78,4 +78,6 @@ public partial class Project
     public virtual ICollection<Risk> Risks { get; set; } = new List<Risk>();
 
     public virtual User UpdatedByUser { get; set; } = null!;
+
+    
 }
