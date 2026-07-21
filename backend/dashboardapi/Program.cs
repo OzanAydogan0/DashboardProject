@@ -6,8 +6,11 @@ using dashboardapi.Data;
 using dashboardapi.Endpoints; // Artık bu klasörü kullanıyoruz!
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 // 1. API Dokümantasyonu (OpenAPI / Swagger) Desteği
 builder.Services.AddOpenApi();
@@ -101,5 +104,6 @@ app.MapMilestoneEndpoints();
 app.MapPortfolioEndpoints();
 app.MapGovernanceEndpoints();
 app.MapSystemEndpoints();
+app.MapExcelImportEndpoints();
 
 app.Run();
