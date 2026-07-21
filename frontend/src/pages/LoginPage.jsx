@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { authService } from '../services/authService'
 import './LoginPage.css'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false) // Şifre görünürlüğü için yeni state
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
@@ -14,28 +15,13 @@ function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await fetch("http://localhost:5074/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        alert(errorData?.message || "Giriş başarısız! E-posta veya şifre hatalı.")
-        setIsLoading(false)
-        return
-      }
-
-      const data = await response.json()
-      localStorage.setItem("token", data.token)
+      // Artık doğrudan authService üzerinden login oluyoruz
+      await authService.login(email, password)
       navigate("/") 
-
     } catch (error) {
-      console.error("Bağlantı hatası:", error)
-      alert("API ile iletişim kurulamadı. Backend (Port: 5074) açık mı?")
+      console.error("Giriş hatası:", error)
+      const errorMessage = error.response?.data?.message || "Giriş başarısız! E-posta veya şifre hatalı."
+      alert(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -77,10 +63,9 @@ function LoginPage() {
             
             <label>
               <span>Şifre</span>
-              {/* input ve butonu bir arada tutan CSS sınıfı */}
               <div className="password-field">
                 <input
-                  type={showPassword ? "text" : "password"} // State true ise text, false ise password
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Şifre"
@@ -88,14 +73,13 @@ function LoginPage() {
                   disabled={isLoading}
                 />
                 <button
-                  type="button" // Formu göndermemesi için tipi kesinlikle 'button' olmalı
+                  type="button"
                   className="toggle-password"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLoading}
                 >
-                  {/* Duruma göre değişen göz ikonu */}
                   <span className="material-symbols-outlined" style={{ fontSize: '20px', verticalAlign: 'middle' }}>
-                    {showPassword ? "Gizle" : "Göster"}
+                    {showPassword ? "visibility_off" : "visibility"}
                   </span>
                 </button>
               </div>

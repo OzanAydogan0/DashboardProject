@@ -18,36 +18,32 @@ import ActionsPage from './pages/ActionsPage'
 import SettingsPage from './pages/SettingsPage'
 import LoginPage from './pages/LoginPage'
 
-// URL yollarına göre başlıkları belirlediğimiz sözlük
 const pageInfo = {
-  '/': { title: 'Ana Sayfa', description: '' },
-  '/projects': { title: 'Projeler', description: '' },
-  '/reports': { title: 'Raporlar', description: '' },
-  '/risks': { title: 'Riskler', description: '' },
-  '/actions': { title: 'Aksiyonlar', description: '' },
-  '/settings': { title: 'Ayarlar', description: '' },
+  '/': { title: 'Portföy Dashboard', description: 'Tüm projelerin genel durum özeti ve KPI değerleri' },
+  '/projects': { title: 'Projeler', description: 'Aktif ve geçmiş proje listesi' },
+  '/reports': { title: 'Raporlar ve PİR', description: 'Aylık PİR raporları ve PDF çıktıları' },
+  '/risks': { title: 'Risk Yönetimi', description: 'Tüm projelerdeki aktif ve kritik riskler' },
+  '/actions': { title: 'Aksiyon Takibi', description: 'Açık ve geciken aksiyon kayıtları' },
+  '/settings': { title: 'Sistem Ayarları', description: 'Kullanıcı yönetimi ve parametre eşikleri' },
 }
 
-// 🛡️ KORUMALI ŞABLON (LAYOUT): Sadece giriş yapanların görebileceği Dashboard iskeleti
 const ProtectedLayout = () => {
   const token = localStorage.getItem('token')
-
-
   const navigate = useNavigate()
   const location = useLocation()
 
-  // login disable
-  /*if (!token) {
+  if (!token) {
     return <Navigate to="/login" replace />
-  }*/
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('token')
+    localStorage.removeItem('user')
     navigate('/login')
   }
 
-  // Mevcut URL'ye göre sayfa başlığını bul
-  const currentPage = pageInfo[location.pathname] || pageInfo['/']
+  // Dinamik rotalar (/projects/PRJ-001 gibi) için varsayılan başlık
+  const currentPage = pageInfo[location.pathname] || { title: 'Proje Detayı', description: '' }
 
   return (
     <div className="app-shell">
@@ -94,7 +90,6 @@ const ProtectedLayout = () => {
           </header>
 
           <section className="dashboard-grid">
-            {/* Alt rotalar (Sayfalar) buraya render edilecek */}
             <Outlet />
           </section>
         </section>
@@ -103,15 +98,12 @@ const ProtectedLayout = () => {
   )
 }
 
-// 🚦 UYGULAMA TRAFİK POLİSİ (ANA YÖNLENDİRİCİ)
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* HERKESE AÇIK */}
         <Route path="/login" element={<LoginPage />} />
 
-        {/* KORUMALI DASHBOARD ROTALARI */}
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/projects" element={<ProjectsPage />} />
