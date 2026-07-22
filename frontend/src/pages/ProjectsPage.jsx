@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { projectService } from '../services/projectService'
 import './ProjectsPage.css'
 
 const progressOptions = ['Hepsi', 'Devam Ediyor', 'Tamamlandı', 'Planlandı', 'Beklemede']
-const healthOptions = ['Hepsi', 'İyi', 'Orta', 'Kritik']
+const healthOptions = ['Hepsi', 'İyi', 'Orta', 'Kritik', 'Yeşil', 'Sarı', 'Kırmızı']
 const budgetSortOptions = ['Yok', 'Artan', 'Azalan']
 const finishSortOptions = ['Yok', 'Artan', 'Azalan']
+
 const budgetOrder = {
   'Yetersiz': 1,
   'Dengeli': 2,
@@ -13,6 +16,12 @@ const budgetOrder = {
 }
 
 function ProjectsPage() {
+  const navigate = useNavigate()
+  
+  const [rawProjects, setRawProjects] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
   const [draftFilters, setDraftFilters] = useState({
     name: '',
     code: '',
@@ -24,65 +33,53 @@ function ProjectsPage() {
   })
   const [filters, setFilters] = useState(draftFilters)
 
-  const projects = [
-    {
-      name: 'Proje 1',
-      code: 'PRJ-001',
-      progress: 'Devam Ediyor',
-      health: 'İyi',
-      budget: 'Dengeli',
-      finish: '2025-06-30',
-    },
-    {
-      name: 'Proje 2',
-      code: 'PRJ-002',
-      progress: 'Tamamlandı',
-      health: 'İyi',
-      budget: 'Yeterli',
-      finish: '2024-12-15',
-    },
-    {
-      name: 'Proje 3',
-      code: 'PRJ-003',
-      progress: 'Planlandı',
-      health: 'Orta',
-      budget: 'Yetersiz',
-      finish: '2025-03-10',
-    },
-  ]
+  useEffect(() => {
+    let isMounted = true
+    const fetchProjects = async () => {
+      try {
+        const data = await projectService.getProjects()
+        if (isMounted) setRawProjects(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error('Projeler çekilirken hata oluştu:', err)
+        if (isMounted) setError('Projeler yüklenemedi. Lütfen bağlantınızı kontrol edin.')
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+    fetchProjects()
+    return () => { isMounted = false }
+  }, [])
 
   const filteredProjects = useMemo(() => {
-    return projects.filter((project) => {
-      if (filters.name && !project.name.toLowerCase().includes(filters.name.toLowerCase())) {
-        return false
-      }
-      if (filters.code && !project.code.toLowerCase().includes(filters.code.toLowerCase())) {
-        return false
-      }
-      if (filters.progress !== 'Hepsi' && project.progress !== filters.progress) {
-        return false
-      }
-      if (filters.health !== 'Hepsi' && project.health !== filters.health) {
-        return false
-      }
-      if (filters.finish && project.finish !== filters.finish) {
-        return false
-      }
+    return rawProjects.filter((project) => {
+      const pName = project.projectName || ''
+      const pCode = project.projectCode || ''
+      const pProgress = project.projectStatus || ''
+      const pHealth = project.manualHealth || ''
+      const pFinish = project.forecastFinishDate ? project.forecastFinishDate.split('T')[0] : ''
+
+      if (filters.name && !pName.toLowerCase().includes(filters.name.toLowerCase())) return false
+      if (filters.code && !pCode.toLowerCase().includes(filters.code.toLowerCase())) return false
+      if (filters.progress !== 'Hepsi' && pProgress !== filters.progress) return false
+      if (filters.health !== 'Hepsi' && pHealth !== filters.health) return false
+      if (filters.finish && pFinish !== filters.finish) return false
       return true
     }).sort((a, b) => {
       if (filters.budgetSort !== 'Yok') {
-        const orderA = budgetOrder[a.budget] ?? 0
-        const orderB = budgetOrder[b.budget] ?? 0
+        const orderA = budgetOrder[a.budgetStatus] ?? 0
+        const orderB = budgetOrder[b.budgetStatus] ?? 0
         return filters.budgetSort === 'Artan' ? orderA - orderB : orderB - orderA
       }
       if (filters.finishSort !== 'Yok') {
+        const dateA = a.forecastFinishDate || ''
+        const dateB = b.forecastFinishDate || ''
         return filters.finishSort === 'Artan'
-          ? a.finish.localeCompare(b.finish)
-          : b.finish.localeCompare(a.finish)
+          ? dateA.localeCompare(dateB)
+          : dateB.localeCompare(dateA)
       }
       return 0
     })
-  }, [filters])
+  }, [rawProjects, filters])
 
   const handleFilterChange = (key, value) => {
     setDraftFilters((current) => ({ ...current, [key]: value }))
@@ -107,10 +104,25 @@ function ProjectsPage() {
     setFilters(empty)
   }
 
+  const formatDate = (dateString) => {
+    if (!dateString) return '-'
+    return new Date(dateString).toLocaleDateString('tr-TR')
+  }
+
+  // Tıklama Yöneticisi
+const handleRowClick = (project) => {
+    // Proje ismini kesinlikle dahil etmiyoruz, sadece ID / Kodu alıyoruz
+    const targetId = project.id || project.projectId || project.projectCode
+
+    if (targetId) {
+      navigate(`/projects/${targetId}`)
+    } else {
+      console.error('Projenin geçerli bir ID veya Proje Kodu bulunamadı:', project)
+    }
+  }
   return (
     <div className="dashboard-card full-width">
-      <h2>Projeler Listesi</h2>
-      <p>Projelerinizi buradan takip edin ve filtreleyin.</p>
+      {/* 🔍 EKSİKSİZ FİLTRE FORMU */}
       <form className="projects-filter-bar" onSubmit={applyFilters}>
         <div className="filter-item">
           <label>Proje Adı</label>
@@ -190,46 +202,66 @@ function ProjectsPage() {
             ))}
           </select>
         </div>
+        
         <div className="projects-filter-actions">
-          <button type="submit" className="filter-button">
-            Filtrele
+          <button type="submit" className="filter-button" disabled={loading}>
+            {loading ? 'Yükleniyor...' : 'Filtrele'}
           </button>
           <button type="button" className="reset-button" onClick={resetFilters}>
             Temizle
           </button>
         </div>
       </form>
+
+      {error && (
+        <div style={{ color: '#ef4444', padding: '12px', background: '#fee2e2', borderRadius: '14px', marginTop: '20px' }}>
+          {error}
+        </div>
+      )}
+
+      {/* 📋 PROJE TABLOSU */}
       <table>
         <thead>
           <tr>
             <th>Proje Adı</th>
             <th>Proje Kodu</th>
-            <th>İlerleme</th>
+            <th>Durum (İlerleme)</th>
             <th>Sağlık</th>
             <th>Bütçe</th>
             <th>Bitiş Tarihi</th>
           </tr>
         </thead>
-        <tbody>
-          {filteredProjects.length > 0 ? (
-            filteredProjects.map((project) => (
-              <tr key={`${project.code}-${project.name}`}>
-                <td>{project.name}</td>
-                <td>{project.code}</td>
-                <td>{project.progress}</td>
-                <td>{project.health}</td>
-                <td>{project.budget}</td>
-                <td>{project.finish}</td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={6} style={{ textAlign: 'center' }}>
-                Filtrelerinize uygun proje bulunamadı.
-              </td>
-            </tr>
-          )}
-        </tbody>
+<tbody>
+  {loading ? (
+    <tr>
+      <td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>
+        Projeler yükleniyor...
+      </td>
+    </tr>
+  ) : filteredProjects.length > 0 ? (
+    filteredProjects.map((project) => (
+      <tr 
+        key={project.projectId || project.projectCode} 
+        // 👇 DİKKAT: Sadece (project) gönderiyoruz ki yukarıdaki fonksiyonunuz çalışsın
+        onClick={() => handleRowClick(project)} 
+        className="clickable-row"
+      >
+        <td>{project.projectName}</td>
+        <td>{project.projectCode}</td>
+        <td>{project.projectStatus || '-'}</td>
+        <td>{project.manualHealth || '-'}</td>
+        <td>{project.budgetStatus || '-'}</td>
+        <td>{formatDate(project.forecastFinishDate || project.baselineFinishDate)}</td>
+      </tr>
+    ))
+  ) : (
+    <tr>
+      <td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>
+        Filtrelerinize uygun proje bulunamadı.
+      </td>
+    </tr>
+  )}
+</tbody>
       </table>
     </div>
   )

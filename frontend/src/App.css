@@ -51,10 +51,20 @@
   gap: 10px;
 }
 
+.sidebar-nav-link.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.sidebar-nav-link.active .sidebar-link-icon {
+  filter: none;
+}
+
 .sidebar-link-icon {
   width: 20px;
   height: 20px;
   object-fit: contain;
+  transition: filter 0.2s;
 }
 
 .sidebar-nav a:hover,

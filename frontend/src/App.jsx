@@ -12,6 +12,7 @@ import actionsIcon from './icons/ads_click_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz2
 // Sayfalar
 import HomePage from './pages/HomePage'
 import ProjectsPage from './pages/ProjectsPage'
+import ProjectDetailPage from './pages/ProjectDetailPage' // 👈 YENİ EKLENDİ
 import ReportsPage from './pages/ReportsPage'
 import RisksPage from './pages/RisksPage'
 import ActionsPage from './pages/ActionsPage'
@@ -19,12 +20,12 @@ import SettingsPage from './pages/SettingsPage'
 import LoginPage from './pages/LoginPage'
 
 const pageInfo = {
-  '/': { title: 'Portföy Dashboard', description: 'Tüm projelerin genel durum özeti ve KPI değerleri' },
-  '/projects': { title: 'Projeler', description: 'Aktif ve geçmiş proje listesi' },
-  '/reports': { title: 'Raporlar ve PİR', description: 'Aylık PİR raporları ve PDF çıktıları' },
-  '/risks': { title: 'Risk Yönetimi', description: 'Tüm projelerdeki aktif ve kritik riskler' },
-  '/actions': { title: 'Aksiyon Takibi', description: 'Açık ve geciken aksiyon kayıtları' },
-  '/settings': { title: 'Sistem Ayarları', description: 'Kullanıcı yönetimi ve parametre eşikleri' },
+  '/': { title: 'Portföy Dashboard'},
+  '/projects': { title: 'Projeler'},
+  '/reports': { title: 'Raporlar ve PİR'},
+  '/risks': { title: 'Risk Yönetimi'},
+  '/actions': { title: 'Aksiyon Takibi'},
+  '/settings': { title: 'Sistem Ayarları'},
 }
 
 const ProtectedLayout = () => {
@@ -32,9 +33,10 @@ const ProtectedLayout = () => {
   const navigate = useNavigate()
   const location = useLocation()
 
+  /*
   if (!token) {
     return <Navigate to="/login" replace />
-  }
+  }*/
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -44,33 +46,34 @@ const ProtectedLayout = () => {
 
   // Dinamik rotalar (/projects/PRJ-001 gibi) için varsayılan başlık
   const currentPage = pageInfo[location.pathname] || { title: 'Proje Detayı', description: '' }
+  const isActiveLink = (path) => path === '/' ? location.pathname === '/' : location.pathname === path || location.pathname.startsWith(`${path}/`)
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">PİR Dashboard</div>
         <nav className="sidebar-nav">
-          <Link to="/" className="sidebar-nav-link">
+          <Link to="/" className={`sidebar-nav-link${isActiveLink('/') ? ' active' : ''}`}>
             <img src={homeIcon} alt="Ana Sayfa" className="sidebar-link-icon" />
             Ana Sayfa
           </Link>
-          <Link to="/projects" className="sidebar-nav-link">
+          <Link to="/projects" className={`sidebar-nav-link${isActiveLink('/projects') ? ' active' : ''}`}>
             <img src={folderOpenIcon} alt="Projeler" className="sidebar-link-icon" />
             Projeler
           </Link>
-          <Link to="/reports" className="sidebar-nav-link">
+          <Link to="/reports" className={`sidebar-nav-link${isActiveLink('/reports') ? ' active' : ''}`}>
             <img src={reportIcon} alt="Raporlar" className="sidebar-link-icon" />
             Raporlar
           </Link>
-          <Link to="/risks" className="sidebar-nav-link">
+          <Link to="/risks" className={`sidebar-nav-link${isActiveLink('/risks') ? ' active' : ''}`}>
             <img src={riskIcon} alt="Riskler" className="sidebar-link-icon" />
             Riskler
           </Link>
-          <Link to="/actions" className="sidebar-nav-link">
+          <Link to="/actions" className={`sidebar-nav-link${isActiveLink('/actions') ? ' active' : ''}`}>
             <img src={actionsIcon} alt="Aksiyonlar" className="sidebar-link-icon" />
             Aksiyonlar
           </Link>
-          <Link to="/settings" className="sidebar-nav-link">
+          <Link to="/settings" className={`sidebar-nav-link${isActiveLink('/settings') ? ' active' : ''}`}>
             <img src={settingsIcon} alt="Ayarlar" className="sidebar-link-icon" />
             Ayarlar
           </Link>
@@ -107,6 +110,8 @@ function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/projects" element={<ProjectsPage />} />
+          {/* 👇 YENİ EKLENEN ROTA: Proje Detay Sayfası */}
+          <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/risks" element={<RisksPage />} />
           <Route path="/actions" element={<ActionsPage />} />

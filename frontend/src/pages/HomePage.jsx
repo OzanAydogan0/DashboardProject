@@ -158,20 +158,8 @@ function HomePage() {
       {/* 🔴 ÜST BAŞLIK VE SEKME ALANI */}
       <div className="top-header-bar">
         <div className="header-title-tabs">
-          <h1>PİR - Proje İlerleme Raporu</h1>
           <div className="header-tabs">
-            <button
-              className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-              onClick={() => setActiveTab('overview')}
-            >
-              Genel Bakış
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-              onClick={() => setActiveTab('analytics')}
-            >
-              Analizler
-            </button>
+
           </div>
         </div>
 
@@ -242,7 +230,7 @@ function HomePage() {
 
         <div className="kpi-card">
           <div className="kpi-info">
-            <span className="kpi-title">Kırmızı Proje</span>
+            <span className="kpi-title">Riskli Proje</span>
             <span className="kpi-value text-red">{loading ? '...' : kpis.redProjects}</span>
           </div>
           <div className="kpi-icon red">
