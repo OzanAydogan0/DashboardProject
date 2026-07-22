@@ -23,9 +23,6 @@ DROP TABLE IF EXISTS users;
 
 PRAGMA foreign_keys = ON; -- Yabancı anahtarları tekrar etkinleştiriyoruz
 
--- ==========================================
--- 1. TABLOLARIN OLUŞTURULMASI (DDL)
--- ==========================================
 
 CREATE TABLE users (
     user_id TEXT NOT NULL,
@@ -45,7 +42,7 @@ CREATE TABLE users (
 
 CREATE TABLE programs (
     program_id TEXT NOT NULL,
-    program_name TEXT NOT NULL,
+    program_name TEXT NULL,
     program_description TEXT,
     program_status TEXT DEFAULT 'Aktif' NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -57,7 +54,7 @@ CREATE TABLE programs (
 
 CREATE TABLE customers (
     customer_id TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
+    customer_name TEXT NULL,
     customer_type TEXT NOT NULL,
     customer_status TEXT DEFAULT 'Aktif' NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -84,7 +81,7 @@ CREATE TABLE projects (
     bac NUMERIC DEFAULT 0 NOT NULL,
     currency TEXT DEFAULT 'TRY' NOT NULL,
     reporting_frequency TEXT DEFAULT 'Aylık' NOT NULL,
-    confidentiality TEXT DEFAULT 'Normal' NOT NULL,
+    confidentiality TEXT DEFAULT 'Şirket İçi' NOT NULL,
     project_description TEXT,
     is_active INTEGER DEFAULT 1 NOT NULL,
     created_by_user_id TEXT NOT NULL,
@@ -96,14 +93,14 @@ CREATE TABLE projects (
     CONSTRAINT fk_projects_program_id FOREIGN KEY (program_id) REFERENCES programs (program_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_projects_customer_id FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_projects_project_manager_user_id FOREIGN KEY (project_manager_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT ck_projects_project_status CHECK (project_status IN ('Taslak','Devam Ediyor','Beklemede','Tamamlandı','Pasif')),
+    CONSTRAINT ck_projects_project_status CHECK (project_status IN ('Taslak','Aktif','Beklemede','Tamamlandı','Pasif')),
     CONSTRAINT ck_projects_manual_health CHECK (manual_health IN ('Yeşil','Sarı','Kırmızı','Gri')),
     CONSTRAINT ck_projects_planned_progress CHECK (planned_progress BETWEEN 0 AND 100),
     CONSTRAINT ck_projects_actual_progress CHECK (actual_progress BETWEEN 0 AND 100),
     CONSTRAINT ck_projects_bac CHECK (bac >= 0),
     CONSTRAINT ck_projects_currency CHECK (currency IN ('TRY','USD','EUR')),
     CONSTRAINT ck_projects_reporting_frequency CHECK (reporting_frequency IN ('Haftalık','Aylık','Üç Aylık')),
-    CONSTRAINT ck_projects_confidentiality CHECK (confidentiality IN ('Genel','Normal','Özel','Gizli')),
+    CONSTRAINT ck_projects_confidentiality CHECK (confidentiality IN ('Şirket İçi','Hizmete Özel','Gizli')),
     CONSTRAINT fk_projects_created_by_user_id FOREIGN KEY (created_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_projects_updated_by_user_id FOREIGN KEY (updated_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT ck_projects_finish_dates CHECK (baseline_finish_date >= start_date AND forecast_finish_date >= start_date AND (actual_finish_date IS NULL OR actual_finish_date >= start_date))
@@ -180,6 +177,7 @@ CREATE TABLE milestones (
     CONSTRAINT fk_milestones_updated_by_user_id FOREIGN KEY (updated_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT ck_milestones_date_order CHECK (forecast_date >= planned_date OR actual_date IS NOT NULL),
     CONSTRAINT ck_milestones_actual_date CHECK (actual_date IS NULL OR actual_date >= planned_date)
+
 );
 
 CREATE TABLE risks (
@@ -339,10 +337,6 @@ CREATE TABLE audit_logs (
     CONSTRAINT ck_audit_logs_action_type CHECK (action_type IN ('INSERT','UPDATE','DELETE'))
 );
 
--- ==========================================
--- 2. TETİKLEYİCİLERİN OLUŞTURULMASI (TRIGGERS)
--- ==========================================
-
 CREATE TRIGGER trg_users_updated_at AFTER UPDATE ON users FOR EACH ROW WHEN NEW.updated_at <= OLD.updated_at
 BEGIN UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE user_id = OLD.user_id; END;
 
@@ -389,10 +383,6 @@ BEGIN
     UPDATE risks SET risk_score = NEW.risk_probability * NEW.risk_impact WHERE risk_id = NEW.risk_id;
 END;
 
--- ==========================================
--- 3. İNDEKSLERİN OLUŞTURULMASI (INDEXES)
--- ==========================================
-
 CREATE INDEX idx_projects_program_id ON projects (program_id);
 CREATE INDEX idx_projects_customer_id ON projects (customer_id);
 CREATE INDEX idx_projects_project_manager_user_id ON projects (project_manager_user_id);
@@ -408,16 +398,12 @@ CREATE INDEX idx_risks_owner_due ON risks (risk_owner_user_id, risk_due_date) WH
 CREATE INDEX idx_issues_project_status_priority ON issues (project_id, issue_status, issue_priority);
 CREATE INDEX idx_issues_owner_due ON issues (issue_owner_user_id, issue_due_date) WHERE issue_status <> 'Kapalı';
 CREATE INDEX idx_actions_project_status_due ON actions (project_id, action_status, action_due_date);
-CREATE INDEX INDEX_actions_owner_due ON actions (action_owner_user_id, action_due_date) WHERE action_status <> 'Tamamlandı';
+CREATE INDEX idx_actions_owner_due ON actions (action_owner_user_id, action_due_date) WHERE action_status <> 'Tamamlandı';
 CREATE INDEX idx_evm_records_project_period_desc ON evm_records (project_id, period DESC);
 CREATE INDEX idx_management_decisions_project_status_due ON management_decisions (project_id, decision_status, decision_due_date);
 CREATE INDEX idx_audit_logs_entity ON audit_logs (entity_name, entity_id, changed_at DESC);
 CREATE INDEX idx_audit_logs_user_changed_at ON audit_logs (user_id, changed_at DESC);
 CREATE INDEX idx_audit_logs_changed_at ON audit_logs (changed_at); 
-
--- ==========================================
--- 4. GÖRÜNÜMLERİN OLUŞTURULMASI (VIEWS)
--- ==========================================
 
 CREATE VIEW vw_dashboard AS
 SELECT
@@ -462,8 +448,8 @@ SELECT
     r.risk_owner_user_id,
     u.full_name AS risk_owner_full_name,
     CASE
-        WHEN r.risk_score BETWEEN 1 AND 5 THEN 'Yeşil'
-        WHEN r.risk_score BETWEEN 6 AND 15 THEN 'Sarı'
+        WHEN r.risk_score BETWEEN 1 AND 4 THEN 'Yeşil'
+        WHEN r.risk_score BETWEEN 5 AND 15 THEN 'Sarı'
         ELSE 'Kırmızı'
     END AS risk_health
 FROM risks r
@@ -503,10 +489,10 @@ SELECT
     e.ac,
     (e.ev - e.pv) AS sv,
     (e.ev - e.ac) AS cv,
-    CASE WHEN e.pv = 0 THEN NULL ELSE ROUND(e.ev / e.pv, 4) END AS spi,
-    CASE WHEN e.ac = 0 THEN NULL ELSE ROUND(e.ev / e.ac, 4) END AS cpi,
-    CASE WHEN e.ac = 0 OR e.ev = 0 THEN NULL ELSE ROUND(e.bac / (e.ev / e.ac), 2) END AS eac,
-    CASE WHEN e.ac = 0 OR e.ev = 0 THEN NULL ELSE ROUND(e.bac - (e.bac / (e.ev / e.ac)), 2) END AS vac
+    CASE WHEN e.pv = 0 THEN NULL ELSE ROUND((1.0 * e.ev) / e.pv, 4) END AS spi,
+    CASE WHEN e.ac = 0 THEN NULL ELSE ROUND((1.0 * e.ev) / e.ac, 4) END AS cpi,
+    CASE WHEN e.ac = 0 OR e.ev = 0 THEN NULL ELSE ROUND((1.0 * e.bac * e.ac) / e.ev, 2) END AS eac,
+    CASE WHEN e.ac = 0 OR e.ev = 0 THEN NULL ELSE ROUND(e.bac - ((1.0 * e.bac * e.ac) / e.ev), 2) END AS vac
 FROM evm_records e
 JOIN projects p ON p.project_id = e.project_id;
 
@@ -514,7 +500,7 @@ JOIN projects p ON p.project_id = e.project_id;
 -- ==========================================
 -- 5. DEMO VERİLERİNİN DOLDURULMASI (INSERTS)
 -- ==========================================
-/* her hash farklıdır aynı şifre bile olsa.
+/* her hash farklıdır aynısı olsa bile.
 -- A. KULLANICILAR (Şifreler 'Demo123!' olarak hashlenmiştir)
 INSERT INTO users (user_id, email, password_hash, full_name, user_role, user_status) VALUES 
 ('USR-ADMIN', 'admin@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Sistem Yöneticisi', 'Sistem Yöneticisi', 'Aktif'),
@@ -530,9 +516,10 @@ INSERT INTO programs (program_id, program_name, program_description, program_sta
 
 -- C. MÜŞTERİLER
 INSERT INTO customers (customer_id, customer_name, customer_type, customer_status) VALUES 
-('CST-001', 'Savunma Sanayii Başkanlığı', 'Kamu', 'Aktif'),
-('CST-002', 'ERİSİS Entegrasyon A.Ş.', 'Özel', 'Aktif'),
-('CST-003', 'İç Geliştirme Departmanı', 'İç Müşteri', 'Aktif');
+('CST-101', 'Savunma Sanayii Başkanlığı', 'Kamu', 'Aktif'),
+('CST-202', 'ERİSİS Entegrasyon A.Ş.', 'Özel', 'Aktif'),
+('CST-303', 'İç Geliştirme Departmanı', 'İç Müşteri', 'Aktif');
+
 
 -- D. PROJELER
 INSERT INTO projects (
@@ -541,12 +528,12 @@ INSERT INTO projects (
     manual_health, planned_progress, actual_progress, bac, currency, reporting_frequency, 
     confidentiality, project_description, is_active, created_by_user_id, updated_by_user_id
 ) VALUES 
-('PRJ-001', 'PRJ-001', 'ÜBYES Entegre Güvenlik Sistemi', 'PRG-001', 'CST-001', 'USR-PM1', '2026-01-01', '2026-12-31', '2026-12-31', NULL, 'Devam Ediyor', 'Kırmızı', 50.00, 38.00, 250000.00, 'USD', 'Aylık', 'Gizli', 'Ülke genelindeki sınır kapılarının entegre yazılım alt yapısı.', 1, 'USR-ADMIN', 'USR-ADMIN'),
-('PRJ-002', 'PRJ-002', 'ERİSİS PSIM Ürünleştirme', 'PRG-002', 'CST-002', 'USR-PM2', '2026-03-01', '2026-09-30', '2026-10-15', NULL, 'Devam Ediyor', 'Sarı', 70.00, 62.00, 800000.00, 'TRY', 'Aylık', 'Normal', 'Farklı güvenlik kamera ve sensörlerini ortak çatı altında birleştiren yazılım.', 1, 'USR-ADMIN', 'USR-ADMIN'),
-('PRJ-003', 'PRJ-003', 'AKSİ FPV İHA Tespit Sistemi', 'PRG-003', 'CST-003', 'USR-PM1', '2026-02-15', '2027-02-15', '2027-02-15', NULL, 'Devam Ediyor', 'Yeşil', 40.00, 42.00, 450000.00, 'EUR', 'Aylık', 'Özel', 'Düşman mini kamikaze İHA''larını ses ve görüntüyle algılayan radar projesi.', 1, 'USR-ADMIN', 'USR-ADMIN');
+('PRJ-001', 'PRJ-001', 'ÜBYES Entegre Güvenlik Sistemi', 'PRG-001', 'CST-101', 'USR-PM1', '2026-01-01', '2026-12-31', '2026-12-31', NULL, 'Aktif', 'Kırmızı', 50.00, 38.00, 250000.00, 'USD', 'Aylık', 'Şirket İçi', 'Ülke genelindeki sınır kapılarının entegre yazılım alt yapısı.', 1, 'USR-ADMIN', 'USR-ADMIN'),
+('PRJ-002', 'PRJ-002', 'ERİSİS PSIM Ürünleştirme', 'PRG-002', 'CST-202', 'USR-PM2', '2026-03-01', '2026-09-30', '2026-10-15', NULL, 'Aktif', 'Sarı', 70.00, 62.00, 800000.00, 'TRY', 'Aylık', 'Şirket İçi', 'Farklı güvenlik kamera ve sensörlerini ortak çatı altında birleştiren yazılım.', 1, 'USR-ADMIN', 'USR-ADMIN'),
+('PRJ-003', 'PRJ-003', 'AKSİ FPV İHA Tespit Sistemi', 'PRG-003', 'CST-303', 'USR-PM1', '2026-02-15', '2027-02-15', '2027-02-15', NULL, 'Aktif', 'Yeşil', 40.00, 42.00, 450000.00, 'EUR', 'Aylık', 'Hizmete Özel', 'Düşman mini kamikaze İHA''larını ses ve görüntüyle algılayan radar projesi.', 1, 'USR-ADMIN', 'USR-ADMIN');
 
 -- E. PROJE KULLANICILARI (Project Assignments)
-INSERT INTO project_users (project_user_id, project_id, user_id, assigned_by_user_id, assignment_status) VALUES 
+INSERT OR IGNORE INTO project_users (project_user_id, project_id, user_id, assigned_by_user_id, assignment_status) VALUES 
 ('PU-001', 'PRJ-001', 'USR-PM1', 'USR-ADMIN', 'Aktif'),
 ('PU-002', 'PRJ-001', 'USR-YONETIM', 'USR-ADMIN', 'Aktif'),
 ('PU-003', 'PRJ-002', 'USR-PM2', 'USR-ADMIN', 'Aktif'),
