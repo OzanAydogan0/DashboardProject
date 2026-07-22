@@ -1,10 +1,10 @@
 import api from './api';
 
 export const projectService = {
-  // SCR-02: Portföy Dashboardu KPI ve Grafik Verileri (C# GET /dashboard ile eşleşti)
+  // SCR-02: Portföy Dashboardu KPI ve Grafik Verileri
   getPortfolioDashboard: async (filters = {}) => {
     const response = await api.get('/dashboard', { params: filters });
-    return response.data; // List<DashboardSummaryDto> dizisi döner
+    return response.data;
   },
 
   // SCR-03: Proje Listesi
@@ -19,9 +19,25 @@ export const projectService = {
     return response.data;
   },
 
-  // Proje EVM Finansal Geçmiş Verisi (C# GET /dashboard/projects/{id}/evm)
+  getProjectById: async (id) => {
+    const response = await api.get(`/projects/${id}`);
+    return response.data;
+  },
+//customers endpointi ekleniyor
+  getCustomers: async () => {
+    // Kendi axios veya fetch yapınıza göre uyarlayın
+    const response = await axios.get('/customers'); 
+    return response.data;
+  },
+  // Proje EVM Finansal Geçmiş Verisi
   getProjectEvm: async (projectId) => {
     const response = await api.get(`/dashboard/projects/${projectId}/evm`);
+    return response.data;
+  },
+
+  // SystemEndpoints C# API: GET /projects/{id}/evm-records (YENİ EKLENDİ)
+  getEvmRecords: async (projectId) => {
+    const response = await api.get(`/projects/${projectId}/evm-records`);
     return response.data;
   },
 

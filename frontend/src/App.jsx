@@ -33,10 +33,10 @@ const ProtectedLayout = () => {
   const navigate = useNavigate()
   const location = useLocation()
 
-  /*
+  
   if (!token) {
     return <Navigate to="/login" replace />
-  }*/
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('token')
