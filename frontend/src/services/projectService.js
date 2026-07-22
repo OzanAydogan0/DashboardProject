@@ -18,6 +18,33 @@ export const projectService = {
     const response = await api.get(`/projects/${projectId}/dashboard`);
     return response.data;
   },
+  // src/services/projectService.js içindeki ilgili metod:
+
+generateReport: async (projectId, format = 'pdf') => {
+  // 1. Önce bu projeye ait PIR raporlarını çekiyoruz
+  const pirsResponse = await api.get(`/projects/${projectId}/pirs`);
+  const pirs = pirsResponse.data;
+
+  if (!pirs || pirs.length === 0) {
+    throw new Error("Bu projeye ait henüz oluşturulmuş bir PIR raporu bulunamadı.");
+  }
+
+  // En güncel PIR raporunun ID'sini alıyoruz
+  const latestPir = pirs[0]; 
+  const pirId = latestPir.pirReportId || latestPir.id;
+
+  // 2. Backend'deki GET endpoint'ine isteğimizi fırlatıyoruz
+  const endpoint = format === 'excel' 
+    ? `/pirs/${pirId}/export/excel` 
+    : `/pirs/${pirId}/export/pdf`;
+
+  const response = await api.get(endpoint, {
+    responseType: 'blob' // Dosya indirirken blob olarak almalıyız
+  });
+
+  return response.data;
+},
+
 
   // Proje EVM Finansal Geçmiş Verisi (C# GET /dashboard/projects/{id}/evm)
   getProjectEvm: async (projectId) => {
