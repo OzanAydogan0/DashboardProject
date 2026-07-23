@@ -53,7 +53,7 @@ generateReport: async (projectId, format = 'pdf') => {
 //customers endpointi ekleniyor
   getCustomers: async () => {
     // Kendi axios veya fetch yapınıza göre uyarlayın
-    const response = await axios.get('/customers'); 
+    const response = await api.get('/customers'); 
     return response.data;
   },
   // Proje EVM Finansal Geçmiş Verisi

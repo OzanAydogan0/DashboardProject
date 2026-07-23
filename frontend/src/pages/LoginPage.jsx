@@ -79,7 +79,7 @@ function LoginPage() {
                   disabled={isLoading}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: '20px', verticalAlign: 'middle' }}>
-                    {showPassword ? "visibility_off" : "visibility"}
+                    {showPassword ? "Gizle" : "Göster"}
                   </span>
                 </button>
               </div>
