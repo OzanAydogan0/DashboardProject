@@ -1,24 +1,22 @@
 import React, { useState } from 'react'
+import { projectService } from '../services/projectService'
 import './MileStonePage.css'
 
 /**
- * Kilometre Taşları (Milestones) Bileşeni - Ekleme ve Düzenleme Destekli
+ * Kilometre Taşları (Milestones) Bileşeni
  * 
  * @param {Array} milestones - Veritabanından gelen mevcut kilometre taşları
  * @param {String|Number} projectId - İlişkili projenin ID değeri
- * @param {Function} onMilestoneUpdated - Veri eklendiğinde/güncellendiğinde ana sayfayı tazeleyen callback
+ * @param {Function} onMilestoneUpdated - Veri eklendiğinde/güncellendiğinde listeyi tazeleyen callback
+ * @param {Function} onMilestoneAdded - Alternatif güncelleme callback'i
  */
-function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
-  // Modal görünürlük state'i
+function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestoneAdded }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  
-  // O an düzenlenmekte olan Kayıt ID'si (null ise Yeni Ekleme modundadır)
   const [editingId, setEditingId] = useState(null)
   
-  // Yüklenme durumu
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
-  // Form girdilerini tutan State
   const [formData, setFormData] = useState({
     milestoneName: '',
     plannedDate: '',
@@ -26,25 +24,21 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
     status: 'Planlandı'
   })
 
-  // Input değişikliklerini yakalama
   const handleInputChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  // Tarih Biçimlendirme (YYYY-MM-DD -> TR Formatı)
   const formatDate = (dateString) => {
     if (!dateString) return '-'
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
 
-  // Date inputları için YYYY-MM-DD formatına dönüştürme yardımcı fonksiyonu
   const formatForInput = (dateString) => {
     if (!dateString) return ''
     return new Date(dateString).toISOString().split('T')[0]
   }
 
-  // Durum Renk Sınıfı
   const getMilestoneStatusStyle = (status) => {
     const s = (status || '').toLowerCase()
     if (s.includes('tamamlandı')) return 'status-completed'
@@ -52,11 +46,9 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
     return 'status-planned'
   }
 
-  // --- MODAL AÇMA FONKSİYONLARI ---
-  
-  // 1. Yeni Ekleme Modunda Modalı Aç
   const handleOpenAddModal = () => {
     setEditingId(null)
+    setErrorMessage('')
     setFormData({
       milestoneName: '',
       plannedDate: '',
@@ -66,9 +58,9 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
     setIsModalOpen(true)
   }
 
-  // 2. Düzenleme Modunda Modalı Aç (Mevcut verileri forma doldurur)
   const handleOpenEditModal = (item) => {
-    setEditingId(item.id)
+    setEditingId(item.id || item.milestoneId)
+    setErrorMessage('')
     setFormData({
       milestoneName: item.milestoneName || '',
       plannedDate: formatForInput(item.plannedDate),
@@ -78,56 +70,84 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
     setIsModalOpen(true)
   }
 
-  // --- VERİTABANINA KAYIT/GÜNCELLEME İŞLEMİ (POST / PUT) ---
+  // --- VERİTABANINA KAYIT VE GÜNCELLEME İŞLEMİ ---
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
-
-    // Düzenleme mi yoksa Yeni Ekleme mi yapılıyor?
-    const isEdit = editingId !== null
-    const url = isEdit 
-      ? `/api/milestones/${editingId}` // Güncelleme adresi (PUT)
-      : `/api/projects/${projectId}/milestones` // Yeni kayıt adresi (POST)
-    
-    const method = isEdit ? 'PUT' : 'POST'
+    setErrorMessage('')
 
     try {
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId: projectId,
+      if (editingId) {
+        // GÜNCELLEME (PATCH /milestones/{id})
+        const updatePayload = {
           milestoneName: formData.milestoneName,
           plannedDate: formData.plannedDate,
+          forecastDate: formData.plannedDate,
           actualDate: formData.actualDate || null,
-          status: formData.status
-        })
-      })
-
-      if (response.ok) {
-        setIsModalOpen(false)
-        // Ana sayfaya haber ver, veritabanından en güncel halini çeksin
-        if (onMilestoneUpdated) {
-          onMilestoneUpdated()
+          milestoneStatus: formData.status
         }
+        await projectService.updateMilestone(editingId, updatePayload)
       } else {
-        alert('İşlem sırasında bir hata oluştu.')
+        // YENİ EKLEME (POST /projects/{projectId}/milestones)
+        // Backend CreateMilestoneRequest DTO yapısına tam uyumlu paket:
+        const createPayload = {
+          milestoneName: formData.milestoneName,
+          plannedDate: formData.plannedDate,
+          forecastDate: formData.plannedDate, // Varsayılan olarak planlanan tarih atanır
+          milestoneStatus: formData.status,
+          critical: 0,
+          milestoneOwnerUserId: null,
+          acceptanceCriteria: '',
+          milestoneDescription: ''
+        }
+
+        await projectService.createProjectMilestone(projectId, createPayload)
       }
+
+      // İşlem başarılıysa modalı kapat ve listeyi güncelle
+      setIsModalOpen(false)
+      
+      if (onMilestoneUpdated) onMilestoneUpdated()
+      if (onMilestoneAdded) onMilestoneAdded()
+
     } catch (error) {
-      console.error('API Hatası:', error)
-      alert('Sunucuya bağlanılamadı.')
+      console.error('Veritabanı işlem hatası:', error)
+      const errorMsg = error.response?.data?.message || 'İşlem sırasında bir hata oluştu.'
+      setErrorMessage(errorMsg)
     } finally {
       setLoading(false)
     }
   }
 
+  // Silme İşlemi Fonksiyonu
+  const handleDelete = async (milestoneId) => {
+    if (!milestoneId) {
+      alert("Silinecek ögenin ID bilgisi bulunamadı.");
+      return;
+    }
+
+    const isConfirmed = window.confirm("Bu kilometre taşını silmek istediğinize emin misiniz?");
+    if (!isConfirmed) return;
+
+    try {
+      await projectService.deleteProjectMilestone(milestoneId);
+      alert("Kilometre taşı başarıyla silindi!");
+      
+      // Listeyi yenile
+      if (onMilestoneUpdated) onMilestoneUpdated();
+      if (onMilestoneAdded) onMilestoneAdded();
+    } catch (error) {
+      console.error("Silme işlemi başarısız:", error);
+      // Backend'den dönen özel hata mesajını gösterelim
+      const serverErrorMsg = error.response?.data?.message || "Silme işlemi başarısız oldu. Oturumunuz kapanmış veya yetkiniz olmayabilir.";
+      alert(serverErrorMsg);
+    }
+  };
+
   return (
     <div className="tab-content-wrapper fade-in">
       <div className="dashboard-card shadow-card timeline-card">
         
-        {/* Üst Kısım / Ekle Butonu */}
         <div className="timeline-header-actions">
           <div style={{ flex: 1 }}></div>
           <button 
@@ -137,7 +157,6 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
           </button>
         </div>
 
-        {/* Tablo */}
         <div className="table-responsive">
           <table className="timeline-table" style={{ width: '100%', textAlign: 'left' }}>
             <thead>
@@ -154,7 +173,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
               {milestones.length > 0 ? milestones.map((m, idx) => {
                 const statusClass = getMilestoneStatusStyle(m.milestoneStatus || m.status)
                 return (
-                  <tr key={m.id || idx}>
+                  <tr key={m.id || m.milestoneId || idx}>
                     <td className="timeline-td">
                       <div className="timeline-line"></div>
                       <div className={`timeline-dot ${statusClass}-dot`}></div>
@@ -167,7 +186,6 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
                         {m.milestoneStatus || m.status || 'Planlandı'}
                       </span>
                     </td>
-                    {/* YENİ: DÜZENLE BUTONU SÜTUNU */}
                     <td style={{ textAlign: 'right', paddingRight: '16px' }}>
                       <button 
                         className="btn-action-edit"
@@ -176,6 +194,14 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
                       >
                         Düzenle
                       </button>
+
+                     <button 
+                      className="btn-delete-milestone" 
+                      onClick={() => handleDelete(m.milestoneId || m.id)}
+                    >
+                      Sil
+                    </button>
+
                     </td>
                   </tr>
                 )
@@ -191,11 +217,17 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
         </div>
       </div>
 
-      {/* --- FORM MODAL (EKLEME VE DÜZENLEME) --- */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content">
             <h3>{editingId ? 'Milestone Düzenle' : 'Yeni Kilometre Taşı Ekle'}</h3>
+            
+            {errorMessage && (
+              <div style={{ color: '#dc2626', backgroundColor: '#fee2e2', padding: '10px', borderRadius: '6px', marginBottom: '15px' }}>
+                {errorMessage}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit}>
               
               <div className="form-group">
@@ -259,7 +291,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated }) {
                   className="btn-submit"
                   disabled={loading}
                 >
-                  {loading ? 'Kaydediliyor...' : (editingId ? 'Güncelle' : 'Veritabanına Kaydet')}
+                  {loading ? 'Kaydediliyor...' : (editingId ? 'Güncelle' : 'Kaydet')}
                 </button>
               </div>
 

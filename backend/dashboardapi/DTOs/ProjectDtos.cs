@@ -2,7 +2,7 @@ namespace dashboardapi.DTOs;
 
 public record ProjectSummaryDto(
     string ProjectId, string ProjectCode, string ProjectName, string ProjectStatus, 
-    string ManualHealth, decimal PlannedProgress, decimal ActualProgress, 
+    string ManualHealth, decimal PlannedProgress, decimal ActualProgress, decimal Bac, string Currency,
     DateTime StartDate, DateTime BaselineFinishDate
 );
 

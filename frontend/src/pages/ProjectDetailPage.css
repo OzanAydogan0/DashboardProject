@@ -26,16 +26,14 @@
   color: var(--text-main);
 }
 
-/* --- YARDIMCI METİN RENK SINIFLARI --- */
+/* --- YARDIMCI RENK SINIFLARI --- */
 .text-success { color: var(--success-color); }
 .text-danger { color: var(--danger-color); }
 .text-neutral { color: var(--neutral-color); }
 .text-muted { color: var(--text-muted); }
-.text-warning { color: var(--warning-color); } /* YENİ EKLENDİ (Sarı renk için) */
+.text-warning { color: var(--warning-color); }
 
-/* --- YÜKLENME VE HATA DURUMLARI --- */
-.loading-state,
-.error-state {
+.loading-state, .error-state {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -45,20 +43,10 @@
   border-radius: 12px;
   padding: 24px;
 }
+.loading-state { color: var(--primary-color); background: var(--card-bg); box-shadow: var(--shadow-sm); }
+.error-state { color: var(--danger-color); background: #fee2e2; border: 1px solid #fca5a5; }
 
-.loading-state {
-  color: var(--primary-color);
-  background: var(--card-bg);
-  box-shadow: var(--shadow-sm);
-}
-
-.error-state {
-  color: var(--danger-color);
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-}
-
-/* --- BAŞLIK & META BİLGİLER --- */
+/* --- ÜST BAŞLIK VE NAVİGASYON --- */
 .project-detail-header {
   background: var(--card-bg);
   padding: 24px 32px 0;
@@ -79,358 +67,255 @@
   cursor: pointer;
   transition: all 0.2s ease;
 }
+.back-btn:hover { background: var(--primary-color); color: white; }
 
-.back-btn:hover {
-  background: var(--primary-color);
-  color: white;
-}
-
-.project-title-section h1 {
-  margin: 0 0 12px 0;
-  font-size: 1.8rem;
-  font-weight: 700;
-}
-
-.project-meta-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.pill {
-  background: var(--secondary-color);
-  border: 1px solid var(--border-color);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
+.project-title-section h1 { margin: 0 0 12px 0; font-size: 1.8rem; font-weight: 700; }
+.project-meta-pills { display: flex; flex-wrap: wrap; gap: 12px; }
+.pill { background: var(--secondary-color); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; color: var(--text-muted); }
 .pill strong { color: var(--text-main); }
 
-/* --- SEKMELER (TABS) --- */
-.project-nav-tabs {
-  display: flex;
-  gap: 16px;
-  border-bottom: 2px solid var(--border-color);
-  overflow-x: auto;
-}
-
-.tab-item {
-  background: none;
-  border: none;
-  padding: 12px 4px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-bottom: 3px solid transparent;
-  transition: all 0.3s ease;
-}
-
+.project-nav-tabs { display: flex; gap: 16px; border-bottom: 2px solid var(--border-color); overflow-x: auto; }
+.tab-item { background: none; border: none; padding: 12px 4px; font-size: 0.95rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s ease; }
 .tab-item:hover { color: var(--primary-color); }
-.tab-item.active {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
-}
+.tab-item.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
 
-/* --- KPI KARTLARI GRİDİ --- */
-.kpi-grid {
+/* --- KPI GRID --- */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.kpi-card { background: var(--card-bg); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); transition: transform 0.3s ease; }
+.hover-lift:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+.kpi-details h3 { font-size: 0.8rem; color: var(--text-muted); margin: 0 0 6px 0; text-transform: uppercase; }
+.kpi-value { font-size: 1.3rem; font-weight: 700; margin: 0; }
+
+/* --- SAYFA DÜZENİ (GRID) --- */
+.overview-top-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
-
-/* KPI Kartı - Dikey ve Yatay Hizalama */
-.kpi-card {
-  background: var(--card-bg);
-  border-radius: 16px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;    /* İçeriği yukarıdan aşağıya dizer */
-  align-items: center;        /* Öğeleri yatayda tam ortalar */
-  justify-content: center;    /* Öğeleri dikeyde tam ortalar */
-  text-align: center;         /* Metin akışını ortalar */
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.hover-lift:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-hover);
-}
-
-/* Kart Detay Kapsayıcısı */
-.kpi-details {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;        /* h3 ve p/div ögelerini ortalar */
-  justify-content: center;
-}
-
-/* KPI Başlığı (SV, CV, SPI vb.) */
-.kpi-details h3 {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin: 0 0 8px 0;           /* Altındaki değerle arasında hafif boşluk bıraktık */
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  text-align: center;
-}
-
-/* KPI Değeri ve Rozetler */
-.kpi-value {
-  font-size: 1.4rem;
-  font-weight: 700;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;    /* İçindeki metin veya rozeti (badge) ortalar */
-  width: 100%;
-}
-
-.kpi-split-values {
-  display: flex;
-  align-items: center;
-  justify-content: center;    /* Bölünmüş değer varsa ortalar */
-  gap: 8px;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.kpi-split-values .divider { 
-  color: var(--border-color); 
-  font-weight: 300; 
-}
-/* --- ANA İÇERİK GRİDİ --- */
-.main-content-grid {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 24px;
-}
-@media (max-width: 1024px) {
-  .main-content-grid { grid-template-columns: 1fr; }
-}
-
-.grid-left-col, .grid-right-col {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+@media (max-width: 900px) {
+  .overview-top-grid { grid-template-columns: 1fr; }
 }
 
 .shadow-card {
   background: var(--card-bg);
   border-radius: 16px;
-  padding: 24px;
+  padding: 20px;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-color);
 }
 
-.card-header {
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.card-header h2 { margin: 0; font-size: 1.2rem; }
+.section-subtitle { margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-muted); }
+.period-badge { background: var(--bg-color); padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+
+/* --- EVM GRAFİĞİ (COMPACT / DARALTILMIŞ) --- */
+.evm-chart-card-compact {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.modern-horizontal-bar-chart.compact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.horizontal-bar-group { display: flex; align-items: center; gap: 12px; }
+.bar-label-left { width: 30px; font-weight: 700; font-size: 0.9rem; color: var(--text-main); }
+.bar-track { flex-grow: 1; background: var(--bg-color); height: 28px; border-radius: 6px; overflow: hidden; position: relative; }
+
+.horizontal-bar-group .bar {
+  height: 100%;
+  width: var(--bar-width, 0%);
+  border-radius: 6px;
+  display: flex;
   align-items: center;
-  margin-bottom: 20px;
-}
-.card-header h2 { margin: 0; font-size: 1.25rem; }
-.period-badge {
-  background: var(--bg-color);
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  justify-content: flex-end;
+  padding-right: 10px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* --- YÖNETİCİ ÖZETİ --- */
-.summary-text-box {
-  background: #f8fafc;
-  padding: 16px 20px;
-  border-left: 4px solid var(--primary-color);
-  border-radius: 4px 8px 8px 4px;
-  font-size: 0.95rem;
-  line-height: 1.7;
-  color: #334155;
+.bar-value-inside { color: white; font-size: 0.8rem; font-weight: 700; }
+.pv-bar { background: linear-gradient(90deg, #2563eb 0%, #60a5fa 100%); }
+.ev-bar { background: linear-gradient(90deg, #059669 0%, #34d399 100%); }
+.ac-bar { background: linear-gradient(90deg, #d97706 0%, #fbbf24 100%); }
+
+/* --- YOL HARİTASI (X EKSENİNDE TAM GENİŞLİK & DİKEY "BUGÜN" ÇİZGİSİ) --- */
+.roadmap-full-width {
+  width: 100%;
 }
 
-/* --- YOL HARİTASI (TIMELINE) TASARIMI --- */
-.modern-timeline {
-  display: flex;
-  justify-content: space-between;
+.today-highlight {
+  background: #fee2e2;
+  color: var(--danger-color);
+  border: 1px solid #fca5a5;
+}
+
+.timeline-scroll-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  padding: 20px 0 10px 0;
+}
+
+.modern-timeline-axis {
   position: relative;
-  padding-top: 20px;
-  margin-top: 10px;
+  min-width: 800px; /* Geniş X ekseni görünümü */
+  padding: 40px 0 20px 0;
 }
 
-.timeline-track {
+/* Yatay Ana Çizgi */
+.timeline-horizontal-track {
   position: absolute;
-  top: 32px;
-  left: 5%;
-  right: 5%;
+  top: 60px;
+  left: 0;
+  right: 0;
   height: 4px;
   background: var(--border-color);
   z-index: 1;
 }
 
-.timeline-node {
-  position: relative;
-  z-index: 2;
+/* Boydan Boya Dikey Bugün Çizgisi */
+.today-vertical-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 25%;
-  text-align: center;
+  pointer-events: none;
 }
 
-.node-point {
-  width: 20px;
-  height: 20px;
+.today-flag {
+  background: var(--danger-color);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.today-dashed-line {
+  width: 2px;
+  height: 100%;
+  border-left: 2px dashed var(--danger-color);
+}
+
+/* Düğümler ve Kartlar */
+.milestones-nodes-container {
+  display: flex;
+  justify-content: space-around;
+  position: relative;
+  z-index: 2;
+  gap: 20px;
+}
+
+.milestone-axis-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  max-width: 220px;
+}
+
+.milestone-status-dot {
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: white;
   border: 4px solid var(--info-color);
   margin-bottom: 12px;
   position: relative;
+  z-index: 3;
+}
+.milestone-status-dot.critical { border-color: var(--danger-color); }
+
+.milestone-card-body {
+  background: var(--secondary-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  width: 100%;
+  box-shadow: var(--shadow-sm);
 }
 
-.node-point.critical { border-color: var(--danger-color); }
-
-.pulse-ring {
-  position: absolute;
-  top: -8px; left: -8px; right: -8px; bottom: -8px;
-  border-radius: 50%;
-  border: 2px solid var(--danger-color);
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0% { transform: scale(0.5); opacity: 1; }
-  100% { transform: scale(1.5); opacity: 0; }
+.milestone-name {
+  margin: 0 0 10px 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+  text-align: center;
 }
 
-.node-title { margin: 0 0 4px 0; font-size: 0.9rem; font-weight: 700; color: var(--text-main); }
-.node-date { font-size: 0.8rem; color: var(--text-muted); }
-
-/* --- EVM ÇUBUK GRAFİĞİ TASARIMI --- */
-.evm-chart-card {
+/* Tarih Rozetleri (Plan, Tahmin, Gerçek) */
+.milestone-dates-grid {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  gap: 6px;
 }
 
-.modern-bar-chart {
-  position: relative;
-  flex-grow: 1;
-  min-height: 250px;
-  margin: 20px 0;
+.date-pill {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-around;
-  padding-bottom: 30px;
-}
-
-.chart-grid {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 30px;
-  display: flex;
-  flex-direction: column;
   justify-content: space-between;
-  z-index: 0;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid var(--border-color);
 }
 
-.grid-line {
-  width: 100%;
-  height: 1px;
-  background: var(--border-color);
-  border-top: 1px dashed #cbd5e1;
-}
-
-.chart-bars {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-evenly;
-}
-
-.bar-group {
+/* Boydan Boya Dikey Bugün Çizgisi */
+.today-vertical-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 25%;
-  height: 100%;
-  justify-content: flex-end;
-}
-
-.bar {
-  width: 45px;
-  height: var(--bar-height, 0%);
-  border-radius: 6px 6px 0 0;
-  position: relative;
-  transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-}
-
-.bar-tooltip {
-  position: absolute;
-  top: -35px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--text-main);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  opacity: 0;
   pointer-events: none;
-  transition: all 0.2s ease;
-  white-space: nowrap;
+  transform: translateX(-50%); /* Çizginin tam noktanın merkezine oturmasını sağlar */
+  transition: left 0.4s ease-out;
 }
-.bar-tooltip::after {
-  content: '';
-  position: absolute;
-  bottom: -4px; left: 50%; transform: translateX(-50%);
-  border-width: 4px 4px 0;
-  border-style: solid;
-  border-color: var(--text-main) transparent transparent transparent;
-}
-.bar:hover .bar-tooltip { opacity: 1; top: -40px; }
 
-/* Çubuk Renk Geçişleri */
-.pv-bar { background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%); }
-.ev-bar { background: linear-gradient(180deg, #34d399 0%, #059669 100%); }
-.ac-bar { background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%); }
-
-.bar-label {
-  margin-top: 12px;
+.today-flag {
+  background: var(--danger-color);
+  color: white;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+  white-space: nowrap;
+  margin-bottom: 4px;
 }
 
-.chart-legend {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color);
+.today-dashed-line {
+  width: 2px;
+  height: 100%;
+  border-left: 2px dashed var(--danger-color);
 }
-.legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); }
-.legend-color { width: 12px; height: 12px; border-radius: 3px; }
-.pv-color { background: #3b82f6; }
-.ev-color { background: #10b981; }
-.ac-color { background: #f59e0b; }
+
+.date-pill.plan { border-left: 3px solid var(--info-color); }
+.date-pill.forecast { border-left: 3px solid var(--warning-color); }
+.date-pill.actual.completed { border-left: 3px solid var(--success-color); background: #f0fdf4; }
+.date-pill.actual.pending { border-left: 3px solid var(--neutral-color); opacity: 0.7; }
+
+.date-label { font-weight: 600; color: var(--text-muted); }
+.date-val { font-weight: 700; color: var(--text-main); }
 
 /* Animasyonlar */
 .fade-in { animation: fadeIn 0.4s ease-in-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Sağlık Rozetleri */
 .badge-health { padding: 4px 12px; border-radius: 12px; font-weight: 600; font-size: 0.85rem; }
 .badge-yesil { background: #dcfce7; color: #15803d; }
 .badge-sari { background: #fef3c7; color: #b45309; }
 .badge-kirmizi { background: #fee2e2; color: #b91c1c; }
-

@@ -38,6 +38,8 @@ public static class ProjectEndpoints
                     p.ManualHealth,
                     p.PlannedProgress,
                     p.ActualProgress,
+                    p.Bac,
+                    p.Currency,
                     p.StartDate,
                     p.BaselineFinishDate
                 ))
@@ -110,12 +112,17 @@ public static class ProjectEndpoints
         group.MapPost("", async (ProjectCreateDto dto, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
             var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
+            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
             if (userRole != "Sistem Yöneticisi")
                 return Results.Json(new { message = "Yeni proje oluşturma yetkisi sadece Sistem Yöneticisine aittir!" }, statusCode: 403);
 
             var exists = await db.Projects.AnyAsync(p => p.ProjectCode == dto.ProjectCode);
             if (exists)
                 return Results.BadRequest(new { message = "Bu proje kodu zaten kullanımda!" });
+
+            // Oturum açan kullanıcının ID'si yoksa varsayılan atanır
+            var creatorUserId = !string.IsNullOrEmpty(userId) ? userId : "USR-001";
 
             var newProject = new Project
             {
@@ -136,7 +143,14 @@ public static class ProjectEndpoints
                 CustomerId = dto.CustomerId,
                 ProjectManagerUserId = dto.ProjectManagerUserId,
                 ReportingFrequency = "Aylık", // MVP Sabiti
-                Confidentiality = dto.Confidentiality ?? "Şirket İçi"
+                Confidentiality = dto.Confidentiality ?? "Şirket İçi",
+
+                // 🚨 ZORUNLU VERİTABANI ALANLARI DÜZELTİLDİ:
+                CreatedByUserId = creatorUserId,
+                UpdatedByUserId = creatorUserId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsActive = 1
             };
 
             db.Projects.Add(newProject);
@@ -174,7 +188,14 @@ public static class ProjectEndpoints
             if (dto.ActualFinishDate.HasValue) project.ActualFinishDate = dto.ActualFinishDate.Value;
             if (!string.IsNullOrEmpty(dto.Confidentiality)) project.Confidentiality = dto.Confidentiality;
             if (!string.IsNullOrEmpty(dto.ProjectManagerUserId) && userRole == "Sistem Yöneticisi") 
-                project.ProjectManagerUserId = dto.ProjectManagerUserId; // PM değiştirmeyi sadece Admin yapabilir
+                project.ProjectManagerUserId = dto.ProjectManagerUserId;
+
+            // 🚨 GÜNCELLEME DENETİM (AUDIT) ALANLARI:
+            if (!string.IsNullOrEmpty(userId))
+            {
+                project.UpdatedByUserId = userId;
+            }
+            project.UpdatedAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
             return Results.Ok(new { message = "Proje başarıyla güncellendi." });

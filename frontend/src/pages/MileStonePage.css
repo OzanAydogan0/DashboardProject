@@ -286,8 +286,39 @@
   transition: background-color 0.2s;
 }
 
+
+
 .btn-submit:hover {
   background-color: #059669;
+}
+
+
+/* --- KİLOMETRE TAŞI SİL/İPTAL BUTONU --- */
+
+/* 1. Butonun Temel Görünümü */
+.btn-delete-milestone {
+  background-color: #dc3545; /* Dikkat çekici, standart silme (tehlike) kırmızısı */
+  color: white;              /* Yazı rengi beyaz */
+  border: none;              /* Standart çirkin kenarlıkları kaldırır */
+  padding: 8px 16px;         /* İç boşluklar: Yukarı/Aşağı 8px, Sağ/Sol 16px */
+  border-radius: 6px;        /* Köşeleri yumuşatır (daha modern görünüm) */
+  cursor: pointer;           /* Fare üzerine gelince imlecin el şeklini almasını sağlar */
+  font-size: 14px;           /* Yazı boyutu */
+  font-weight: 600;          /* Yazı kalınlığı (yarı kalın) */
+  margin-left: 8px;          /* Yanında başka buton varsa araya mesafe koyar */
+  transition: all 0.3s ease; /* Renk ve boyut değişimlerinin aniden değil, 0.3 saniyede yumuşakça olmasını sağlar */
+}
+
+/* 2. Fareyle Üzerine Gelindiğinde (Hover) */
+.btn-delete-milestone:hover {
+  background-color: #c82333; /* Rengi biraz daha koyu kırmızı yapar */
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4); /* Dışarıya doğru hafif kırmızımsı bir gölge verir */
+}
+
+/* 3. Butona Tıklandığı An (Active) */
+.btn-delete-milestone:active {
+  transform: scale(0.95);    /* Fiziksel tıklama hissiyatı için butonu %5 oranında küçültür */
+  box-shadow: none;          /* Küçüldüğünde gölgeyi kaldırarak derinlik hissini artırır */
 }
 
 /* ==========================================
@@ -302,5 +333,8 @@
   to {
     opacity: 1;
     transform: scale(1);
-  }
+  } 
+
+
+  
 }
