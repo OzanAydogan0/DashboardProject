@@ -65,7 +65,7 @@ function ReportsPage() {
 
     try {
       const format = outputFormats.excel ? 'excel' : 'pdf';
-      const blob = await projectService.generateReport(projectId, format);
+      const blob = await projectService.generateReport(projectId, format, startDate, endDate);
 
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -104,7 +104,6 @@ function ReportsPage() {
               onChange={(e) => setReportType(e.target.value)}
             >
               <option value="pir">Proje İlerleme Raporu (PİR)</option>
-              <option value="status">Statü Raporu</option>
             </select>
           </div>
 

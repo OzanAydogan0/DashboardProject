@@ -71,6 +71,8 @@ builder.Services.AddRateLimiter(options =>
 
 // 5. Yetkilendirme (Authorization) Servisi
 builder.Services.AddAuthorization();
+// EPPlus Excel Lisans Ayarı (Ticari Olmayan Kullanım)
+OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
 
 var app = builder.Build();
 
