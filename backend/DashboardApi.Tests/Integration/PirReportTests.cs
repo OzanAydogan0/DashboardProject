@@ -8,6 +8,7 @@ using DashboardApi.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using dashboardapi.Models;
 
 namespace DashboardApi.Tests.Integration;
 
@@ -219,6 +220,289 @@ public sealed class PirReportTests
         Assert.Equal(
             HttpStatusCode.Unauthorized,
             response.StatusCode);
+    }
+
+        [Fact]
+    public async Task GetPirReports_ForAnotherManagersProject_ReturnsForbidden()
+    {
+        // Arrange
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        TestUserCredentials pm1Credentials;
+        TestUserCredentials pm2Credentials;
+        string pm2ProjectId;
+        string protectedSummary;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider
+                .GetRequiredService<AppDbContext>();
+
+            var builder = new TestDataBuilder(db);
+
+            pm1Credentials = await builder.CreateActiveUserAsync(
+                role: "Proje Yöneticisi");
+
+            pm2Credentials = await builder.CreateActiveUserAsync(
+                role: "Proje Yöneticisi");
+
+            const string pm1ProjectId = "PRJ-001";
+            pm2ProjectId = "PRJ-002";
+
+            var pm1Project = await db.Projects.SingleAsync(
+                project => project.ProjectId == pm1ProjectId);
+
+            var pm2Project = await db.Projects.SingleAsync(
+                project => project.ProjectId == pm2ProjectId);
+
+            pm1Project.ProjectManagerUserId =
+                pm1Credentials.User.UserId;
+
+            pm2Project.ProjectManagerUserId =
+                pm2Credentials.User.UserId;
+
+            protectedSummary =
+                $"PM2 özel PİR içeriği {Guid.NewGuid():N}";
+
+            var now = DateTime.UtcNow;
+
+            db.PirReports.Add(new PirReport
+            {
+                PirReportId =
+                    $"TEST-PIR-{Guid.NewGuid():N}"[..17].ToUpperInvariant(),
+
+                ProjectId = pm2ProjectId,
+                Period = "2027-03",
+                ReportDate = new DateTime(2027, 3, 31),
+
+                ExecutiveSummary = protectedSummary,
+                CompletedWork = "PM2 projesine ait özel çalışma bilgisi.",
+                Delays = null,
+                NextPeriodPlan = "PM2 projesinin sonraki dönem planı.",
+                ManagementExpectations = null,
+
+                ManualHealth = "Sarı",
+                ReportStatus = "Yayımlandı",
+
+                PublishedByUserId = pm2Credentials.User.UserId,
+                PublishedAt = now,
+
+                CreatedByUserId = pm2Credentials.User.UserId,
+                UpdatedByUserId = pm2Credentials.User.UserId,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+
+            await db.SaveChangesAsync();
+        }
+
+        var loginRequest = new LoginRequest(
+            pm1Credentials.User.Email,
+            pm1Credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            loginRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            loginResponse.StatusCode);
+
+        var loginResult =
+            await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+
+        Assert.NotNull(loginResult);
+        Assert.False(string.IsNullOrWhiteSpace(loginResult.Token));
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                loginResult.Token);
+
+        // Act
+        using var response = await client.GetAsync(
+            $"/projects/{pm2ProjectId}/pirs");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            response.StatusCode);
+
+        var responseBody =
+            await response.Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain(
+            protectedSummary,
+            responseBody,
+            StringComparison.Ordinal);
+
+        using var verificationScope =
+            factory.Services.CreateScope();
+
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<AppDbContext>();
+
+        var protectedReportStillExists =
+            await verificationDb.PirReports.AnyAsync(
+                report =>
+                    report.ProjectId == pm2ProjectId &&
+                    report.ExecutiveSummary == protectedSummary);
+
+        // Reddedilen GET isteği veritabanındaki raporu değiştirmemeli.
+        Assert.True(protectedReportStillExists);
+    }
+
+    /*
+        * AC-05 ve API yönergesi mevcut PİR kaydının güncellenip
+        * yayımlanabilmesi için PATCH /reports/{id} bekliyor.
+        *
+        * Backend'de henüz UpdatePirReportRequest DTO'su olmadığı için
+        * payload JsonContent ile sözleşme adayı olarak gönderiliyor.
+        */
+        [Fact]
+    public async Task PirReport_CreateUpdateAndPublish_CompletesFullWorkflow()
+    {
+        // Arrange
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(
+            factory,
+            role: "Sistem Yöneticisi");
+
+        var loginRequest = new LoginRequest(
+            credentials.User.Email,
+            credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            loginRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            loginResponse.StatusCode);
+
+        var loginResult =
+            await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+
+        Assert.NotNull(loginResult);
+        Assert.False(string.IsNullOrWhiteSpace(loginResult.Token));
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                loginResult.Token);
+
+        const string period = "2027-01";
+
+        var createRequest = new CreatePirReportRequest(
+            ProjectId: "PRJ-003",
+            Period: period,
+            ReportDate: new DateTime(2027, 1, 31),
+            ExecutiveSummary: "İlk taslak yönetici özeti.",
+            CompletedWork: "İlk taslak tamamlanan işler.",
+            Delays: null,
+            NextPeriodPlan: "İlk taslak dönem planı.",
+            ManagementExpectations: null,
+            ManualHealth: "Sarı",
+            ReportStatus: "Taslak");
+
+        using var createResponse = await client.PostAsJsonAsync(
+            "/pirs",
+            createRequest);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            createResponse.StatusCode);
+
+        var createBody =
+            await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(
+            createBody.TryGetProperty(
+                "pirId",
+                out var pirIdProperty));
+
+        var pirId = pirIdProperty.GetString();
+
+        Assert.False(string.IsNullOrWhiteSpace(pirId));
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider
+                .GetRequiredService<AppDbContext>();
+
+            var draft = await db.PirReports
+                .AsNoTracking()
+                .SingleAsync(report =>
+                    report.PirReportId == pirId);
+
+            Assert.Equal("Taslak", draft.ReportStatus);
+            Assert.Null(draft.PublishedAt);
+            Assert.Null(draft.PublishedByUserId);
+        }
+        var updateAndPublishRequest = new
+        {
+            executiveSummary = "Güncellenmiş ve yayımlanmış yönetici özeti.",
+            completedWork = "Güncellenmiş tamamlanan işler.",
+            delays = "Kritik olmayan kısa gecikme.",
+            nextPeriodPlan = "Sonraki dönem kabul faaliyetleri.",
+            managementExpectations = "Yönetim onayı beklenmektedir.",
+            manualHealth = "Yeşil",
+            reportStatus = "Yayımlandı"
+        };
+
+        // Act
+        using var publishResponse = await client.PatchAsJsonAsync(
+            $"/reports/{pirId}",
+            updateAndPublishRequest);
+
+        // Assert
+        Assert.True(
+            publishResponse.StatusCode != HttpStatusCode.NotFound,
+            "AC-05 karşılanmıyor: PATCH /reports/{id} PİR güncelleme ve yayımlama endpoint'i uygulanmamış.");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            publishResponse.StatusCode);
+
+        using var verificationScope =
+            factory.Services.CreateScope();
+
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<AppDbContext>();
+
+        var publishedReport = await verificationDb.PirReports
+            .AsNoTracking()
+            .SingleAsync(report =>
+                report.PirReportId == pirId);
+
+        Assert.Equal(
+            "Güncellenmiş ve yayımlanmış yönetici özeti.",
+            publishedReport.ExecutiveSummary);
+
+        Assert.Equal(
+            "Güncellenmiş tamamlanan işler.",
+            publishedReport.CompletedWork);
+
+        Assert.Equal(
+            "Yayımlandı",
+            publishedReport.ReportStatus);
+
+        Assert.Equal(
+            "Yeşil",
+            publishedReport.ManualHealth);
+
+        Assert.Equal(
+            credentials.User.UserId,
+            publishedReport.PublishedByUserId);
+
+        Assert.NotNull(publishedReport.PublishedAt);
+
+        Assert.Equal(
+            credentials.User.UserId,
+            publishedReport.UpdatedByUserId);
     }
     private static async Task<TestUserCredentials> CreateActiveUserAsync(
         TestWebApplicationFactory factory,

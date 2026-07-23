@@ -138,6 +138,188 @@ public sealed class EvmTests
             message.GetString());
     }
 
+    [Fact]
+    public async Task CreateEvmRecord_ValidValues_CalculatesEacAndVacCorrectly()
+    {
+        // Arrange
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(
+            factory,
+            role: "Sistem Yöneticisi");
+
+        var loginRequest = new LoginRequest(
+            credentials.User.Email,
+            credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            loginRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            loginResponse.StatusCode);
+
+        var loginResult =
+            await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+
+        Assert.NotNull(loginResult);
+        Assert.False(string.IsNullOrWhiteSpace(loginResult.Token));
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                loginResult.Token);
+
+        /*
+        * CPI = EV / AC = 400 / 500 = 0,80
+        * EAC = BAC / CPI = 1000 / 0,80 = 1250
+        * VAC = BAC - EAC = 1000 - 1250 = -250
+        */
+        var request = new CreateEvmRecordRequest(
+            ProjectId: "PRJ-003",
+            Period: "2026-11",
+            Bac: 1000m,
+            Pv: 500m,
+            Ev: 400m,
+            Ac: 500m);
+
+        // Act
+        using var createResponse = await client.PostAsJsonAsync(
+            "/evm-records",
+            request);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            createResponse.StatusCode);
+
+        using var getResponse = await client.GetAsync(
+            "/projects/PRJ-003/evm-records");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            getResponse.StatusCode);
+
+        var records =
+            await getResponse.Content.ReadFromJsonAsync<List<EvmRecordDto>>();
+
+        Assert.NotNull(records);
+
+        var createdRecord = Assert.Single(
+            records,
+            record => record.Period == "2026-11");
+
+        Assert.Equal(0.80m, createdRecord.Cpi);
+        Assert.Equal(1250m, createdRecord.Eac);
+        Assert.Equal(-250m, createdRecord.Vac);
+    }
+
+        [Fact]
+    public async Task CreateEvmRecord_ZeroPvOrAc_HandlesUndefinedMetricsCorrectly()
+    {
+        // Arrange
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(
+            factory,
+            role: "Sistem Yöneticisi");
+
+        var loginRequest = new LoginRequest(
+            credentials.User.Email,
+            credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            loginRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            loginResponse.StatusCode);
+
+        var loginResult =
+            await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+
+        Assert.NotNull(loginResult);
+        Assert.False(string.IsNullOrWhiteSpace(loginResult.Token));
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                loginResult.Token);
+
+        var zeroPvRequest = new CreateEvmRecordRequest(
+            ProjectId: "PRJ-003",
+            Period: "2026-10",
+            Bac: 1000m,
+            Pv: 0m,
+            Ev: 400m,
+            Ac: 500m);
+
+        var zeroAcRequest = new CreateEvmRecordRequest(
+            ProjectId: "PRJ-003",
+            Period: "2026-12",
+            Bac: 1000m,
+            Pv: 500m,
+            Ev: 400m,
+            Ac: 0m);
+
+        // Act
+        using var zeroPvResponse = await client.PostAsJsonAsync(
+            "/evm-records",
+            zeroPvRequest);
+
+        using var zeroAcResponse = await client.PostAsJsonAsync(
+            "/evm-records",
+            zeroAcRequest);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            zeroPvResponse.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            zeroAcResponse.StatusCode);
+
+        using var getResponse = await client.GetAsync(
+            "/projects/PRJ-003/evm-records");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            getResponse.StatusCode);
+
+        var records =
+            await getResponse.Content.ReadFromJsonAsync<List<EvmRecordDto>>();
+
+        Assert.NotNull(records);
+
+        var zeroPvRecord = Assert.Single(
+            records,
+            record => record.Period == "2026-10");
+
+        var zeroAcRecord = Assert.Single(
+            records,
+            record => record.Period == "2026-12");
+
+        // PV = 0: SPI tanımsızdır.
+        Assert.Null(zeroPvRecord.Spi);
+
+        // AC sıfır olmadığı için diğer maliyet metrikleri hesaplanabilir.
+        Assert.Equal(0.80m, zeroPvRecord.Cpi);
+        Assert.Equal(1250m, zeroPvRecord.Eac);
+        Assert.Equal(-250m, zeroPvRecord.Vac);
+
+        // AC = 0: CPI tanımsızdır.
+        Assert.Equal(0.80m, zeroAcRecord.Spi);
+        Assert.Null(zeroAcRecord.Cpi);
+
+        // CPI hesaplanamadığı için EAC ve VAC da hesaplanamaz.
+        Assert.Null(zeroAcRecord.Eac);
+        Assert.Null(zeroAcRecord.Vac);
+    }
     private static async Task<TestUserCredentials> CreateActiveUserAsync(
         TestWebApplicationFactory factory,
         string role)

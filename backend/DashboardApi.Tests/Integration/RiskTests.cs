@@ -8,6 +8,7 @@ using DashboardApi.Tests.Builders;
 using DashboardApi.Tests.Fixtures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using dashboardapi.Models;
 
 namespace DashboardApi.Tests.Integration;
 
@@ -189,8 +190,76 @@ public sealed class RiskTests
             updatedRisk.UpdatedByUserId);
     }
 
+            [Fact]
+        public async Task CreateRisk_UpperManagementViewer_ReturnsForbidden()
+        {
+            // Arrange
+            await using var factory = new TestWebApplicationFactory();
+            using var client = factory.CreateHttpsClient();
+
+            var credentials = await CreateActiveUserAsync(
+                factory,
+                role: "Üst Yönetim İzleyicisi");
+
+            var loginRequest = new LoginRequest(
+                credentials.User.Email,
+                credentials.PlainTextPassword);
+
+            using var loginResponse = await client.PostAsJsonAsync(
+                "/auth/login",
+                loginRequest);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                loginResponse.StatusCode);
+
+            var loginResult =
+                await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+
+            Assert.NotNull(loginResult);
+            Assert.False(
+                string.IsNullOrWhiteSpace(loginResult.Token));
+
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue(
+                    "Bearer",
+                    loginResult.Token);
+
+            var request = new CreateRiskRequest(
+                ProjectId: "PRJ-001",
+                RiskTitle: "Üst yönetim yetki kontrolü",
+                RiskCategory: "Teknik",
+                RiskProbability: 3,
+                RiskImpact: 4,
+                RiskOwnerUserId: credentials.User.UserId,
+                RiskMitigation: "Bu kayıt oluşturulmamalıdır.",
+                RiskDueDate: new DateTime(2026, 12, 31),
+                RiskStatus: "Açık");
+
+            // Act
+            using var response = await client.PostAsJsonAsync(
+                "/risks",
+                request);
+
+            // Assert
+            Assert.Equal(
+                HttpStatusCode.Forbidden,
+                response.StatusCode);
+
+            using var scope = factory.Services.CreateScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<AppDbContext>();
+
+            var riskWasCreated = await db.Risks
+                .AsNoTracking()
+                .AnyAsync(risk =>
+                    risk.RiskTitle == "Üst yönetim yetki kontrolü");
+
+            Assert.False(riskWasCreated);
+        }
         [Fact]
-    public async Task CreateRisk_UpperManagementViewer_ReturnsForbidden()
+    public async Task GetProjectRisks_WithDifferentScores_ReturnsCorrectRiskHealth()
     {
         // Arrange
         await using var factory = new TestWebApplicationFactory();
@@ -198,7 +267,79 @@ public sealed class RiskTests
 
         var credentials = await CreateActiveUserAsync(
             factory,
-            role: "Üst Yönetim İzleyicisi");
+            role: "Sistem Yöneticisi");
+
+        var now = DateTime.UtcNow;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider
+                .GetRequiredService<AppDbContext>();
+
+            db.Risks.AddRange(
+                new Risk
+                {
+                    RiskId = "TEST-RSK-GREEN",
+                    ProjectId = "PRJ-003",
+                    RiskTitle = "Yeşil sağlık seviyesi testi",
+                    RiskCategory = "Teknik",
+                    RiskProbability = 2,
+                    RiskImpact = 2,
+                    RiskScore = 0,
+                    RiskOwnerUserId = credentials.User.UserId,
+                    RiskMitigation = "Test azaltma planı",
+                    RiskDueDate = now.AddDays(30),
+                    RiskStatus = "Açık",
+                    OpenedDate = now.Date,
+                    ClosedDate = null,
+                    CreatedByUserId = credentials.User.UserId,
+                    UpdatedByUserId = credentials.User.UserId,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                },
+                new Risk
+                {
+                    RiskId = "TEST-RSK-YELLOW",
+                    ProjectId = "PRJ-003",
+                    RiskTitle = "Sarı sağlık seviyesi testi",
+                    RiskCategory = "Takvim",
+                    RiskProbability = 3,
+                    RiskImpact = 3,
+                    RiskScore = 0,
+                    RiskOwnerUserId = credentials.User.UserId,
+                    RiskMitigation = "Test azaltma planı",
+                    RiskDueDate = now.AddDays(30),
+                    RiskStatus = "Açık",
+                    OpenedDate = now.Date,
+                    ClosedDate = null,
+                    CreatedByUserId = credentials.User.UserId,
+                    UpdatedByUserId = credentials.User.UserId,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                },
+                new Risk
+                {
+                    RiskId = "TEST-RSK-RED",
+                    ProjectId = "PRJ-003",
+                    RiskTitle = "Kırmızı sağlık seviyesi testi",
+                    RiskCategory = "Maliyet",
+                    RiskProbability = 4,
+                    RiskImpact = 5,
+                    RiskScore = 0,
+                    RiskOwnerUserId = credentials.User.UserId,
+                    RiskMitigation = "Test azaltma planı",
+                    RiskDueDate = now.AddDays(30),
+                    RiskStatus = "Açık",
+                    OpenedDate = now.Date,
+                    ClosedDate = null,
+                    CreatedByUserId = credentials.User.UserId,
+                    UpdatedByUserId = credentials.User.UserId,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+
+            await db.SaveChangesAsync();
+        }
 
         var loginRequest = new LoginRequest(
             credentials.User.Email,
@@ -216,46 +357,46 @@ public sealed class RiskTests
             await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
 
         Assert.NotNull(loginResult);
-        Assert.False(
-            string.IsNullOrWhiteSpace(loginResult.Token));
 
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue(
                 "Bearer",
                 loginResult.Token);
 
-        var request = new CreateRiskRequest(
-            ProjectId: "PRJ-001",
-            RiskTitle: "Üst yönetim yetki kontrolü",
-            RiskCategory: "Teknik",
-            RiskProbability: 3,
-            RiskImpact: 4,
-            RiskOwnerUserId: credentials.User.UserId,
-            RiskMitigation: "Bu kayıt oluşturulmamalıdır.",
-            RiskDueDate: new DateTime(2026, 12, 31),
-            RiskStatus: "Açık");
-
         // Act
-        using var response = await client.PostAsJsonAsync(
-            "/risks",
-            request);
+        using var response = await client.GetAsync(
+            "/projects/PRJ-003/risks");
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.Forbidden,
+            HttpStatusCode.OK,
             response.StatusCode);
 
-        using var scope = factory.Services.CreateScope();
+        var risks =
+            await response.Content.ReadFromJsonAsync<List<RiskDto>>();
 
-        var db = scope.ServiceProvider
-            .GetRequiredService<AppDbContext>();
+        Assert.NotNull(risks);
 
-        var riskWasCreated = await db.Risks
-            .AsNoTracking()
-            .AnyAsync(risk =>
-                risk.RiskTitle == "Üst yönetim yetki kontrolü");
+        var greenRisk = Assert.Single(
+            risks,
+            risk => risk.RiskId == "TEST-RSK-GREEN");
 
-        Assert.False(riskWasCreated);
+        var yellowRisk = Assert.Single(
+            risks,
+            risk => risk.RiskId == "TEST-RSK-YELLOW");
+
+        var redRisk = Assert.Single(
+            risks,
+            risk => risk.RiskId == "TEST-RSK-RED");
+
+        Assert.Equal(4, greenRisk.RiskScore);
+        Assert.Equal("Yeşil", greenRisk.RiskHealth);
+
+        Assert.Equal(9, yellowRisk.RiskScore);
+        Assert.Equal("Sarı", yellowRisk.RiskHealth);
+
+        Assert.Equal(20, redRisk.RiskScore);
+        Assert.Equal("Kırmızı", redRisk.RiskHealth);
     }
 
     private static async Task<TestUserCredentials> CreateActiveUserAsync(

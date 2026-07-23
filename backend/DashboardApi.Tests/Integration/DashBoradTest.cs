@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using ActionModel = dashboardapi.Models.Action;
 
 namespace DashboardApi.Tests.Integration;
-
 public sealed class DashboardTests
 {
     [Fact]

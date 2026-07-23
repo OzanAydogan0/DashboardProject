@@ -7,6 +7,7 @@ using dashboardapi.DTOs;
 using DashboardApi.Tests.Builders;
 using DashboardApi.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 
 namespace DashboardApi.Tests.Integration;
 
@@ -105,6 +106,128 @@ public sealed class PdfTests
         Assert.True(
             pdfBytes.Length > 500,
             $"Oluşturulan PDF çok küçük: {pdfBytes.Length} byte.");
+    }
+
+        [Fact]
+    public async Task ExportPirPdf_WithValidReport_ReturnsNonEmptyPdf()
+    {
+        // Arrange
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(
+            factory,
+            role: "Sistem Yöneticisi");
+
+        string pirId;
+        int pirCountBeforeRequest;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider
+                .GetRequiredService<AppDbContext>();
+
+            var publishedReport = await db.PirReports
+                .AsNoTracking()
+                .FirstOrDefaultAsync(report =>
+                    report.ReportStatus == "Yayımlandı");
+
+            Assert.NotNull(publishedReport);
+
+            pirId = publishedReport.PirReportId;
+            pirCountBeforeRequest = await db.PirReports.CountAsync();
+        }
+
+        var loginRequest = new LoginRequest(
+            credentials.User.Email,
+            credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            loginRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            loginResponse.StatusCode);
+
+        var loginResult =
+            await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+
+        Assert.NotNull(loginResult);
+        Assert.False(string.IsNullOrWhiteSpace(loginResult.Token));
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                loginResult.Token);
+
+        // Act
+        using var response = await client.GetAsync(
+            $"/pirs/{pirId}/export/pdf");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        Assert.Equal(
+            "application/pdf",
+            response.Content.Headers.ContentType?.MediaType);
+
+        var pdfBytes =
+            await response.Content.ReadAsByteArrayAsync();
+
+        Assert.NotEmpty(pdfBytes);
+
+        Assert.True(
+            pdfBytes.Length > 500,
+            $"Üretilen PDF beklenenden küçük: {pdfBytes.Length} byte.");
+
+        Assert.True(
+            pdfBytes.Length >= 4,
+            "PDF imzasını kontrol etmek için yeterli byte dönmedi.");
+
+        var pdfSignature = Encoding.ASCII.GetString(
+            pdfBytes,
+            0,
+            4);
+
+        Assert.Equal(
+            "%PDF",
+            pdfSignature);
+
+        var contentDisposition =
+            response.Content.Headers.ContentDisposition;
+
+        if (contentDisposition is not null)
+        {
+            var fileName =
+                contentDisposition.FileNameStar ??
+                contentDisposition.FileName;
+
+            Assert.False(string.IsNullOrWhiteSpace(fileName));
+
+            fileName = fileName.Trim('"');
+
+            Assert.EndsWith(
+                ".pdf",
+                fileName,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        using var verificationScope =
+            factory.Services.CreateScope();
+
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<AppDbContext>();
+
+        var pirCountAfterRequest =
+            await verificationDb.PirReports.CountAsync();
+
+        // Export amaçlı GET isteği veritabanını değiştirmemelidir.
+        Assert.Equal(
+            pirCountBeforeRequest,
+            pirCountAfterRequest);
     }
 
     private static async Task<TestUserCredentials> CreateActiveUserAsync(

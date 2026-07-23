@@ -175,8 +175,8 @@ CREATE TABLE milestones (
     CONSTRAINT fk_milestones_milestone_owner_user_id FOREIGN KEY (milestone_owner_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_milestones_created_by_user_id FOREIGN KEY (created_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_milestones_updated_by_user_id FOREIGN KEY (updated_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT ck_milestones_date_order CHECK (forecast_date >= planned_date OR actual_date IS NOT NULL),
-    CONSTRAINT ck_milestones_actual_date CHECK (actual_date IS NULL OR actual_date >= planned_date)
+    CONSTRAINT ck_milestones_date_order CHECK (forecast_date >= planned_date OR actual_date IS NOT NULL)
+   
 
 );
 
