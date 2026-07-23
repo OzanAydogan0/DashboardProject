@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 C:\Users\ozan.aydogan\Desktop\DashboardProject\backend\dashboardapi\bin\Debug\net10.0\appsettings.Development.json
 C:\Users\ozan.aydogan\Desktop\DashboardProject\backend\dashboardapi\bin\Debug\net10.0\appsettings.json
 C:\Users\ozan.aydogan\Desktop\DashboardProject\backend\dashboardapi\bin\Debug\net10.0\dashboardapi.staticwebassets.endpoints.json
@@ -196,6 +198,7 @@ C:\Users\ozan.aydogan\Desktop\DashboardProject\backend\dashboardapi\bin\Debug\ne
 C:\Users\ozan.aydogan\Desktop\DashboardProject\backend\dashboardapi\bin\Debug\net10.0\runtimes\win-x64\native\qpdf.dll
 C:\Users\ozan.aydogan\Desktop\DashboardProject\backend\dashboardapi\bin\Debug\net10.0\runtimes\win-x86\native\QuestPdfSkia.dll
 C:\Users\ozan.aydogan\Desktop\DashboardProject\backend\dashboardapi\bin\Debug\net10.0\runtimes\win-x86\native\qpdf.dll
+>>>>>>> 9dec7dfad3b397677f5367298b3419d33011a3e1
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\appsettings.Development.json
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\appsettings.json
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\dashboardapi.staticwebassets.endpoints.json
@@ -394,3 +397,8 @@ C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net10.0\dashboardapi.pdb
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net10.0\dashboardapi.genruntimeconfig.cache
 C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\obj\Debug\net10.0\ref\dashboardapi.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\EPPlus.System.Drawing.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\Microsoft.Win32.SystemEvents.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\System.Drawing.Common.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\runtimes\win\lib\net7.0\Microsoft.Win32.SystemEvents.dll
+C:\Users\adnan.goksu\Desktop\projectdashboard\backend\dashboardapi\bin\Debug\net10.0\runtimes\win\lib\net7.0\System.Drawing.Common.dll

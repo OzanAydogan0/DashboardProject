@@ -1,10 +1,14 @@
 import api from './api';
 
 export const projectService = {
-  // SCR-02: Portföy Dashboardu KPI ve Grafik Verileri (C# GET /dashboard ile eşleşti)
+  // =========================================================
+  // 📊 DASHBOARD & PROJE GENEL VERİLERİ
+  // =========================================================
+
+  // SCR-02: Portföy Dashboardu KPI ve Grafik Verileri
   getPortfolioDashboard: async (filters = {}) => {
     const response = await api.get('/dashboard', { params: filters });
-    return response.data; // List<DashboardSummaryDto> dizisi döner
+    return response.data;
   },
 
   // SCR-03: Proje Listesi
@@ -13,44 +17,38 @@ export const projectService = {
     return response.data;
   },
 
-  // SCR-04: Tek Proje Detay Özet Verisi
+// --- Riskler (Risks) ---
+getAllRisks: async () => {
+  const response = await api.get('/risks');
+  return response.data;
+},
+getProjectRisks: async (projectId) => {
+  const response = await api.get(`/projects/${projectId}/risks`);
+  return response.data;
+},
+
+// --- Aksiyonlar (Actions) ---
+getAllActions: async () => {
+  const response = await api.get('/actions');
+  return response.data;
+},
+getProjectActions: async (projectId) => {
+  const response = await api.get(`/projects/${projectId}/actions`);
+  return response.data;
+},
+
+  // SCR-04: Tek Proje Detay Özet Verisi (Eski kodundaki yapı korundu)
   getProjectDashboard: async (projectId) => {
     const response = await api.get(`/projects/${projectId}/dashboard`);
     return response.data;
   },
-  // src/services/projectService.js içindeki ilgili metod:
-
-generateReport: async (projectId, format = 'pdf') => {
-  // 1. Önce bu projeye ait PIR raporlarını çekiyoruz
-  const pirsResponse = await api.get(`/projects/${projectId}/pirs`);
-  const pirs = pirsResponse.data;
-
-  if (!pirs || pirs.length === 0) {
-    throw new Error("Bu projeye ait henüz oluşturulmuş bir PIR raporu bulunamadı.");
-  }
-
-  // En güncel PIR raporunun ID'sini alıyoruz
-  const latestPir = pirs[0]; 
-  const pirId = latestPir.pirReportId || latestPir.id;
-
-  // 2. Backend'deki GET endpoint'ine isteğimizi fırlatıyoruz
-  const endpoint = format === 'excel' 
-    ? `/pirs/${pirId}/export/excel` 
-    : `/pirs/${pirId}/export/pdf`;
-
-  const response = await api.get(endpoint, {
-    responseType: 'blob' // Dosya indirirken blob olarak almalıyız
-  });
-
-  return response.data;
-},
 
 
-  // Proje EVM Finansal Geçmiş Verisi (C# GET /dashboard/projects/{id}/evm)
-  getProjectEvm: async (projectId) => {
-    const response = await api.get(`/dashboard/projects/${projectId}/evm`);
+  getProjectById: async (id) => {
+    const response = await api.get(`/projects/${id}`);
     return response.data;
   },
+
 
   // Yeni Proje Ekleme
   createProject: async (projectData) => {
@@ -64,7 +62,20 @@ generateReport: async (projectId, format = 'pdf') => {
     return response.data;
   },
 
-  // Excel Dışa Aktarımı
+  // =========================================================
+  // 📈 EVM & RAPORLAMA & DIŞA AKTARIM
+  // =========================================================
+
+  getProjectEvm: async (projectId) => {
+    const response = await api.get(`/dashboard/projects/${projectId}/evm`);
+    return response.data;
+  },
+
+  getEvmRecords: async (projectId) => {
+    const response = await api.get(`/projects/${projectId}/evm-records`);
+    return response.data;
+  },
+
   exportProjectsExcel: async (filters = {}) => {
     const response = await api.get('/projects/export.xlsx', {
       params: filters,
@@ -73,57 +84,125 @@ generateReport: async (projectId, format = 'pdf') => {
     return response.data;
   },
 
-  // ---------------------------------------------------------
-  // TEK PROJE DETAYI: ALT SEKME VERİLERİ (GET & POST)
-  // ---------------------------------------------------------
+  // Eski kodundaki detaylı rapor alma fonksiyonu birebir korundu
+  generateReport: async (projectId, format = 'pdf', startDate, endDate) => {
+    const pirsResponse = await api.get(`/projects/${projectId}/pirs`);
+    let pirs = pirsResponse.data;
 
-  // PİR Dönemleri (Raporlar)
+    if (!pirs || pirs.length === 0) {
+      throw new Error("Bu projeye ait henüz oluşturulmuş bir PIR raporu bulunamadı.");
+    }
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0); // Günün başı
+      pirs = pirs.filter(p => new Date(p.reportDate) >= start);
+    }
+    
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Günün sonu
+      pirs = pirs.filter(p => new Date(p.reportDate) <= end);
+    }
+
+    if (pirs.length === 0) {
+      throw new Error("Seçilen tarih aralığında bu projeye ait bir rapor bulunamadı. Lütfen farklı tarihler seçin.");
+    }
+
+    const latestPir = pirs[0]; 
+    const pirId = latestPir.pirReportId || latestPir.id;
+
+    const endpoint = format === 'excel' 
+      ? `/pirs/${pirId}/export/excel` 
+      : `/pirs/${pirId}/export/pdf`;
+
+    const response = await api.get(endpoint, {
+      responseType: 'blob'
+    });
+
+    return response.data;
+  },
+
+  // =========================================================
+  // 📑 TEK PROJE DETAYI: ALT SEKME VERİLERİ (GET & POST)
+  // =========================================================
+
+  // --- PİR Dönemleri (Raporlar) ---
   getProjectReports: async (projectId) => {
-    const response = await api.get(`/projects/${projectId}/reports`);
+    // Backend'de endpoint '/pirs' olarak geçtiği için URL güncellendi, fonksiyon adı korundu.
+    const response = await api.get(`/projects/${projectId}/pirs`);
     return response.data;
   },
   createProjectReport: async (projectId, reportData) => {
-    const response = await api.post(`/projects/${projectId}/reports`, reportData);
+    // Frontend parametreleri korundu, payload içine projectId eklendi.
+    const payload = { ...reportData, projectId };
+    const response = await api.post(`/pirs`, payload);
     return response.data;
   },
 
-  // Kilometre Taşları (Milestones)
+  // --- Kilometre Taşları (Milestones) ---
   getProjectMilestones: async (projectId) => {
     const response = await api.get(`/projects/${projectId}/milestones`);
     return response.data;
   },
   createProjectMilestone: async (projectId, milestoneData) => {
-    const response = await api.post(`/projects/${projectId}/milestones`, milestoneData);
+    const payload = { ...milestoneData, projectId };
+    const response = await api.post(`/milestones`, payload);
     return response.data;
   },
 
-  // Riskler (Risks)
-  getProjectRisks: async (projectId) => {
-    const response = await api.get(`/projects/${projectId}/risks`);
-    return response.data;
-  },
+  
   createProjectRisk: async (projectId, riskData) => {
-    const response = await api.post(`/projects/${projectId}/risks`, riskData);
+    const payload = { ...riskData, projectId };
+    const response = await api.post(`/risks`, payload);
     return response.data;
   },
 
-  // Sorunlar (Issues)
+  // --- Sorunlar (Issues) ---
   getProjectIssues: async (projectId) => {
     const response = await api.get(`/projects/${projectId}/issues`);
     return response.data;
   },
   createProjectIssue: async (projectId, issueData) => {
-    const response = await api.post(`/projects/${projectId}/issues`, issueData);
+    const payload = { ...issueData, projectId };
+    const response = await api.post(`/issues`, payload);
     return response.data;
   },
 
-  // Aksiyonlar (Actions)
-  getProjectActions: async (projectId) => {
-    const response = await api.get(`/projects/${projectId}/actions`);
+  
+  createProjectAction: async (projectId, actionData) => {
+    const payload = { ...actionData, projectId };
+    const response = await api.post(`/actions`, payload);
     return response.data;
   },
-  createProjectAction: async (projectId, actionData) => {
-    const response = await api.post(`/projects/${projectId}/actions`, actionData);
+
+  // =========================================================
+  // 🌟 YENİ EKLENEN OPERASYONLAR (GÜNCELLEME, SİSTEM, KULLANICI)
+  // (Bunlar eski kodunu bozmaz, ekstra özellik kazandırır)
+  // =========================================================
+
+  getCustomers: async () => {
+    const response = await api.get('/customers'); 
+    return response.data;
+  },
+
+  updateMilestone: async (milestoneId, milestoneData) => {
+    const response = await api.patch(`/milestones/${milestoneId}`, milestoneData);
+    return response.data;
+  },
+
+  updateRisk: async (riskId, riskData) => {
+    const response = await api.patch(`/risks/${riskId}`, riskData);
+    return response.data;
+  },
+
+  updateIssue: async (issueId, issueData) => {
+    const response = await api.patch(`/issues/${issueId}`, issueData);
+    return response.data;
+  },
+
+  updateAction: async (actionId, actionData) => {
+    const response = await api.patch(`/actions/${actionId}`, actionData);
     return response.data;
   }
 };

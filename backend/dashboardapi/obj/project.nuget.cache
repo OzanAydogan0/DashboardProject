@@ -1,12 +1,13 @@
 {
   "version": 2,
-  "dgSpecHash": "oQhX1SToGgo=",
+  "dgSpecHash": "imHQu5FOk0I=",
   "success": true,
   "projectFilePath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\bcrypt.net-next\\4.2.0\\bcrypt.net-next.4.2.0.nupkg.sha512",
-    "C:\\Users\\adnan.goksu\\.nuget\\packages\\epplus\\8.6.1\\epplus.8.6.1.nupkg.sha512",
-    "C:\\Users\\adnan.goksu\\.nuget\\packages\\epplus.interfaces\\8.4.0\\epplus.interfaces.8.4.0.nupkg.sha512",
+    "C:\\Users\\adnan.goksu\\.nuget\\packages\\epplus\\7.3.2\\epplus.7.3.2.nupkg.sha512",
+    "C:\\Users\\adnan.goksu\\.nuget\\packages\\epplus.interfaces\\6.1.1\\epplus.interfaces.6.1.1.nupkg.sha512",
+    "C:\\Users\\adnan.goksu\\.nuget\\packages\\epplus.system.drawing\\6.1.1\\epplus.system.drawing.6.1.1.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\microsoft.aspnetcore.authentication.jwtbearer\\10.0.10\\microsoft.aspnetcore.authentication.jwtbearer.10.0.10.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.10\\microsoft.aspnetcore.openapi.10.0.10.nupkg.sha512",
@@ -37,6 +38,7 @@
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\microsoft.io.recyclablememorystream\\3.0.1\\microsoft.io.recyclablememorystream.3.0.1.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\microsoft.openapi\\2.0.0\\microsoft.openapi.2.0.0.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\microsoft.visualstudio.solutionpersistence\\1.0.52\\microsoft.visualstudio.solutionpersistence.1.0.52.nupkg.sha512",
+    "C:\\Users\\adnan.goksu\\.nuget\\packages\\microsoft.win32.systemevents\\7.0.0\\microsoft.win32.systemevents.7.0.0.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\mono.texttemplating\\3.0.0\\mono.texttemplating.3.0.0.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\questpdf\\2026.7.1\\questpdf.2026.7.1.nupkg.sha512",
@@ -52,14 +54,15 @@
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\system.composition.hosting\\9.0.0\\system.composition.hosting.9.0.0.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\system.composition.runtime\\9.0.0\\system.composition.runtime.9.0.0.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\system.composition.typedparts\\9.0.0\\system.composition.typedparts.9.0.0.nupkg.sha512",
+    "C:\\Users\\adnan.goksu\\.nuget\\packages\\system.drawing.common\\7.0.0\\system.drawing.common.7.0.0.nupkg.sha512",
     "C:\\Users\\adnan.goksu\\.nuget\\packages\\system.identitymodel.tokens.jwt\\8.19.2\\system.identitymodel.tokens.jwt.8.19.2.nupkg.sha512",
-    "C:\\Users\\adnan.goksu\\.nuget\\packages\\system.security.cryptography.pkcs\\10.0.7\\system.security.cryptography.pkcs.10.0.7.nupkg.sha512"
+    "C:\\Users\\adnan.goksu\\.nuget\\packages\\system.security.cryptography.pkcs\\8.0.0\\system.security.cryptography.pkcs.8.0.0.nupkg.sha512"
   ],
   "logs": [
     {
       "code": "NU1903",
       "level": "Warning",
-      "message": "Package 'Microsoft.OpenApi' 2.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc",
+      "message": "'Microsoft.OpenApi' 2.0.0 paketinde önem derecesi yüksek olan bilinen bir https://github.com/advisories/GHSA-v5pm-xwqc-g5wc güvenlik açığı var",
       "projectPath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",
       "warningLevel": 1,
       "filePath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",
@@ -71,7 +74,7 @@
     {
       "code": "NU1903",
       "level": "Warning",
-      "message": "Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q",
+      "message": "'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 paketinde önem derecesi yüksek olan bilinen bir https://github.com/advisories/GHSA-2m69-gcr7-jv3q güvenlik açığı var",
       "projectPath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",
       "warningLevel": 1,
       "filePath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",

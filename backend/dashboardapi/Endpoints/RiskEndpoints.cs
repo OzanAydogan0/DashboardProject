@@ -141,6 +141,49 @@ public static class RiskEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { message = "Risk başarıyla güncellendi." });
         });
+
+        // 4. GET /risks -> Tüm Aktif Projelerin Risklerini Listeleme (Genel Dashboard İçin)
+            app.MapGet("risks", async (ClaimsPrincipal userClaims, AppDbContext db) =>
+            {
+                var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
+                var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+                var query = db.Set<VwRisk>().AsQueryable();
+
+                // GÜVENLİK KONTROLÜ: Yöneticiler her şeyi görür, diğer kullanıcılar sadece üye/PM olduğu projelerin risklerini görür
+                if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+                {
+                    var accessibleProjectIds = await db.Projects
+                        .Where(p => p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId))
+                        .Select(p => p.ProjectId)
+                        .ToListAsync();
+
+                    query = query.Where(r => accessibleProjectIds.Contains(r.ProjectId));
+                }
+
+                var rawRisks = await query.ToListAsync();
+
+                var result = rawRisks.Select(r => new RiskDto(
+                    r.RiskId,
+                    r.ProjectId,
+                    r.ProjectCode,
+                    r.ProjectName,
+                    r.RiskTitle,
+                    r.RiskCategory,
+                    r.RiskProbability,
+                    r.RiskImpact,
+                    r.RiskScore,
+                    r.RiskStatus,
+                    r.RiskDueDate,
+                    r.RiskOwnerUserId,
+                    r.RiskOwnerFullName,
+                    ParseString(r.RiskHealth)
+                )).ToList();
+
+                return Results.Ok(result);
+            });
     }
 
     private static string ParseString(byte[]? bytes)

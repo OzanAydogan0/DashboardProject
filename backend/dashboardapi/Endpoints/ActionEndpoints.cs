@@ -151,5 +151,47 @@ public static class ActionEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { message = "Aksiyon başarıyla güncellendi." });
         });
+        // 4. GET /actions -> Tüm Projelerin Aksiyonlarını Listeleme (Genel Dashboard İçin)
+        app.MapGet("actions", async (ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
+            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            var query = db.Set<dashboardapi.Models.Action>()
+                .Include(a => a.ActionOwnerUser)
+                .AsQueryable();
+
+            // GÜVENLİK KONTROLÜ: Admin ve Üst Yönetim hepsini görür, diğerleri sadece kendi projelerindekini görür
+            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+            {
+                var accessibleProjectIds = await db.Projects
+                    .Where(p => p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId))
+                    .Select(p => p.ProjectId)
+                    .ToListAsync();
+
+                query = query.Where(a => accessibleProjectIds.Contains(a.ProjectId));
+            }
+
+            var actions = await query.ToListAsync();
+
+            var result = actions.Select(a => new ActionDto(
+                a.ActionId,
+                a.ProjectId,
+                a.ActionDescription,
+                a.SourceType,
+                a.SourceReference,
+                a.ActionOwnerUserId,
+                a.ActionOwnerUser?.FullName ?? "Atanmamış",
+                a.ActionDueDate,
+                a.ActionStatus,
+                a.ActionProgress,
+                a.ActionPriority,
+                a.CompletedDate
+            )).ToList();
+
+            return Results.Ok(result);
+        });
     }
 }
