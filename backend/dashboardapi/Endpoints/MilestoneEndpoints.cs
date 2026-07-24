@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
@@ -13,20 +14,13 @@ public static class MilestoneEndpoints
         // 1. GET /projects/{id}/milestones -> Projeye Ait Tüm Kilometre Taşlarını Listeleme
         app.MapGet("projects/{id}/milestones", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            // GÜVENLİK KONTROLÜ: Kullanıcı bu projenin kilometre taşlarını görmeye yetkili mi?
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == id && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-                
-                if (!hasAccess) 
-                    return Results.Json(new { message = "Bu projenin kilometre taşlarını görmeye yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+                return Results.Json(new { message = "Bu projenin kilometre taşlarını görmeye yetkiniz yok!" }, statusCode: 403);
 
             var milestones = await db.Set<Milestone>()
                 .Include(m => m.MilestoneOwnerUser)
@@ -55,24 +49,16 @@ public static class MilestoneEndpoints
         // 2. POST /projects/{projectId}/milestones -> Projeye Yeni Kilometre Taşı Ekleme
         app.MapPost("projects/{projectId}/milestones", async (string projectId, CreateMilestoneRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            // 🛡️ RAPOR KURALI: Üst Yönetim rolü veri ekleyemez
-            if (userRole == "Üst Yönetim")
+            if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolünün sisteme kilometre taşı ekleme yetkisi yoktur!" }, statusCode: 403);
 
-            // GÜVENLİK KONTROLÜ: Admin değilse, projenin PM'i veya ekip üyesi mi?
-            if (userRole != "Sistem Yöneticisi")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == projectId && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-                
-                if (!hasAccess) 
-                    return Results.Json(new { message = "Bu projeye kilometre taşı ekleme yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanWriteProjectAsync(db, projectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye kilometre taşı ekleme yetkiniz yok!" }, statusCode: 403);
 
             // GÜVENLİK AĞI: Eğer frontend'den Sahip ID gelmediyse veya boşsa, işlemi yapan kişiyi(userId) ata.
             // Bu sayede veritabanındaki 'NOT NULL' (Boş Olamaz) hatasını önlüyoruz.
@@ -111,27 +97,19 @@ public static class MilestoneEndpoints
         // 3. PATCH /milestones/{id} -> Kilometre Taşı Güncelleme 
         app.MapPatch("milestones/{id}", async (string id, UpdateMilestoneRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
             var milestone = await db.Set<Milestone>().FindAsync(id);
             if (milestone == null) return Results.NotFound(new { message = "Kilometre taşı bulunamadı." });
 
-            // 🛡️ RAPOR KURALI: Üst Yönetim değişiklik yapamaz
-            if (userRole == "Üst Yönetim")
+            if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolü kilometre taşları üzerinde değişiklik yapamaz!" }, statusCode: 403);
 
-            // GÜVENLİK KONTROLÜ: Yetkili PM veya Admin mi?
-            if (userRole != "Sistem Yöneticisi")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == milestone.ProjectId && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-
-                if (!hasAccess)
-                    return Results.Json(new { message = "Bu projenin kilometre taşını güncelleme yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanWriteProjectAsync(db, milestone.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projenin kilometre taşını güncelleme yetkiniz yok!" }, statusCode: 403);
 
             // Alanları güvenli şekilde güncelleme havuzu
             if (!string.IsNullOrEmpty(request.MilestoneName)) milestone.MilestoneName = request.MilestoneName;
@@ -157,8 +135,8 @@ public static class MilestoneEndpoints
             try
             {
                 // 1. KULLANICI BİLGİLERİNİ OKUMA VE OTURUM KONTROLÜ
-                var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-                var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userRole = PermissionHelper.GetUserRole(userClaims);
+                var userId = PermissionHelper.GetUserId(userClaims);
 
                 // Oturum açılmamışsa veya Token geçersizse 401 dön (Veritabanı çökmesini engeller)
                 if (string.IsNullOrEmpty(userId))
@@ -175,23 +153,14 @@ public static class MilestoneEndpoints
                 }
 
                 // 3. YETKİ KONTROLÜ
-                if (userRole == "Üst Yönetim")
+                if (PermissionHelper.IsExecutive(userRole))
                 {
-                    // Mesaj güncellendi
                     return Results.Json(new { message = "Üst Yönetim rolü iptal işlemi yapamaz!" }, statusCode: 403);
                 }
 
-                // Admin değilse projeye erişim yetkisi var mı kontrol et
-                if (userRole != "Sistem Yöneticisi")
+                if (!await PermissionHelper.CanWriteProjectAsync(db, milestone.ProjectId, userId, userRole))
                 {
-                    var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == milestone.ProjectId && 
-                        (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-
-                    if (!hasAccess)
-                    {
-                        // Mesaj güncellendi
-                        return Results.Json(new { message = "Bu projenin kilometre taşını iptal etme yetkiniz yok!" }, statusCode: 403);
-                    }
+                    return Results.Json(new { message = "Bu projenin kilometre taşını iptal etme yetkiniz yok!" }, statusCode: 403);
                 }
 
                 // 4. SOFT DELETE İŞLEMİ (Durumu İptal Olarak Güncelleme)

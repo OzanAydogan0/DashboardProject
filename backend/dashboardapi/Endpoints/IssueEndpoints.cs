@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
@@ -13,20 +14,13 @@ public static class IssueEndpoints
         // 1. GET /projects/{id}/issues -> Projeye Ait Tüm Aktif/Kapalı Sorunları Listeleme
         app.MapGet("projects/{id}/issues", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            // GÜVENLİK KONTROLÜ: Kullanıcı bu projenin sorunlarını görmeye yetkili mi?
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == id && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-                
-                if (!hasAccess) 
-                    return Results.Json(new { message = "Bu projenin sorun (issue) verilerini görmeye yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+                return Results.Json(new { message = "Bu projenin sorun (issue) verilerini görmeye yetkiniz yok!" }, statusCode: 403);
 
             var issues = await db.Set<Issue>()
                 .Include(i => i.IssueOwnerUser)
@@ -55,24 +49,16 @@ public static class IssueEndpoints
         // 2. POST /issues -> Projede Yeni Bir Sorun (Issue) Bildirme
         app.MapPost("issues", async (CreateIssueRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            // 🛡️ RAPOR KURALI: Üst Yönetim rolü hiçbir şekilde yeni sorun kaydı açamaz (Salt Okunur)
-            if (userRole == "Üst Yönetim")
+            if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolünün sisteme sorun kaydı ekleme yetkisi yoktur!" }, statusCode: 403);
 
-            // GÜVENLİK KONTROLÜ: Admin değilse, projenin PM'i veya ekip üyesi mi?
-            if (userRole != "Sistem Yöneticisi")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == request.ProjectId && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-                
-                if (!hasAccess) 
-                    return Results.Json(new { message = "Bu projeye sorun kaydı ekleme yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanWriteProjectAsync(db, request.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye sorun kaydı ekleme yetkiniz yok!" }, statusCode: 403);
 
             var newIssue = new Issue
             {
@@ -103,27 +89,19 @@ public static class IssueEndpoints
         // 3. PATCH /issues/{id} -> Sorun Güncelleme ve Kapatma Motoru (Eksik Operasyon Eklendi)
         app.MapPatch("issues/{id}", async (string id, UpdateIssueRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
             var issue = await db.Set<Issue>().FindAsync(id);
             if (issue == null) return Results.NotFound(new { message = "Sorun kaydı bulunamadı." });
 
-            // 🛡️ RAPOR KURALI: Üst Yönetim değişiklik yapamaz
-            if (userRole == "Üst Yönetim")
+            if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolü sorunlar üzerinde değişiklik yapamaz!" }, statusCode: 403);
 
-            // GÜVENLİK KONTROLÜ: Yetkili PM veya Admin mi?
-            if (userRole != "Sistem Yöneticisi")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == issue.ProjectId && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-
-                if (!hasAccess)
-                    return Results.Json(new { message = "Bu projenin sorun kaydını güncelleme yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanWriteProjectAsync(db, issue.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projenin sorun kaydını güncelleme yetkiniz yok!" }, statusCode: 403);
 
             // Alanları güvenli şekilde güncelleme
             if (!string.IsNullOrEmpty(request.IssueTitle)) issue.IssueTitle = request.IssueTitle;

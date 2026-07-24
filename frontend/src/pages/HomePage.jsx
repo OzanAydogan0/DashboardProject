@@ -60,8 +60,16 @@ function HomePage() {
   }
 
   // 🔍 Client-Side veya Reaktif Filtreleme
-  const filteredProjects = useMemo(() => {
+  const activeProjects = useMemo(() => {
     return rawProjects.filter((p) => {
+      const isActiveByFlag = Number(p.isActive ?? 1) === 1
+      const isActiveByStatus = (p.projectStatus || '').toLowerCase().includes('aktif')
+      return isActiveByFlag && isActiveByStatus
+    })
+  }, [rawProjects])
+
+  const filteredProjects = useMemo(() => {
+    return activeProjects.filter((p) => {
       const matchCode = !filters.projectCode || p.projectCode === filters.projectCode
       const matchHealth =
         !filters.health ||
@@ -70,7 +78,7 @@ function HomePage() {
 
       return matchCode && matchHealth && matchStatus
     })
-  }, [rawProjects, filters])
+  }, [activeProjects, filters])
 
   // 🧮 Gelen DTO Verisinden Dinamik KPI Hesaplamaları
   const kpis = useMemo(() => {
@@ -97,7 +105,7 @@ function HomePage() {
       const h = (p.manualHealth || '').toLowerCase()
       if (h.includes('kırmızı') || h.includes('kirmizi') || h.includes('red')) red++
       else if (h.includes('sarı') || h.includes('sari') || h.includes('yellow')) yellow++
-      else green++
+      else if (h.includes('yeşil') || h.includes('yesil') || h.includes('green')) green++
 
       const planned = p.plannedProgress || 0
       const actual = p.actualProgress || 0
@@ -179,7 +187,7 @@ function HomePage() {
         <div className="filter-item">
           <select name="projectCode" value={filters.projectCode} onChange={handleFilterChange}>
             <option value="">Tüm Projeler</option>
-            {rawProjects.map((p) => (
+            {activeProjects.map((p) => (
               <option key={p.projectId || p.projectCode} value={p.projectCode}>
                 {p.projectCode} - {p.projectName}
               </option>
@@ -190,7 +198,7 @@ function HomePage() {
         <div className="filter-item">
           <select name="status" value={filters.status} onChange={handleFilterChange}>
             <option value="">Tüm Durumlar</option>
-            {Array.from(new Set(rawProjects.map((p) => p.projectStatus).filter(Boolean))).map((st) => (
+            {Array.from(new Set(activeProjects.map((p) => p.projectStatus).filter(Boolean))).map((st) => (
               <option key={st} value={st}>{st}</option>
             ))}
           </select>
@@ -297,7 +305,6 @@ function HomePage() {
           <div className="donut-chart-wrapper">
             <div className="donut-relative">
               <svg viewBox="0 0 42 42" className="donut-svg">
-                <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#E2E8F0" strokeWidth="4.5" />
                 {/* Yeşil Dilim */}
                 <circle
                   cx="21" cy="21" r="15.915" fill="transparent"
@@ -442,7 +449,7 @@ function HomePage() {
 
         <div className="table-footer">
           <span className="pagination-info">
-            1 - {filteredProjects.length} / {rawProjects.length} Proje
+            1 - {filteredProjects.length} / {activeProjects.length} Proje
           </span>
         </div>
       </div>

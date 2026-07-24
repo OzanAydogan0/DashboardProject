@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models;
+using dashboardapi.Services;
 using System.ComponentModel.DataAnnotations;
 
 namespace dashboardapi.Endpoints;
@@ -17,6 +18,13 @@ public static class SystemEndpoints
 
         app.MapGet("projects/{id}/evm-records", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (!await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+                return Results.Json(new { message = "Bu projenin EVM kayıtlarını görmeye yetkiniz yok!" }, statusCode: 403);
+
             // 1. Adım: Projenin kendi para birimini 'Projects' tablosundan sorguluyoruz
             var projectCurrency = await db.Projects
                 .Where(p => p.ProjectId == id)
@@ -52,8 +60,15 @@ public static class SystemEndpoints
 
         app.MapPost("evm-records", async (CreateEvmRecordRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü EVM kaydı ekleyemez!" }, statusCode: 403);
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, request.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye EVM kaydı ekleme yetkiniz yok!" }, statusCode: 403);
 
             // --- EVM FORMÜLLERİ (BACKEND'DE OTOMATİK HESAPLANIYOR) ---
             decimal? sv = request.Ev - request.Pv; // Zaman Sapması
@@ -101,10 +116,9 @@ public static class SystemEndpoints
 
         app.MapGet("audit-logs", async (ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
             
-            // Logları sadece Sistem Yöneticisi görebilir!
-            if (userRole != "Sistem Yöneticisi")
+            if (!PermissionHelper.IsSystemAdmin(userRole))
                 return Results.Json(new { message = "Sistem loglarını görüntüleme yetkiniz yok!" }, statusCode: 403);
 
             var logs = await db.Set<AuditLog>()

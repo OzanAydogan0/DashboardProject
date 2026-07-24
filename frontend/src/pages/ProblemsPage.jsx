@@ -1,94 +1,307 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { projectService } from '../services/projectService';
+import './ProblemsPage.css';
 
-/**
- * Sorun / Problem Kayıtları (Problems / Issues) Tablo Bileşeni
- * Güncelleme: Genel punto boyutları (fontSize) belirgin şekilde büyütüldü.
- */
+const getCurrentUserId = () => {
+    try {
+        const userString = localStorage.getItem('user');
+        const user = userString ? JSON.parse(userString) : null;
+        return user?.userId || user?.UserId || user?.id || '';
+    } catch {
+        return '';
+    }
+};
+
+const emptyForm = {
+    issueTitle: '',
+    issuePriority: 'Orta',
+    issueOwnerUserId: getCurrentUserId(),
+    issueDueDate: '',
+    issueStatus: 'Açık',
+    issueImpact: 'Orta',
+    rootCause: '',
+    issueResolution: ''
+};
+
 function ProblemsPage() {
-    // 1. URL'den proje ID'sini alıyoruz
     const { id: projectId } = useParams();
 
-    // 2. State tanımlamaları
     const [issues, setIssues] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [form, setForm] = useState(emptyForm);
+    const [editingIssueId, setEditingIssueId] = useState(null);
+    const [showIssueModal, setShowIssueModal] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDeletingId, setIsDeletingId] = useState(null);
+    const [priorityFilter, setPriorityFilter] = useState('Hepsi');
+    const [canWrite, setCanWrite] = useState(false);
 
-    // 3. Tarih Biçimlendirme Yardımcı Fonksiyonu
     const formatDate = (dateString) => {
         if (!dateString) return '-';
         return new Date(dateString).toLocaleDateString('tr-TR');
     };
 
-    // 4. Önceliğe göre renk belirleyen yardımcı fonksiyon
     const getPriorityStyle = (priority) => {
         switch (priority?.toLowerCase()) {
+            case 'kritik':
+            case 'critical':
+                return { bg: '#f3e5d1', text: '#7c4a1b' };
             case 'yüksek':
             case 'high':
-                return { bg: '#fee2e2', text: '#991b1b' }; // Açık Kırmızı
+                return { bg: '#fee2e2', text: '#991b1b' };
             case 'orta':
             case 'medium':
-                return { bg: '#fef3c7', text: '#92400e' }; // Açık Turuncu
+                return { bg: '#fef3c7', text: '#92400e' };
             case 'düşük':
             case 'low':
-                return { bg: '#d1fae5', text: '#065f46' }; // Açık Yeşil
+                return { bg: '#d1fae5', text: '#065f46' };
             default:
-                return { bg: '#f3f4f6', text: '#374151' }; // Gri
+                return { bg: '#f3f4f6', text: '#374151' };
         }
     };
 
-    // 5. API'den tüm verileri çeken useEffect
+    const fetchIssues = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const data = await projectService.getProjectIssues(projectId);
+            setIssues(Array.isArray(data) ? data : []);
+        } catch (err) {
+            const backendMessage = err.response?.data?.message || err.message || 'Sorun kayıtları yüklenirken bir hata oluştu.';
+            setError(backendMessage);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchIssues = async () => {
-            try {
-                const token = localStorage.getItem('token');
-
-                const response = await fetch(`http://localhost:5074/projects/${projectId}/issues`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.status === 401) throw new Error("Oturum süreniz dolmuş, lütfen tekrar giriş yapın.");
-                if (response.status === 403) throw new Error("Bu projenin sorun verilerini görmeye yetkiniz yok!");
-                if (!response.ok) throw new Error("Sorun kayıtları yüklenirken bir hata oluştu.");
-
-                const data = await response.json();
-                setIssues(data);
-
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
+        const userString = localStorage.getItem('user');
+        try {
+            const user = userString ? JSON.parse(userString) : null;
+            const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || '';
+            const isExecutive = ['Üst Yönetim İzleyicisi', 'Üst Yönetim'].includes(userRole);
+            setCanWrite(!isExecutive);
+        } catch {
+            setCanWrite(false);
+        }
 
         if (projectId) {
             fetchIssues();
         }
     }, [projectId]);
 
-    // 6. Yüklenme ve Hata Durumları (Puntolar 18px yapıldı)
-    if (loading) return <div className="tab-content-wrapper fade-in"><p style={{ padding: '20px', fontSize: '18px' }}>Sorunlar ve çözüm detayları yükleniyor...</p></div>;
-    if (error) return <div className="tab-content-wrapper fade-in"><p style={{ padding: '20px', color: 'red', fontSize: '18px' }}>Hata: {error}</p></div>;
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setForm((prev) => ({ ...prev, [name]: value }));
+    };
 
-    // 7. Ana Ekran ve Büyütülmüş Puntolu Tablo
+    const filteredIssues = priorityFilter === 'Hepsi'
+        ? issues
+        : issues.filter((issue) => (issue.issuePriority || '').toLowerCase() === priorityFilter.toLowerCase());
+
+    const resetForm = () => {
+        setEditingIssueId(null);
+        setForm({
+            ...emptyForm,
+            issueOwnerUserId: getCurrentUserId()
+        });
+    };
+
+    const openCreateModal = () => {
+        resetForm();
+        setShowIssueModal(true);
+    };
+
+    const closeIssueModal = () => {
+        setShowIssueModal(false);
+        resetForm();
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!projectId) return;
+
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const payload = {
+                projectId,
+                issueTitle: form.issueTitle,
+                issuePriority: form.issuePriority,
+                issueOwnerUserId: form.issueOwnerUserId || getCurrentUserId(),
+                issueDueDate: form.issueDueDate ? new Date(form.issueDueDate).toISOString() : null,
+                issueStatus: form.issueStatus,
+                issueImpact: form.issueImpact,
+                rootCause: form.rootCause || '',
+                issueResolution: form.issueResolution || ''
+            };
+
+            if (editingIssueId) {
+                await projectService.updateIssue(editingIssueId, payload);
+            } else {
+                await projectService.createProjectIssue(projectId, payload);
+            }
+
+            closeIssueModal();
+            await fetchIssues();
+        } catch (err) {
+            const backendMessage = err.response?.data?.message || err.message || 'Sorun kaydı işlenemedi.';
+            setError(backendMessage);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleEdit = (issue) => {
+        setEditingIssueId(issue.issueId);
+        setForm({
+            issueTitle: issue.issueTitle || '',
+            issuePriority: issue.issuePriority || 'Orta',
+            issueOwnerUserId: issue.issueOwnerUserId || getCurrentUserId(),
+            issueDueDate: issue.issueDueDate ? new Date(issue.issueDueDate).toISOString().slice(0, 10) : '',
+            issueStatus: issue.issueStatus || 'Açık',
+            issueImpact: issue.issueImpact || 'Orta',
+            rootCause: issue.rootCause || '',
+            issueResolution: issue.issueResolution || ''
+        });
+        setShowIssueModal(true);
+    };
+
+    const handleSoftDelete = async (issue) => {
+        if (!window.confirm('Bu sorunu soft delete yapmak istediğinize emin misiniz? Durum alanı "Kapalı" olarak güncellenecek.')) {
+            return;
+        }
+
+        setIsDeletingId(issue.issueId);
+        setError(null);
+
+        try {
+            await projectService.updateIssue(issue.issueId, {
+                issueStatus: 'Kapalı',
+                issueResolution: 'Soft delete ile kapatıldı',
+                issueTitle: issue.issueTitle || '',
+                issuePriority: issue.issuePriority || 'Orta',
+                issueImpact: issue.issueImpact || 'Orta'
+            });
+            await fetchIssues();
+        } catch (err) {
+            const backendMessage = err.response?.data?.message || err.message || 'Sorun kapatılamadı.';
+            setError(backendMessage);
+        } finally {
+            setIsDeletingId(null);
+        }
+    };
+
+    if (loading) return <div className="tab-content-wrapper fade-in"><p className="status-text">Sorunlar ve çözüm detayları yükleniyor...</p></div>;
+    if (error) return <div className="tab-content-wrapper fade-in"><p className="status-text error-text">Hata: {error}</p></div>;
+
     return (
         <div className="tab-content-wrapper fade-in">
-            <div className="dashboard-card shadow-card">
-                
-                <div className="card-header">
+            <div className="dashboard-card shadow-card problems-card">
+                <div className="card-header problems-header">
                     <h2>Sorun (Issue) Kayıtları</h2>
+                    {canWrite && (
+                        <button type="button" className="btn-primary" onClick={openCreateModal}>
+                            Yeni Sorun
+                        </button>
+                    )}
                 </div>
 
+                {!canWrite && (
+                    <div className="permission-note">Bu projede sorun ekleme/düzenleme yetkiniz bulunmuyor.</div>
+                )}
+
+                <div className="problems-filter-bar">
+                    <label className="problems-filter-item">
+                        <span>Öncelik Filtre</span>
+                        <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+                            <option value="Hepsi">Hepsi</option>
+                            <option value="Düşük">Düşük</option>
+                            <option value="Orta">Orta</option>
+                            <option value="Yüksek">Yüksek</option>
+                            <option value="Kritik">Kritik</option>
+                        </select>
+                    </label>
+                </div>
+
+                {showIssueModal && canWrite && (
+                    <div className="issue-modal-overlay" onClick={closeIssueModal}>
+                        <div className="issue-modal" onClick={(e) => e.stopPropagation()}>
+                            <div className="issue-modal-header">
+                                <h3>{editingIssueId ? 'Sorun Düzenle' : 'Yeni Sorun Ekle'}</h3>
+                                <button type="button" className="modal-close-btn" onClick={closeIssueModal}>×</button>
+                            </div>
+
+                            <form className="issue-form" onSubmit={handleSubmit}>
+                                <div className="form-grid">
+                                    <label>
+                                        <span>Sorun Tanımı</span>
+                                        <input name="issueTitle" value={form.issueTitle} onChange={handleInputChange} required />
+                                    </label>
+                                    <label>
+                                        <span>Öncelik</span>
+                                        <select name="issuePriority" value={form.issuePriority} onChange={handleInputChange}>
+                                            <option value="Düşük">Düşük</option>
+                                            <option value="Orta">Orta</option>
+                                            <option value="Yüksek">Yüksek</option>
+                                            <option value="Kritik">Kritik</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Etki</span>
+                                        <select name="issueImpact" value={form.issueImpact} onChange={handleInputChange}>
+                                            <option value="Yüksek">Yüksek</option>
+                                            <option value="Orta">Orta</option>
+                                            <option value="Düşük">Düşük</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Durum</span>
+                                        <select name="issueStatus" value={form.issueStatus} onChange={handleInputChange}>
+                                            <option value="Açık">Açık</option>
+                                            <option value="İzleniyor">İzleniyor</option>
+                                            <option value="Kapalı">Kapalı</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Hedef Tarihi</span>
+                                        <input type="date" name="issueDueDate" value={form.issueDueDate} onChange={handleInputChange} />
+                                    </label>
+                                    <label>
+                                        <span>Sorumlu Kullanıcı ID</span>
+                                        <input name="issueOwnerUserId" value={form.issueOwnerUserId} onChange={handleInputChange} />
+                                    </label>
+                                    <label className="full-width">
+                                        <span>Kök Neden</span>
+                                        <textarea name="rootCause" value={form.rootCause} onChange={handleInputChange} rows="3" />
+                                    </label>
+                                    <label className="full-width">
+                                        <span>Çözüm</span>
+                                        <textarea name="issueResolution" value={form.issueResolution} onChange={handleInputChange} rows="3" placeholder="Çözüm açıklamasını buraya yazabilirsiniz" />
+                                    </label>
+                                </div>
+
+                                <div className="form-actions">
+                                    <button type="submit" className="btn-primary" disabled={isSubmitting}>
+                                        {isSubmitting ? 'Kaydediliyor...' : editingIssueId ? 'Güncelle' : 'Ekle'}
+                                    </button>
+                                    <button type="button" className="btn-secondary" onClick={closeIssueModal}>
+                                        İptal
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
                 <div className="table-responsive">
-                    {issues.length === 0 ? (
-                        <p style={{ padding: '20px', textAlign: 'center', fontSize: '18px' }}>Bu projeye ait henüz bir sorun kaydı bulunmuyor.</p>
+                    {filteredIssues.length === 0 ? (
+                        <p className="empty-state">Bu projeye ait henüz bir sorun kaydı bulunmuyor.</p>
                     ) : (
-                        /* Tablo temel puntosu 17px seviyesine yükseltildi */
-                        <table className="modern-table" style={{ width: '100%', textAlign: 'left', fontSize: '17px' }}>
+                        <table className="modern-table problems-table">
                             <thead>
                                 <tr>
                                     <th>ID</th>
@@ -99,73 +312,58 @@ function ProblemsPage() {
                                     <th>Sorumlu</th>
                                     <th>Kök Neden & Çözüm</th>
                                     <th>Tarih Detayları</th>
+                                    {canWrite && <th>İşlem</th>}
                                 </tr>
                             </thead>
                             <tbody>
-                                {issues.map((i) => {
+                                {filteredIssues.map((i) => {
                                     const priorityBadge = getPriorityStyle(i.issuePriority);
 
                                     return (
                                         <tr key={i.issueId}>
-                                            {/* 1. ID */}
+                                            <td><strong>{i.issueId}</strong></td>
+                                            <td><div className="font-medium">{i.issueTitle || '-'}</div></td>
                                             <td>
-                                                <strong>{i.issueId}</strong>
-                                            </td>
-
-                                            {/* 2. Sorun Tanımı */}
-                                            <td>
-                                                <div className="font-medium" style={{ fontSize: '17px' }}>{i.issueTitle || '-'}</div>
-                                            </td>
-
-                                            {/* 3. Öncelik (Rozet boyutu 15px yapıldı) */}
-                                            <td>
-                                                <span style={{ 
-                                                    backgroundColor: priorityBadge.bg, 
-                                                    color: priorityBadge.text,
-                                                    padding: '6px 12px', 
-                                                    borderRadius: '12px', 
-                                                    fontSize: '15px', 
-                                                    fontWeight: 'bold',
-                                                    display: 'inline-block'
-                                                }}>
+                                                <span className="priority-badge" style={{ backgroundColor: priorityBadge.bg, color: priorityBadge.text }}>
                                                     {i.issuePriority || 'Belirtilmemiş'}
                                                 </span>
                                             </td>
-
-                                            {/* 4. Etki */}
-                                            <td>
-                                                <strong>{i.issueImpact || '-'}</strong>
-                                            </td>
-
-                                            {/* 5. Durum */}
+                                            <td><strong>{i.issueImpact || '-'}</strong></td>
                                             <td>{i.issueStatus || '-'}</td>
-
-                                            {/* 6. Sorumlu (User ID 15px yapıldı) */}
                                             <td>
                                                 <div>{i.issueOwnerFullName || i.issueOwnerUser?.fullName || 'Atanmamış'}</div>
                                                 {i.issueOwnerUserId && (
-                                                    <small style={{ color: '#6b7280', fontSize: '15px' }}>User ID: {i.issueOwnerUserId}</small>
+                                                    <small className="owner-id-text">User ID: {i.issueOwnerUserId}</small>
                                                 )}
                                             </td>
-
-                                            {/* 7. Kök Neden & Çözüm (15px/16px seviyesine çıkarıldı) */}
                                             <td>
-                                                <div style={{ fontSize: '15px', marginBottom: '6px' }}>
-                                                    <strong>Kök Neden:</strong> {i.rootCause || '-'}
-                                                </div>
-                                                <div style={{ fontSize: '15px', color: '#16a34a' }}>
-                                                    <strong>Çözüm:</strong> {i.issueResolution || '-'}
-                                                </div>
+                                                <div className="issue-detail-line"><strong>Kök Neden:</strong> {i.rootCause || '-'}</div>
+                                                <div className="issue-detail-line issue-solution"><strong>Çözüm:</strong> {i.issueResolution || '-'}</div>
                                             </td>
-
-                                            {/* 8. Tarih Detayları (15px seviyesine çıkarıldı) */}
                                             <td>
-                                                <div style={{ fontSize: '15px', lineHeight: '1.6' }}>
+                                                <div className="date-detail-list">
                                                     <div><strong>Açılış:</strong> {formatDate(i.openedDate)}</div>
                                                     <div><strong>Hedef:</strong> {formatDate(i.issueDueDate)}</div>
                                                     <div><strong>Kapanış:</strong> {formatDate(i.closedDate)}</div>
                                                 </div>
                                             </td>
+                                            {canWrite && (
+                                                <td>
+                                                    <div className="row-actions">
+                                                        <button type="button" className="btn-secondary" onClick={() => handleEdit(i)}>
+                                                            Düzenle
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="btn-danger"
+                                                            onClick={() => handleSoftDelete(i)}
+                                                            disabled={isDeletingId === i.issueId}
+                                                        >
+                                                            {isDeletingId === i.issueId ? 'Kapatılıyor...' : 'Sil'}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            )}
                                         </tr>
                                     );
                                 })}

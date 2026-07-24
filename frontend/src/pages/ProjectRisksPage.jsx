@@ -1,78 +1,263 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { projectService } from '../services/projectService';
+import './ProjectRisksPage.css';
 
-/**
- * Proje Riskleri Sayfa Bileşeni (ProjectRisksPage)
- * - Proje Kodu ve Proje ID alanları kaldırılmıştır.
- * - Olasılık ve Etki değerleri ayrı sütunlarda gösterilmektedir.
- */
+const getCurrentUserId = () => {
+    try {
+        const userString = localStorage.getItem('user');
+        const user = userString ? JSON.parse(userString) : null;
+        return user?.userId || user?.UserId || user?.id || '';
+    } catch {
+        return '';
+    }
+};
+
+const emptyForm = {
+    riskTitle: '',
+    riskCategory: 'Genel',
+    riskProbability: 3,
+    riskImpact: 3,
+    riskStatus: 'Açık',
+    riskDueDate: '',
+    riskMitigation: '',
+    riskOwnerUserId: getCurrentUserId()
+};
+
 const ProjectRisksPage = () => {
-    // 1. URL'den proje ID'sini alıyoruz
     const { id: projectId } = useParams();
 
-    // 2. Sayfanın durumlarını (state) tanımlıyoruz
     const [risks, setRisks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [form, setForm] = useState(emptyForm);
+    const [editingRiskId, setEditingRiskId] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDeletingId, setIsDeletingId] = useState(null);
+    const [canWrite, setCanWrite] = useState(false);
+    const [showRiskModal, setShowRiskModal] = useState(false);
 
-    // 3. API'den risk verilerini çeken useEffect
+    const fetchRisks = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const data = await projectService.getProjectRisks(projectId);
+            setRisks(Array.isArray(data) ? data : []);
+        } catch (err) {
+            const backendMessage = err.response?.data?.message || err.message || 'Risk verileri alınamadı.';
+            setError(backendMessage);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchRisks = async () => {
-            try {
-                const token = localStorage.getItem('token'); 
-
-                const response = await fetch(`http://localhost:5074/projects/${projectId}/risks`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.status === 401) throw new Error("Oturum süreniz dolmuş, lütfen tekrar giriş yapın.");
-                if (response.status === 403) throw new Error("Bu projenin risk verilerini görmeye yetkiniz yok!");
-                if (!response.ok) throw new Error("Riskler yüklenirken bir hata oluştu.");
-
-                const data = await response.json();
-                setRisks(data);
-
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
+        const userString = localStorage.getItem('user');
+        try {
+            const user = userString ? JSON.parse(userString) : null;
+            const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || '';
+            const isExecutive = ['Üst Yönetim İzleyicisi', 'Üst Yönetim'].includes(userRole);
+            setCanWrite(!isExecutive);
+        } catch {
+            setCanWrite(false);
+        }
 
         if (projectId) {
             fetchRisks();
         }
     }, [projectId]);
 
-    // 4. Risk skoruna göre rozet (badge) rengini belirleyen fonksiyon
     const getScoreColor = (score) => {
-        if (score >= 15) return '#ef4444'; // Yüksek Risk: Kırmızı
-        if (score >= 8) return '#f59e0b';  // Orta Risk: Turuncu
-        return '#10b981';                  // Düşük Risk: Yeşil
+        if (score >= 15) return '#ef4444';
+        if (score >= 8) return '#f59e0b';
+        return '#10b981';
     };
 
-    // 5. Yüklenme ve Hata Durumları
-    if (loading) return <div className="tab-content-wrapper fade-in"><p style={{ padding: '20px' }}>Risk verileri yükleniyor...</p></div>;
-    if (error) return <div className="tab-content-wrapper fade-in"><p style={{ padding: '20px', color: 'red' }}>Hata: {error}</p></div>;
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setForm((prev) => ({ ...prev, [name]: value }));
+    };
 
-    // 6. Ana Tablo Ekranı
+    const resetForm = () => {
+        setEditingRiskId(null);
+        setForm({
+            ...emptyForm,
+            riskOwnerUserId: getCurrentUserId()
+        });
+    };
+
+    const openCreateModal = () => {
+        resetForm();
+        setShowRiskModal(true);
+    };
+
+    const closeRiskModal = () => {
+        setShowRiskModal(false);
+        resetForm();
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!projectId) return;
+
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const payload = {
+                ...form,
+                projectId,
+                riskProbability: Number(form.riskProbability),
+                riskImpact: Number(form.riskImpact),
+                riskDueDate: form.riskDueDate ? new Date(form.riskDueDate).toISOString() : null,
+            };
+
+            if (editingRiskId) {
+                await projectService.updateRisk(editingRiskId, payload);
+            } else {
+                await projectService.createProjectRisk(projectId, payload);
+            }
+
+            resetForm();
+            setShowRiskModal(false);
+            await fetchRisks();
+        } catch (err) {
+            const backendMessage = err.response?.data?.message || err.message || 'Risk kaydı işlenemedi.';
+            setError(backendMessage);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleEdit = (risk) => {
+        setEditingRiskId(risk.riskId);
+        setForm({
+            riskTitle: risk.riskTitle || '',
+            riskCategory: risk.riskCategory || 'Genel',
+            riskProbability: risk.riskProbability ?? 3,
+            riskImpact: risk.riskImpact ?? 3,
+            riskStatus: risk.riskStatus || 'Açık',
+            riskDueDate: risk.riskDueDate ? new Date(risk.riskDueDate).toISOString().slice(0, 10) : '',
+            riskMitigation: risk.riskMitigation || '',
+            riskOwnerUserId: risk.riskOwnerUserId || getCurrentUserId()
+        });
+        setShowRiskModal(true);
+    };
+
+    const handleDelete = async (riskId) => {
+        if (!window.confirm('Bu risk kaydını silmek istediğinize emin misiniz?')) {
+            return;
+        }
+
+        setIsDeletingId(riskId);
+        try {
+            await projectService.deleteRisk(riskId);
+            await fetchRisks();
+        } catch (err) {
+            const backendMessage = err.response?.data?.message || err.message || 'Risk silinemedi.';
+            setError(backendMessage);
+        } finally {
+            setIsDeletingId(null);
+        }
+    };
+
+    if (loading) return <div className="tab-content-wrapper fade-in"><p className="status-text">Risk verileri yükleniyor...</p></div>;
+    if (error) return <div className="tab-content-wrapper fade-in"><p className="status-text error-text">Hata: {error}</p></div>;
+
     return (
         <div className="tab-content-wrapper fade-in">
-            <div className="dashboard-card shadow-card">
-                
-                <div className="card-header">
+            <div className="dashboard-card shadow-card project-risks-card">
+                <div className="card-header project-risks-header">
                     <h2>Proje Risk Kayıtları</h2>
+                    {canWrite && (
+                        <button type="button" className="btn-primary" onClick={openCreateModal}>
+                            Yeni Risk
+                        </button>
+                    )}
                 </div>
+
+                {!canWrite && (
+                    <div className="permission-note">Bu projede risk ekleme/düzenleme yetkiniz bulunmuyor.</div>
+                )}
+
+                {showRiskModal && canWrite && (
+                    <div className="risk-modal-overlay" onClick={closeRiskModal}>
+                        <div className="risk-modal" onClick={(e) => e.stopPropagation()}>
+                            <div className="risk-modal-header">
+                                <h3>{editingRiskId ? 'Risk Düzenle' : 'Yeni Risk Ekle'}</h3>
+                                <button type="button" className="modal-close-btn" onClick={closeRiskModal}>×</button>
+                            </div>
+
+                            <form className="risk-form" onSubmit={handleSubmit}>
+                                <div className="form-grid">
+                                    <label>
+                                        <span>Risk Başlığı</span>
+                                        <input name="riskTitle" value={form.riskTitle} onChange={handleInputChange} required />
+                                    </label>
+                                    <label>
+                                        <span>Kategori</span>
+                                        <input name="riskCategory" value={form.riskCategory} onChange={handleInputChange} required />
+                                    </label>
+                                    <label>
+                                        <span>Olasılık</span>
+                                        <select name="riskProbability" value={form.riskProbability} onChange={handleInputChange}>
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="3">3</option>
+                                            <option value="4">4</option>
+                                            <option value="5">5</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Etki</span>
+                                        <select name="riskImpact" value={form.riskImpact} onChange={handleInputChange}>
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="3">3</option>
+                                            <option value="4">4</option>
+                                            <option value="5">5</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Durum</span>
+                                        <select name="riskStatus" value={form.riskStatus} onChange={handleInputChange}>
+                                            <option value="Açık">Açık</option>
+                                            <option value="İzleniyor">İzleniyor</option>
+                                            <option value="Kapandı">Kapandı</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Bitiş Tarihi</span>
+                                        <input type="date" name="riskDueDate" value={form.riskDueDate} onChange={handleInputChange} />
+                                    </label>
+                                    <label className="full-width">
+                                        <span>Sorumlu Kullanıcı ID</span>
+                                        <input name="riskOwnerUserId" value={form.riskOwnerUserId} onChange={handleInputChange} />
+                                    </label>
+                                    <label className="full-width">
+                                        <span>Azaltım / Müdahale</span>
+                                        <textarea name="riskMitigation" value={form.riskMitigation} onChange={handleInputChange} rows="3" />
+                                    </label>
+                                </div>
+
+                                <div className="form-actions">
+                                    <button type="submit" className="btn-primary" disabled={isSubmitting}>
+                                        {isSubmitting ? 'Kaydediliyor...' : editingRiskId ? 'Güncelle' : 'Ekle'}
+                                    </button>
+                                    <button type="button" className="btn-secondary" onClick={closeRiskModal}>
+                                        İptal
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
 
                 <div className="table-responsive">
                     {risks.length === 0 ? (
-                        <p style={{ padding: '20px', textAlign: 'center' }}>Bu projeye ait henüz bir risk tanımlanmamış.</p>
+                        <p className="empty-state">Bu projeye ait henüz bir risk tanımlanmamış.</p>
                     ) : (
-                        <table className="modern-table" style={{ width: '100%', textAlign: 'left' }}>
+                        <table className="modern-table">
                             <thead>
                                 <tr>
                                     <th>ID</th>
@@ -84,56 +269,46 @@ const ProjectRisksPage = () => {
                                     <th>Durum</th>
                                     <th>Sorumlu</th>
                                     <th>Bitiş Tarihi</th>
+                                    {canWrite && <th>İşlem</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {risks.map((risk) => (
                                     <tr key={risk.riskId}>
-                                        {/* 1. Risk ID */}
                                         <td>{risk.riskId}</td>
-
-                                        {/* 2. Risk Başlığı */}
                                         <td className="font-medium">{risk.riskTitle}</td>
-
-                                        {/* 3. Kategori */}
                                         <td>{risk.riskCategory || '-'}</td>
-
-                                        {/* 4. Olasılık (Ayrı Sütun) */}
+                                        <td><strong>{risk.riskProbability ?? '-'}</strong></td>
+                                        <td><strong>{risk.riskImpact ?? '-'}</strong></td>
                                         <td>
-                                            <strong>{risk.riskProbability ?? '-'}</strong>
-                                        </td>
-
-                                        {/* 5. Etki (Ayrı Sütun) */}
-                                        <td>
-                                            <strong>{risk.riskImpact ?? '-'}</strong>
-                                        </td>
-
-                                        {/* 6. Risk Skoru */}
-                                        <td>
-                                            <span style={{ 
-                                                backgroundColor: getScoreColor(risk.riskScore), 
-                                                color: 'white', 
-                                                padding: '4px 8px', 
-                                                borderRadius: '12px',
-                                                fontWeight: 'bold',
-                                                display: 'inline-block'
-                                            }}>
+                                            <span className="risk-score-pill" style={{ backgroundColor: getScoreColor(risk.riskScore) }}>
                                                 {risk.riskScore ?? 0}
                                             </span>
                                         </td>
-
-                                        {/* 7. Durum */}
                                         <td>{risk.riskStatus || '-'}</td>
-
-                                        {/* 8. Sorumlu */}
                                         <td>{risk.riskOwnerFullName || 'Atanmamış'}</td>
-
-                                        {/* 9. Bitiş Tarihi */}
                                         <td>
-                                            {risk.riskDueDate 
-                                                ? new Date(risk.riskDueDate).toLocaleDateString('tr-TR') 
+                                            {risk.riskDueDate
+                                                ? new Date(risk.riskDueDate).toLocaleDateString('tr-TR')
                                                 : 'Belirtilmemiş'}
                                         </td>
+                                        {canWrite && (
+                                            <td>
+                                                <div className="row-actions">
+                                                    <button type="button" className="btn-secondary" onClick={() => handleEdit(risk)}>
+                                                        Düzenle
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-danger"
+                                                        onClick={() => handleDelete(risk.riskId)}
+                                                        disabled={isDeletingId === risk.riskId}
+                                                    >
+                                                        {isDeletingId === risk.riskId ? 'Siliniyor...' : 'Sil'}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

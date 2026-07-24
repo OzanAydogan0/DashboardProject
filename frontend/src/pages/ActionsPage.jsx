@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { projectService } from '../services/projectService';
 import './ActionsPage.css';
 
 function ActionsPage({ projectId }) {
+  const navigate = useNavigate();
   const [actions, setActions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -84,8 +86,13 @@ function ActionsPage({ projectId }) {
             <tbody>
               {actions.map((action) => {
                 const progressValue = action.actionProgress ?? action.ActionProgress ?? 0;
+                const projectIdFromAction = action.projectId || action.ProjectId;
                 return (
-                  <tr key={action.actionId || action.ActionId}>
+                  <tr
+                    key={action.actionId || action.ActionId}
+                    onClick={() => navigate(`/projects/${projectIdFromAction}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td className="action-title-cell">
                       {action.actionDescription || action.ActionDescription}
                     </td>

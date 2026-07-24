@@ -210,6 +210,11 @@ importProjectsExcel: (formData) => {
     return response.data;
   },
 
+  deleteRisk: async (riskId) => {
+    const response = await api.delete(`/risks/${riskId}`);
+    return response.data;
+  },
+
   updateIssue: async (issueId, issueData) => {
     const response = await api.patch(`/issues/${issueId}`, issueData);
     return response.data;

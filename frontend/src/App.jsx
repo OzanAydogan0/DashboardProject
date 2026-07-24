@@ -28,7 +28,6 @@ const pageInfo = {
   '/settings': { title: 'Sistem Ayarları'},
 }
 
-// App.jsx içerisindeki ProtectedLayout bileşeni
 const ProtectedLayout = () => {
   const token = localStorage.getItem('token')
   const navigate = useNavigate()
@@ -58,7 +57,7 @@ const ProtectedLayout = () => {
   const currentPage = pageInfo[location.pathname] || { title: 'Proje Detayı', description: '' }
   const isActiveLink = (path) => path === '/' ? location.pathname === '/' : location.pathname === path || location.pathname.startsWith(`${path}/`)
 
-  // 💡 DİNAMİK ROL VE İSİM OKUMA (PascalCase / camelCase Esnekliği)
+  // DİNAMİK ROL VE İSİM OKUMA
   const userName = user?.fullName || user?.FullName || user?.name || user?.Name || 'Kullanıcı';
   const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || 'Rol Tanımsız';
 
@@ -107,8 +106,9 @@ const ProtectedLayout = () => {
       </aside>
 
       <main className="content-shell">
-        <header style={{ paddingBottom: '20px', borderBottom: '1px solid var(--border)', marginBottom: '24px' }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-h)' }}>{currentPage.title}</h1>
+        {/* DÜZELTİLEN BAŞLIK ALANI */}
+        <header className="page-header">
+          <h1>{currentPage.title}</h1>
         </header>
 
         <section className="page-content">

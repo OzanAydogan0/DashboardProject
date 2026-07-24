@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { projectService } from '../services/projectService';
 import './RisksPage.css';
 
 function RisksPage({ projectId }) {
+  const navigate = useNavigate();
   const [risks, setRisks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -74,11 +76,6 @@ function RisksPage({ projectId }) {
 
   return (
     <div className="dashboard-card full-width">
-      <div className="risk-header-container">
-        <div>
-          <h2>Risk Yönetimi</h2>
-        </div>
-      </div>
 
       {loading ? (
         <div className="status-message">Veritabanından risk verileri yükleniyor...</div>
@@ -101,7 +98,11 @@ function RisksPage({ projectId }) {
             </thead>
             <tbody>
               {risks.map((risk) => (
-                <tr key={risk.riskId}>
+                <tr
+                  key={risk.riskId}
+                  onClick={() => navigate(`/projects/${risk.projectId || risk.ProjectId}`)}
+                  style={{ cursor: 'pointer' }}
+                >
                   {/* Proje Adı (Sadece Genel Sayfada Görünür) */}
                   {!projectId && (
                     <td style={{ fontWeight: '600', color: '#475569' }}>

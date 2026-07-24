@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
@@ -15,17 +16,15 @@ public static class ProjectEndpoints
         // 1. GET /projects -> Rol Bazlı ve Akıllı Filtreli Proje Listesi
         group.MapGet("", async (ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            IQueryable<Project> query = db.Projects;
+            IQueryable<Project> query = db.Projects.Where(p => p.IsActive == 1);
 
-            // ROL KONTROLÜ: Sistem Yöneticisi veya Üst Yönetim DEĞİLSE filtrele (Pasif projeler elenir)
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+            if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
-                // Kullanıcı ya projenin yöneticisi olmalı YA DA proje ekibinde yer almalı
                 query = query.Where(p => p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId));
             }
 
@@ -51,21 +50,14 @@ public static class ProjectEndpoints
         // 2. GET /projects/{id} -> Detaylı Proje Verisi + Otomatik Hesaplama Motoru
         group.MapGet("{id}", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
-            var project = await db.Projects.FindAsync(id);
+            var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == id && p.IsActive == 1);
             if (project == null) return Results.NotFound(new { message = "Proje bulunamadı." });
 
-            // GÜVENLİK KONTROLÜ: Kullanıcının bu projeyi görmeye yetkisi var mı?
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
-            {
-                var hasAccess = project.ProjectManagerUserId == userId || 
-                                 await db.ProjectUsers.AnyAsync(pu => pu.ProjectId == id && pu.UserId == userId);
-                
-                if (!hasAccess) 
-                    return Results.Json(new { message = "Bu projenin detaylarını görmeye yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!string.IsNullOrEmpty(userId) && !await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+                return Results.Json(new { message = "Bu projenin detaylarını görmeye yetkiniz yok!" }, statusCode: 403);
 
             // 🧮 RAPOR KURALI: Otomatik Sağlık Önerisi Algoritması (Planlanan vs Gerçekleşen İlerleme kıyası)
             string autoHealthRecommendation = "Yeşil";
@@ -111,10 +103,10 @@ public static class ProjectEndpoints
         // 3. POST /projects -> Yeni Proje Oluşturma (Sadece Sistem Yöneticisi)
         group.MapPost("", async (ProjectCreateDto dto, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
-            if (userRole != "Sistem Yöneticisi")
+            if (!PermissionHelper.IsSystemAdmin(userRole))
                 return Results.Json(new { message = "Yeni proje oluşturma yetkisi sadece Sistem Yöneticisine aittir!" }, statusCode: 403);
 
             var exists = await db.Projects.AnyAsync(p => p.ProjectCode == dto.ProjectCode);
@@ -162,17 +154,16 @@ public static class ProjectEndpoints
         // 4. PATCH /projects/{id} -> Proje Güncelleme (Sistem Yöneticisi veya Atanmış PM)
         group.MapPatch("{id}", async (string id, ProjectUpdateDto dto, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
-            var project = await db.Projects.FindAsync(id);
+            var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == id && p.IsActive == 1);
             if (project == null) return Results.NotFound(new { message = "Proje bulunamadı." });
 
-            // ROL KONTROLÜ: Üst yönetim güncelleyemez. PM ise sadece kendi projesini güncelleyebilir.
-            if (userRole == "Üst Yönetim")
+            if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolü projeler üzerinde değişiklik yapamaz!" }, statusCode: 403);
 
-            if (userRole == "Proje Yöneticisi" && project.ProjectManagerUserId != userId)
+            if (!PermissionHelper.IsSystemAdmin(userRole) && !await PermissionHelper.CanManageProjectAsync(db, id, userId!, userRole))
                 return Results.Json(new { message = "Sadece kendi sorumlu olduğunuz projeleri güncelleyebilirsiniz!" }, statusCode: 403);
 
             // Alanları Güvenli Şekilde Güncelleme

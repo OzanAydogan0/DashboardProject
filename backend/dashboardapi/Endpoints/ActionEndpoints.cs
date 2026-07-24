@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
@@ -13,20 +14,13 @@ public static class ActionEndpoints
         // 1. GET /projects/{id}/actions -> Projeye Ait Tüm Aksiyonları Listeleme
         app.MapGet("projects/{id}/actions", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            // GÜVENLİK KONTROLÜ: Kullanıcı bu projenin aksiyonlarını görmeye yetkili mi?
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == id && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-                
-                if (!hasAccess) 
-                    return Results.Json(new { message = "Bu projenin aksiyonlarını görmeye yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+                return Results.Json(new { message = "Bu projenin aksiyonlarını görmeye yetkiniz yok!" }, statusCode: 403);
 
             var actions = await db.Set<dashboardapi.Models.Action>()
                 .Include(a => a.ActionOwnerUser)
@@ -54,24 +48,16 @@ public static class ActionEndpoints
         // 2. POST /actions -> Projeye Yeni Aksiyon Ekleme
         app.MapPost("actions", async (CreateActionRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            // 🛡️ RAPOR KURALI: Üst Yönetim rolü aksiyon oluşturamaz (Salt Okunur)
-            if (userRole == "Üst Yönetim")
+            if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolünün sisteme aksiyon ekleme yetkisi yoktur!" }, statusCode: 403);
 
-            // GÜVENLİK KONTROLÜ: Admin değilse, projenin PM'i veya ekip üyesi mi?
-            if (userRole != "Sistem Yöneticisi")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == request.ProjectId && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-                
-                if (!hasAccess) 
-                    return Results.Json(new { message = "Bu projeye aksiyon ekleme yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanWriteProjectAsync(db, request.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye aksiyon ekleme yetkiniz yok!" }, statusCode: 403);
 
             var newAction = new dashboardapi.Models.Action
             {
@@ -101,27 +87,19 @@ public static class ActionEndpoints
         // 3. PATCH /actions/{id} -> Aksiyon Güncelleme ve Otomatik Tamamlanma Motoru (Eksik Operasyon Eklendi)
         app.MapPatch("actions/{id}", async (string id, UpdateActionRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
             var action = await db.Set<dashboardapi.Models.Action>().FindAsync(id);
             if (action == null) return Results.NotFound(new { message = "Aksiyon kaydı bulunamadı." });
 
-            // 🛡️ RAPOR KURALI: Üst Yönetim değişiklik yapamaz
-            if (userRole == "Üst Yönetim")
+            if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolü aksiyonlar üzerinde değişiklik yapamaz!" }, statusCode: 403);
 
-            // GÜVENLİK KONTROLÜ: Yetkili PM veya Admin mi?
-            if (userRole != "Sistem Yöneticisi")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == action.ProjectId && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-
-                if (!hasAccess)
-                    return Results.Json(new { message = "Bu projenin aksiyonunu güncelleme yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanWriteProjectAsync(db, action.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projenin aksiyonunu güncelleme yetkiniz yok!" }, statusCode: 403);
 
             // Alanları güvenli şekilde güncelleme
             if (!string.IsNullOrEmpty(request.ActionDescription)) action.ActionDescription = request.ActionDescription;
@@ -159,15 +137,20 @@ public static class ActionEndpoints
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
+            var activeProjectIds = await db.Projects
+                .Where(p => p.IsActive == 1)
+                .Select(p => p.ProjectId)
+                .ToListAsync();
+
             var query = db.Set<dashboardapi.Models.Action>()
                 .Include(a => a.ActionOwnerUser)
+                .Where(a => activeProjectIds.Contains(a.ProjectId))
                 .AsQueryable();
 
-            // GÜVENLİK KONTROLÜ: Admin ve Üst Yönetim hepsini görür, diğerleri sadece kendi projelerindekini görür
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+            if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
                 var accessibleProjectIds = await db.Projects
-                    .Where(p => p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId))
+                    .Where(p => p.IsActive == 1 && (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)))
                     .Select(p => p.ProjectId)
                     .ToListAsync();
 
