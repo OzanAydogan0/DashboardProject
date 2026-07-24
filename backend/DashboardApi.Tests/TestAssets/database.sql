@@ -177,6 +177,7 @@ CREATE TABLE milestones (
     CONSTRAINT fk_milestones_updated_by_user_id FOREIGN KEY (updated_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT ck_milestones_date_order CHECK (forecast_date >= planned_date OR actual_date IS NOT NULL)
    
+
 );
 
 CREATE TABLE risks (
@@ -499,14 +500,14 @@ JOIN projects p ON p.project_id = e.project_id;
 -- ==========================================
 -- 5. DEMO VERİLERİNİN DOLDURULMASI (INSERTS)
 -- ==========================================
-/* her hash farklıdır aynısı olsa bile.
+
 -- A. KULLANICILAR (Şifreler 'Demo123!' olarak hashlenmiştir)
 INSERT INTO users (user_id, email, password_hash, full_name, user_role, user_status) VALUES 
 ('USR-ADMIN', 'admin@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Sistem Yöneticisi', 'Sistem Yöneticisi', 'Aktif'),
 ('USR-PM1', 'pm1@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Ahmet Yılmaz', 'Proje Yöneticisi', 'Aktif'),
 ('USR-PM2', 'pm2@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Canan Kaya', 'Proje Yöneticisi', 'Aktif'),
 ('USR-YONETIM', 'yonetim@pir.local', '$2a$11$e09a957863bf0d0db7691uD6pMepXg6r7C9f1uKWhV6Bq8Gv5uO8S', 'Bülent Koç', 'Üst Yönetim İzleyicisi', 'Aktif');
-*/
+
 -- B. PROGRAMLAR
 INSERT INTO programs (program_id, program_name, program_description, program_status) VALUES 
 ('PRG-001', 'Güvenlik Sistemleri', 'Havalimanı, sınır kapısı ve askeri entegre sınır güvenlik sistemleri.', 'Aktif'),
