@@ -12,7 +12,7 @@ import actionsIcon from './icons/ads_click_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz2
 // Sayfalar
 import HomePage from './pages/HomePage'
 import ProjectsPage from './pages/ProjectsPage'
-import ProjectDetailPage from './pages/ProjectDetailPage' // 👈 YENİ EKLENDİ
+import ProjectDetailPage from './pages/ProjectDetailPage'
 import ReportsPage from './pages/ReportsPage'
 import RisksPage from './pages/RisksPage'
 import ActionsPage from './pages/ActionsPage'
@@ -28,10 +28,22 @@ const pageInfo = {
   '/settings': { title: 'Sistem Ayarları'},
 }
 
+// App.jsx içerisindeki ProtectedLayout bileşeni
 const ProtectedLayout = () => {
   const token = localStorage.getItem('token')
   const navigate = useNavigate()
   const location = useLocation()
+
+  // Kullanıcı verisini güvenli bir şekilde okuyoruz
+  const userString = localStorage.getItem('user');
+  let user = null;
+  try {
+    if (userString && userString !== "undefined") {
+      user = JSON.parse(userString);
+    }
+  } catch (error) {
+    console.error("Kullanıcı bilgisi okunurken hata oluştu:", error);
+  }
 
   if (!token) {
     return <Navigate to="/login" replace />
@@ -43,9 +55,12 @@ const ProtectedLayout = () => {
     navigate('/login')
   }
 
-  // Dinamik rotalar (/projects/PRJ-001 gibi) için varsayılan başlık
   const currentPage = pageInfo[location.pathname] || { title: 'Proje Detayı', description: '' }
   const isActiveLink = (path) => path === '/' ? location.pathname === '/' : location.pathname === path || location.pathname.startsWith(`${path}/`)
+
+  // 💡 DİNAMİK ROL VE İSİM OKUMA (PascalCase / camelCase Esnekliği)
+  const userName = user?.fullName || user?.FullName || user?.name || user?.Name || 'Kullanıcı';
+  const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || 'Rol Tanımsız';
 
   return (
     <div className="app-shell">
@@ -77,20 +92,26 @@ const ProtectedLayout = () => {
             Ayarlar
           </Link>
         </nav>
+
+        {/* DİNAMİK PROFİL KARTI */}
+        <div className="sidebar-profile">
+          <div className="profile-info">
+            <span className="profile-name">{userName}</span>
+            <span className="profile-role">{userRole}</span>
+          </div>
+        </div>
+
         <button className="logout-button" onClick={handleLogout}>
           Çıkış Yap
         </button>
       </aside>
 
       <main className="content-shell">
-        <section className="page-content">
-          <header className="dashboard-header dashboard-top">
-            <div>
-              <h1>{currentPage.title}</h1>
-              <p>{currentPage.description}</p>
-            </div>
-          </header>
+        <header style={{ paddingBottom: '20px', borderBottom: '1px solid var(--border)', marginBottom: '24px' }}>
+          <h1 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-h)' }}>{currentPage.title}</h1>
+        </header>
 
+        <section className="page-content">
           <section className="dashboard-grid">
             <Outlet />
           </section>
@@ -105,11 +126,9 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/projects" element={<ProjectsPage />} />
-          {/* 👇 YENİ EKLENEN ROTA: Proje Detay Sayfası */}
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/risks" element={<RisksPage />} />

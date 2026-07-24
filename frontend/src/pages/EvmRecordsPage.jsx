@@ -29,9 +29,18 @@ function EvmRecordsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const formatCurrency = (val) => {
+    // Para birimini dinamik olarak formatlayan fonksiyon
+    // Eğer backend'den currency kodu gelmezse çökmemesi için 'TRY' varsayılan yapıldı.
+    const formatCurrency = (val, currencyCode = 'TRY') => {
         if (val === null || val === undefined) return '-';
-        return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
+        try {
+            return new Intl.NumberFormat('tr-TR', { 
+                style: 'currency', 
+                currency: currencyCode 
+            }).format(val);
+        } catch (err) {
+            return `${val} ${currencyCode}`;
+        }
     };
 
     useEffect(() => {
@@ -42,6 +51,7 @@ function EvmRecordsPage() {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!response.ok) throw new Error("EVM verileri alınamadı.");
+                
                 const data = await response.json();
                 setRecords(data);
             } catch (err) {
@@ -64,7 +74,6 @@ function EvmRecordsPage() {
             <div className="dashboard-card shadow-card" style={{ padding: '24px' }}>
                 <h2>Kazanılmış Değer Yönetimi (EVM)</h2>
 
-                {/* 1. YENİ RENK KURALLARINA GÖRE EVM TABLOSU */}
                 <div className="table-responsive" style={{ marginBottom: '40px' }}>
                     <table className="modern-table" style={{ width: '100%', fontSize: '17px' }}>
                         <thead>
@@ -82,49 +91,35 @@ function EvmRecordsPage() {
                         </thead>
                         <tbody>
                             {records.map((r) => {
-                                // Yeni renk kurallarının uygulanması
                                 const spiStyle = getMetricStatusStyle('spi', r.spi);
                                 const cpiStyle = getMetricStatusStyle('cpi', r.cpi);
+                                
+                                // DİKKAT: Backend tarafında veritabanından eklenecek olan alanın adını buraya yazmalısın.
+                                // Eğer backend'e "currency" adında eklerseniz burası anında çalışacaktır.
+                                const currentCurrency = r.currency || 'TRY';
 
                                 return (
                                     <tr key={r.evmRecordId}>
                                         <td><strong>{r.period}</strong></td>
-                                        <td>{formatCurrency(r.bac)}</td>
-                                        <td style={{ color: '#2563eb' }}>{formatCurrency(r.pv)}</td>
-                                        <td style={{ color: '#16a34a' }}>{formatCurrency(r.ev)}</td>
-                                        <td style={{ color: '#dc2626' }}>{formatCurrency(r.ac)}</td>
+                                        <td>{formatCurrency(r.bac, currentCurrency)}</td>
+                                        <td style={{ color: '#2563eb' }}>{formatCurrency(r.pv, currentCurrency)}</td>
+                                        <td style={{ color: '#16a34a' }}>{formatCurrency(r.ev, currentCurrency)}</td>
+                                        <td style={{ color: '#dc2626' }}>{formatCurrency(r.ac, currentCurrency)}</td>
                                         
-                                        {/* SPI Rozeti (Yeni Kurallarla) */}
                                         <td>
-                                            <span style={{
-                                                backgroundColor: spiStyle.bg,
-                                                color: spiStyle.text,
-                                                padding: '6px 12px',
-                                                borderRadius: '8px',
-                                                fontWeight: 'bold',
-                                                fontSize: '15px'
-                                            }}>
+                                            <span style={{ backgroundColor: spiStyle.bg, color: spiStyle.text, padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px' }}>
                                                 {r.spi ?? '-'}
                                             </span>
                                         </td>
-
-                                        {/* CPI Rozeti (Yeni Kurallarla) */}
                                         <td>
-                                            <span style={{
-                                                backgroundColor: cpiStyle.bg,
-                                                color: cpiStyle.text,
-                                                padding: '6px 12px',
-                                                borderRadius: '8px',
-                                                fontWeight: 'bold',
-                                                fontSize: '15px'
-                                            }}>
+                                            <span style={{ backgroundColor: cpiStyle.bg, color: cpiStyle.text, padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px' }}>
                                                 {r.cpi ?? '-'}
                                             </span>
                                         </td>
 
-                                        <td>{formatCurrency(r.eac)}</td>
+                                        <td>{formatCurrency(r.eac, currentCurrency)}</td>
                                         <td style={{ color: r.vac < 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>
-                                            {formatCurrency(r.vac)}
+                                            {formatCurrency(r.vac, currentCurrency)}
                                         </td>
                                     </tr>
                                 );
@@ -133,7 +128,6 @@ function EvmRecordsPage() {
                     </table>
                 </div>
 
-                {/* 2. TREND ÇİZGİ GRAFİĞİ */}
                 <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
                     <h3 style={{ fontSize: '18px', marginBottom: '20px' }}>PV, EV ve AC Trend Analizi</h3>
                     <ResponsiveContainer width="100%" height={350}>
@@ -141,7 +135,7 @@ function EvmRecordsPage() {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="period" />
                             <YAxis />
-                            <Tooltip formatter={(val) => formatCurrency(val)} />
+                            <Tooltip formatter={(val, name, props) => formatCurrency(val, props.payload.currency || 'TRY')} />
                             <Legend />
                             <Line type="monotone" dataKey="pv" name="PV (Planlanan)" stroke="#2563eb" strokeWidth={3} />
                             <Line type="monotone" dataKey="ev" name="EV (Kazanılan)" stroke="#16a34a" strokeWidth={3} />

@@ -145,7 +145,7 @@ export const projectService = {
   },
 
   createProjectReport: async (projectId, reportData) => {
-    const payload = { ...reportData, projectId };
+    const payload = { ...reportData, projectId };z
     const response = await api.post(`/pirs`, payload);
     return response.data;
   },

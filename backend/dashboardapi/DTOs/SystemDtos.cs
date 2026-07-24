@@ -7,6 +7,7 @@ public record EvmRecordDto(
     string EvmRecordId,
     string ProjectId,
     string Period,
+    string Currency,
     decimal Bac,
     decimal Pv,
     decimal Ev,
@@ -23,6 +24,7 @@ public record EvmRecordDto(
 public record CreateEvmRecordRequest(
     string ProjectId,
     string Period,
+    string Currency,
     decimal Bac,
     decimal Pv,
     decimal Ev,
