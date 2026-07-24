@@ -4,7 +4,7 @@ import { projectService } from '../services/projectService'
 import './ProjectsPage.css'
 
 const progressOptions = ['Hepsi', 'Devam Ediyor', 'Tamamlandı', 'Planlandı', 'Beklemede']
-const healthOptions = ['Hepsi', 'İyi', 'Orta', 'Kritik', 'Yeşil', 'Sarı', 'Kırmızı']
+const healthOptions = ['Hepsi', 'İyi', 'Orta', 'Kritik', 'Yeşil', 'Orta', 'Kötü']
 const budgetSortOptions = ['Yok', 'Artan', 'Azalan']
 const finishSortOptions = ['Yok', 'Artan', 'Azalan']
 

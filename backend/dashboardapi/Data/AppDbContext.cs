@@ -401,7 +401,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.ExecutiveSummary).HasColumnName("executive_summary");
             entity.Property(e => e.ManagementExpectations).HasColumnName("management_expectations");
             entity.Property(e => e.ManualHealth)
-                .HasDefaultValue("Gri")
+                .HasDefaultValue("Hesaplanamadı")
                 .HasColumnName("manual_health");
             entity.Property(e => e.NextPeriodPlan).HasColumnName("next_period_plan");
             entity.Property(e => e.Period).HasColumnName("period");
@@ -510,7 +510,7 @@ public partial class AppDbContext : DbContext
                 .HasDefaultValue(1)
                 .HasColumnName("is_active");
             entity.Property(e => e.ManualHealth)
-                .HasDefaultValue("Gri")
+                .HasDefaultValue("Hesaplanamadı")
                 .HasColumnName("manual_health");
             entity.Property(e => e.PlannedProgress)
                 .HasDefaultValueSql("0")

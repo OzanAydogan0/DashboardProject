@@ -66,10 +66,10 @@ public static class ProjectEndpoints
             }
 
             // 🧮 RAPOR KURALI: Otomatik Sağlık Önerisi Algoritması (Planlanan vs Gerçekleşen İlerleme kıyası)
-            string autoHealthRecommendation = "Yeşil";
+            string autoHealthRecommendation = "İyi";
             decimal progressGap = project.PlannedProgress - project.ActualProgress;
-            if (progressGap > 15) autoHealthRecommendation = "Kırmızı";
-            else if (progressGap > 5) autoHealthRecommendation = "Sarı";
+            if (progressGap > 15) autoHealthRecommendation = "Kötü";
+            else if (progressGap > 5) autoHealthRecommendation = "Orta";
 
             // 🧮 RAPOR KURALI: EVM (Kazanılmış Değer) Temel Hesaplamaları
             decimal bac = project.Bac;
@@ -124,7 +124,7 @@ public static class ProjectEndpoints
                 ProjectName = dto.ProjectName,
                 ProjectDescription = dto.ProjectDescription,
                 ProjectStatus = dto.ProjectStatus ?? "Taslak",
-                ManualHealth = dto.ManualHealth ?? "Yeşil",
+                ManualHealth = dto.ManualHealth ?? "İyi",
                 PlannedProgress = dto.PlannedProgress,
                 ActualProgress = dto.ActualProgress,
                 Bac = dto.Bac,

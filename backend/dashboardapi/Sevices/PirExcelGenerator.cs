@@ -15,7 +15,7 @@ public static class PirExcelGenerator
         var ws = package.Workbook.Worksheets.Add("PIR Raporu");
 
         // 📌 1. Izgara Çizgilerini Aç
-        ws.View.ShowGridLines = true;
+        ws.View.ShowHesaplanamadıdLines = true;
 
         // 📌 2. BAŞLIK ALANI
         ws.Cells["A1:E1"].Merge = true;

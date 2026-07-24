@@ -75,7 +75,7 @@ CREATE TABLE projects (
     forecast_finish_date DATE NOT NULL,
     actual_finish_date DATE,
     project_status TEXT DEFAULT 'Taslak' NOT NULL,
-    manual_health TEXT DEFAULT 'Gri' NOT NULL,
+    manual_health TEXT DEFAULT 'Hesaplanamadı' NOT NULL,
     planned_progress NUMERIC DEFAULT 0 NOT NULL,
     actual_progress NUMERIC DEFAULT 0 NOT NULL,
     bac NUMERIC DEFAULT 0 NOT NULL,
@@ -94,7 +94,7 @@ CREATE TABLE projects (
     CONSTRAINT fk_projects_customer_id FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_projects_project_manager_user_id FOREIGN KEY (project_manager_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT ck_projects_project_status CHECK (project_status IN ('Taslak','Aktif','Beklemede','Tamamlandı','Pasif')),
-    CONSTRAINT ck_projects_manual_health CHECK (manual_health IN ('Yeşil','Sarı','Kırmızı','Gri')),
+    CONSTRAINT ck_projects_manual_health CHECK (manual_health IN ('İyi','orta','Kötü','Hesaplanamadı')),
     CONSTRAINT ck_projects_planned_progress CHECK (planned_progress BETWEEN 0 AND 100),
     CONSTRAINT ck_projects_actual_progress CHECK (actual_progress BETWEEN 0 AND 100),
     CONSTRAINT ck_projects_bac CHECK (bac >= 0),
@@ -133,7 +133,7 @@ CREATE TABLE pir_reports (
     delays TEXT,
     next_period_plan TEXT NOT NULL,
     management_expectations TEXT,
-    manual_health TEXT DEFAULT 'Gri' NOT NULL,
+    manual_health TEXT DEFAULT 'Hesaplanamadı' NOT NULL,
     report_status TEXT DEFAULT 'Taslak' NOT NULL,
     published_by_user_id TEXT,
     published_at DATETIME,
@@ -145,7 +145,7 @@ CREATE TABLE pir_reports (
     CONSTRAINT uq_pir_reports_project_period UNIQUE (project_id, period),
     CONSTRAINT fk_pir_reports_project_id FOREIGN KEY (project_id) REFERENCES projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT ck_pir_reports_period CHECK (length(period) = 7 AND substr(period, 1, 4) GLOB '[0-9][0-9][0-9][0-9]' AND substr(period, 5, 1) = '-' AND substr(period, 6, 2) BETWEEN '01' AND '12'),
-    CONSTRAINT ck_pir_reports_manual_health CHECK (manual_health IN ('Yeşil','Sarı','Kırmızı','Gri')),
+    CONSTRAINT ck_pir_reports_manual_health CHECK (manual_health IN ('İyi','orta','Kötü','Hesaplanamadı')),
     CONSTRAINT ck_pir_reports_report_status CHECK (report_status IN ('Taslak','Yayımlandı')),
     CONSTRAINT fk_pir_reports_published_by_user_id FOREIGN KEY (published_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_pir_reports_created_by_user_id FOREIGN KEY (created_by_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -448,9 +448,9 @@ SELECT
     r.risk_owner_user_id,
     u.full_name AS risk_owner_full_name,
     CASE
-        WHEN r.risk_score BETWEEN 1 AND 4 THEN 'Yeşil'
-        WHEN r.risk_score BETWEEN 5 AND 15 THEN 'Sarı'
-        ELSE 'Kırmızı'
+        WHEN r.risk_score BETWEEN 1 AND 4 THEN 'İyi'
+        WHEN r.risk_score BETWEEN 5 AND 15 THEN 'orta'
+        ELSE 'Kötü'
     END AS risk_health
 FROM risks r
 JOIN projects p ON p.project_id = r.project_id
@@ -528,9 +528,9 @@ INSERT INTO projects (
     manual_health, planned_progress, actual_progress, bac, currency, reporting_frequency, 
     confidentiality, project_description, is_active, created_by_user_id, updated_by_user_id
 ) VALUES 
-('PRJ-001', 'PRJ-001', 'ÜBYES Entegre Güvenlik Sistemi', 'PRG-001', 'CST-101', 'USR-PM1', '2026-01-01', '2026-12-31', '2026-12-31', NULL, 'Aktif', 'Kırmızı', 50.00, 38.00, 250000.00, 'USD', 'Aylık', 'Şirket İçi', 'Ülke genelindeki sınır kapılarının entegre yazılım alt yapısı.', 1, 'USR-ADMIN', 'USR-ADMIN'),
-('PRJ-002', 'PRJ-002', 'ERİSİS PSIM Ürünleştirme', 'PRG-002', 'CST-202', 'USR-PM2', '2026-03-01', '2026-09-30', '2026-10-15', NULL, 'Aktif', 'Sarı', 70.00, 62.00, 800000.00, 'TRY', 'Aylık', 'Şirket İçi', 'Farklı güvenlik kamera ve sensörlerini ortak çatı altında birleştiren yazılım.', 1, 'USR-ADMIN', 'USR-ADMIN'),
-('PRJ-003', 'PRJ-003', 'AKSİ FPV İHA Tespit Sistemi', 'PRG-003', 'CST-303', 'USR-PM1', '2026-02-15', '2027-02-15', '2027-02-15', NULL, 'Aktif', 'Yeşil', 40.00, 42.00, 450000.00, 'EUR', 'Aylık', 'Hizmete Özel', 'Düşman mini kamikaze İHA''larını ses ve görüntüyle algılayan radar projesi.', 1, 'USR-ADMIN', 'USR-ADMIN');
+('PRJ-001', 'PRJ-001', 'ÜBYES Entegre Güvenlik Sistemi', 'PRG-001', 'CST-101', 'USR-PM1', '2026-01-01', '2026-12-31', '2026-12-31', NULL, 'Aktif', 'Kötü', 50.00, 38.00, 250000.00, 'USD', 'Aylık', 'Şirket İçi', 'Ülke genelindeki sınır kapılarının entegre yazılım alt yapısı.', 1, 'USR-ADMIN', 'USR-ADMIN'),
+('PRJ-002', 'PRJ-002', 'ERİSİS PSIM Ürünleştirme', 'PRG-002', 'CST-202', 'USR-PM2', '2026-03-01', '2026-09-30', '2026-10-15', NULL, 'Aktif', 'orta', 70.00, 62.00, 800000.00, 'TRY', 'Aylık', 'Şirket İçi', 'Farklı güvenlik kamera ve sensörlerini ortak çatı altında birleştiren yazılım.', 1, 'USR-ADMIN', 'USR-ADMIN'),
+('PRJ-003', 'PRJ-003', 'AKSİ FPV İHA Tespit Sistemi', 'PRG-003', 'CST-303', 'USR-PM1', '2026-02-15', '2027-02-15', '2027-02-15', NULL, 'Aktif', 'İyi', 40.00, 42.00, 450000.00, 'EUR', 'Aylık', 'Hizmete Özel', 'Düşman mini kamikaze İHA''larını ses ve görüntüyle algılayan radar projesi.', 1, 'USR-ADMIN', 'USR-ADMIN');
 
 -- E. PROJE KULLANICILARI (Project Assignments)
 INSERT OR IGNORE INTO project_users (project_user_id, project_id, user_id, assigned_by_user_id, assignment_status) VALUES 
@@ -545,8 +545,8 @@ INSERT INTO pir_reports (
     delays, next_period_plan, management_expectations, manual_health, report_status, 
     published_by_user_id, published_at, created_by_user_id, updated_by_user_id
 ) VALUES 
-('PIR-01', 'PRJ-001', '2026-06', '2026-06-30', 'Kritik sunucu donanımlarının gümrükte kalması nedeniyle gecikmeler yaşanmaktadır.', 'Sunucu mimari çizimleri tamamlandı, DB taslakları onaylandı.', 'Gümrük işlemleri ve gümrük vergisi muafiyeti belgesi gecikmiştir.', 'Alternatif yerli donanım testlerinin yapılması ve veri merkezinin hazırlanması.', 'Gümrük evrakları için bakanlık nezdinde acil destek talep edilmektedir.', 'Kırmızı', 'Yayımlandı', 'USR-YONETIM', '2026-07-01 14:00:00', 'USR-PM1', 'USR-PM1'),
-('PIR-02', 'PRJ-002', '2026-06', '2026-06-30', 'Genel olarak planlanan takvime uygun gidilmektedir, tasarım ekibi ek destek vermektedir.', 'Web arayüz kodlamaları tamamlandı, API entegrasyonu başladı.', 'Mobil tasarım tarafında 1 haftalık bir gecikme gözlemlendi.', 'Mobil API''ların bağlanması ve ilk beta sürümün müşteriye sunulması.', 'Önemli bir üst yönetim kararı bulunmamaktadır.', 'Sarı', 'Yayımlandı', 'USR-YONETIM', '2026-07-01 15:30:00', 'USR-PM2', 'USR-PM2');
+('PIR-01', 'PRJ-001', '2026-06', '2026-06-30', 'Kritik sunucu donanımlarının gümrükte kalması nedeniyle gecikmeler yaşanmaktadır.', 'Sunucu mimari çizimleri tamamlandı, DB taslakları onaylandı.', 'Gümrük işlemleri ve gümrük vergisi muafiyeti belgesi gecikmiştir.', 'Alternatif yerli donanım testlerinin yapılması ve veri merkezinin hazırlanması.', 'Gümrük evrakları için bakanlık nezdinde acil destek talep edilmektedir.', 'Kötü', 'Yayımlandı', 'USR-YONETIM', '2026-07-01 14:00:00', 'USR-PM1', 'USR-PM1'),
+('PIR-02', 'PRJ-002', '2026-06', '2026-06-30', 'Genel olarak planlanan takvime uygun gidilmektedir, taortam ekibi ek destek vermektedir.', 'Web arayüz kodlamaları tamamlandı, API entegrasyonu başladı.', 'Mobil taortam tarafında 1 haftalık bir gecikme gözlemlendi.', 'Mobil API''ların bağlanması ve ilk beta sürümün müşteriye sunulması.', 'Önemli bir üst yönetim kararı bulunmamaktadır.', 'orta', 'Yayımlandı', 'USR-YONETIM', '2026-07-01 15:30:00', 'USR-PM2', 'USR-PM2');
 
 -- G. KİLOMETRE TAŞLARI (Milestones)
 INSERT INTO milestones (
@@ -554,9 +554,9 @@ INSERT INTO milestones (
     milestone_status, critical, milestone_owner_user_id, acceptance_criteria, milestone_description, 
     created_by_user_id, updated_by_user_id
 ) VALUES 
-('MS-101', 'PRJ-001', 'Kritik Tasarım Onayı (CDR)', '2026-04-15', '2026-04-15', '2026-04-15', 'Tamamlandı', 1, 'USR-PM1', 'Tüm paydaşların imzaladığı CDR belgesi.', 'Yazılım ve donanım mimari tasarımı.', 'USR-ADMIN', 'USR-ADMIN'),
+('MS-101', 'PRJ-001', 'Kritik Taortam Onayı (CDR)', '2026-04-15', '2026-04-15', '2026-04-15', 'Tamamlandı', 1, 'USR-PM1', 'Tüm paydaşların imzaladığı CDR belgesi.', 'Yazılım ve donanım mimari taortamı.', 'USR-ADMIN', 'USR-ADMIN'),
 ('MS-102', 'PRJ-001', 'Fabrika Kabul Testleri (FAT)', '2026-08-01', '2026-08-15', NULL, 'Devam Ediyor', 1, 'USR-PM1', 'Test senaryolarının %98 başarı oranıyla geçilmesi.', 'Donanım entegrasyonlarının laboratuvarda test edilmesi.', 'USR-ADMIN', 'USR-ADMIN'),
-('MS-201', 'PRJ-002', 'Veritabanı Tasarım Kilidi', '2026-04-01', '2026-04-05', '2026-04-05', 'Tamamlandı', 0, 'USR-PM2', 'SQLite şemasının test sunucusunda kilitlenmesi.', 'EF Core şema eşleme ve migration süreci.', 'USR-ADMIN', 'USR-ADMIN');
+('MS-201', 'PRJ-002', 'Veritabanı Taortam Kilidi', '2026-04-01', '2026-04-05', '2026-04-05', 'Tamamlandı', 0, 'USR-PM2', 'SQLite şemasının test sunucusunda kilitlenmesi.', 'EF Core şema eşleme ve migration süreci.', 'USR-ADMIN', 'USR-ADMIN');
 
 -- H. RİSKLER (Tetikleyiciler risk_score''u otomatik hesaplayacak)
 INSERT INTO risks (

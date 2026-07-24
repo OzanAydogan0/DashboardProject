@@ -95,8 +95,8 @@ function HomePage() {
 
     filteredProjects.forEach((p) => {
       const h = (p.manualHealth || '').toLowerCase()
-      if (h.includes('kırmızı') || h.includes('kirmizi') || h.includes('red')) red++
-      else if (h.includes('sarı') || h.includes('sari') || h.includes('yellow')) yellow++
+      if (h.includes('kötü') || h.includes('kotu') || h.includes('kirmizi') || h.includes('red')) red++
+      else if (h.includes('orta') || h.includes('sarı') ||h.includes('sari') || h.includes('yellow')) yellow++
       else green++
 
       const planned = p.plannedProgress || 0
@@ -199,9 +199,11 @@ function HomePage() {
         <div className="filter-item">
           <select name="health" value={filters.health} onChange={handleFilterChange}>
             <option value="">Tüm Sağlık Durumları</option>
-            <option value="Yeşil">Yeşil</option>
-            <option value="Sarı">Sarı</option>
-            <option value="Kırmızı">Kırmızı</option>
+            <option value="İyi">İyi</option>
+            <option value="Orta">Orta</option>
+            <option value="Kötü">Kötü</option>
+            <option value="Hesaplanamadı">Hesaplanamadı</option>
+
           </select>
         </div>
 
@@ -305,14 +307,14 @@ function HomePage() {
                   strokeDasharray={`${greenPct} ${100 - greenPct}`}
                   strokeDashoffset={greenOffset}
                 />
-                {/* Sarı Dilim */}
+                {/* Orta Dilim */}
                 <circle
                   cx="21" cy="21" r="15.915" fill="transparent"
                   stroke="#F59E0B" strokeWidth="4.5"
                   strokeDasharray={`${yellowPct} ${100 - yellowPct}`}
                   strokeDashoffset={yellowOffset}
                 />
-                {/* Kırmızı Dilim */}
+                {/* Kötü Dilim */}
                 <circle
                   cx="21" cy="21" r="15.915" fill="transparent"
                   stroke="#EF4444" strokeWidth="4.5"
@@ -327,9 +329,9 @@ function HomePage() {
             </div>
 
             <div className="chart-legend">
-              <div className="legend-item"><span className="dot green"></span> Yeşil ({kpis.greenProjects})</div>
-              <div className="legend-item"><span className="dot yellow"></span> Sarı ({kpis.yellowProjects})</div>
-              <div className="legend-item"><span className="dot red"></span> Kırmızı ({kpis.redProjects})</div>
+              <div className="legend-item"><span className="dot green"></span> İyi ({kpis.greenProjects})</div>
+              <div className="legend-item"><span className="dot yellow"></span> Orta ({kpis.yellowProjects})</div>
+              <div className="legend-item"><span className="dot red"></span> Kötü ({kpis.redProjects})</div>
             </div>
           </div>
         </div>
