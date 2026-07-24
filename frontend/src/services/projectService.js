@@ -67,6 +67,18 @@ export const projectService = {
   // 📈 EVM & RAPORLAMA & DIŞA AKTARIM
   // =========================================================
 
+// =========================================================
+  // 📥 EXCEL İLE İÇE AKTARMA (IMPORT)
+  // =========================================================
+  // projectService.js
+importProjectsExcel: (formData) => {
+  return api.post('/projects/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+},
+
   getProjectEvm: async (projectId) => {
     const response = await api.get(`/dashboard/projects/${projectId}/evm`);
     return response.data;

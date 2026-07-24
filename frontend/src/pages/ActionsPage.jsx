@@ -64,12 +64,6 @@ function ActionsPage({ projectId }) {
 
   return (
     <div className="dashboard-card full-width">
-      <div className="action-header-container">
-        <div>
-          <h2>Aksiyon Takibi</h2>
-          <p>Projelere ait tüm aksiyonları, sorumluları ve ilerleme durumlarını canlı izleyin.</p>
-        </div>
-      </div>
 
       {loading ? (
         <div className="status-message">Veritabanından aksiyonlar yükleniyor...</div>
