@@ -3508,19 +3508,19 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\ozan.aydogan\\.nuget\\packages\\": {}
+    "C:\\Users\\adnan.goksu\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\ozan.aydogan\\Desktop\\DashboardProject\\backend\\dashboardapi\\dashboardapi.csproj",
+      "projectUniqueName": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",
       "projectName": "dashboardapi",
-      "projectPath": "C:\\Users\\ozan.aydogan\\Desktop\\DashboardProject\\backend\\dashboardapi\\dashboardapi.csproj",
-      "packagesPath": "C:\\Users\\ozan.aydogan\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\ozan.aydogan\\Desktop\\DashboardProject\\backend\\dashboardapi\\obj\\",
+      "projectPath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\dashboardapi.csproj",
+      "packagesPath": "C:\\Users\\adnan.goksu\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\adnan.goksu\\Desktop\\projectdashboard\\backend\\dashboardapi\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\ozan.aydogan\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "C:\\Users\\adnan.goksu\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net10.0"
@@ -4031,7 +4031,7 @@
       "code": "NU1903",
       "level": "Warning",
       "warningLevel": 1,
-      "message": "Package 'Microsoft.OpenApi' 2.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc",
+      "message": "'Microsoft.OpenApi' 2.0.0 paketinde önem derecesi yüksek olan bilinen bir https://github.com/advisories/GHSA-v5pm-xwqc-g5wc güvenlik açığı var",
       "libraryId": "Microsoft.OpenApi",
       "targetGraphs": [
         "net10.0"
@@ -4041,7 +4041,7 @@
       "code": "NU1903",
       "level": "Warning",
       "warningLevel": 1,
-      "message": "Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q",
+      "message": "'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 paketinde önem derecesi yüksek olan bilinen bir https://github.com/advisories/GHSA-2m69-gcr7-jv3q güvenlik açığı var",
       "libraryId": "SQLitePCLRaw.lib.e_sqlite3",
       "targetGraphs": [
         "net10.0"

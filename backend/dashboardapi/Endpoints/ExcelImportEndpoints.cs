@@ -14,7 +14,7 @@ public static class ExcelImportEndpoints
     public static void MapExcelImportEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("projects/import", async (
-            IFormFile file, 
+            [FromForm] IFormFile file, // 👈 1. [FromForm] özniteliği eklendi (415 hatasını çözer)
             ClaimsPrincipal userClaims, 
             AppDbContext db) =>
         {
@@ -38,7 +38,7 @@ public static class ExcelImportEndpoints
             {
                 await file.CopyToAsync(stream);
                 using var package = new ExcelPackage(stream);
-                var worksheet = package.Workbook.Worksheets[0];
+                var worksheet = package.Workbook.Worksheets.FirstOrDefault();
                 
                 if (worksheet == null) return Results.BadRequest(new { message = "Çalışma sayfası bulunamadı." });
 
@@ -51,9 +51,9 @@ public static class ExcelImportEndpoints
                     {
                         var projectCode = worksheet.Cells[row, 1].Value?.ToString()?.Trim();
                         var projectName = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
-                        var programName = worksheet.Cells[row, 3].Value?.ToString()?.Trim(); // Kullanıcı Adı yazar
-                        var customerName = worksheet.Cells[row, 4].Value?.ToString()?.Trim(); // Kullanıcı Adı yazar
-                        var pmEmail = worksheet.Cells[row, 5].Value?.ToString()?.Trim(); // Kullanıcı E-posta yazar
+                        var programName = worksheet.Cells[row, 3].Value?.ToString()?.Trim(); 
+                        var customerName = worksheet.Cells[row, 4].Value?.ToString()?.Trim(); 
+                        var pmIdentifier = worksheet.Cells[row, 5].Value?.ToString()?.Trim(); // PM ID veya E-posta
                         var startDateStr = worksheet.Cells[row, 6].Value?.ToString();
                         var endDateStr = worksheet.Cells[row, 7].Value?.ToString();
                         var bacStr = worksheet.Cells[row, 8].Value?.ToString()?.Trim();
@@ -63,9 +63,9 @@ public static class ExcelImportEndpoints
                         var status = worksheet.Cells[row, 12].Value?.ToString()?.Trim() ?? "Planlandı";
 
                         if (string.IsNullOrEmpty(projectCode) || string.IsNullOrEmpty(projectName) || 
-                            string.IsNullOrEmpty(pmEmail) || string.IsNullOrEmpty(programName) || string.IsNullOrEmpty(customerName))
+                            string.IsNullOrEmpty(pmIdentifier) || string.IsNullOrEmpty(programName) || string.IsNullOrEmpty(customerName))
                         {
-                            errorLogs.Add($"Satır {row}: Proje Kodu, Adı, Program Adı, Müşteri Adı ve PM E-posta alanları zorunludur.");
+                            errorLogs.Add($"Satır {row}: Proje Kodu, Adı, Program Adı, Müşteri Adı ve PM ID/E-posta alanları zorunludur.");
                             continue;
                         }
 
@@ -76,29 +76,49 @@ public static class ExcelImportEndpoints
                             continue;
                         }
 
-                        // 🧠 AKILLI EŞLEŞTİRME (İsimden ID'ye)
+                        // 🧠 AKILLI EŞLEŞTİRME & OTOMATİK OLUŞTURMA (Get or Create)
                         
-                        // 1. Programı Bul
-                        var program = await db.Programs.FirstOrDefaultAsync(p => p.ProgramName == programName);
+                        // 1. Programı Bul veya Otomatik Oluştur
+                        var program = db.Programs.Local.FirstOrDefault(p => p.ProgramName == programName) 
+                                      ?? await db.Programs.FirstOrDefaultAsync(p => p.ProgramName == programName);
+
                         if (program == null)
                         {
-                            errorLogs.Add($"Satır {row}: '{programName}' sistemde bulunamadı. Lütfen tanımlı bir Program adı girin.");
-                            continue;
+                            program = new dashboardapi.Models.Program
+                            {
+                                ProgramId = Guid.NewGuid().ToString(),
+                                ProgramName = programName,
+                                ProgramDescription = "Excel içe aktarımı ile otomatik oluşturuldu.",
+                                ProgramStatus = "Aktif",
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            db.Programs.Add(program);
                         }
 
-                        // 2. Müşteriyi Bul (Müşteri tablosundaki İsim alanının "CustomerName" olduğunu varsayıyoruz, modeline göre düzeltebilirsin)
-                        var customer = await db.Customers.FirstOrDefaultAsync(c => c.CustomerName == customerName);
+                        // 2. Müşteriyi Bul veya Otomatik Oluştur
+                        var customer = db.Customers.Local.FirstOrDefault(c => c.CustomerName == customerName) 
+                                       ?? await db.Customers.FirstOrDefaultAsync(c => c.CustomerName == customerName);
+
                         if (customer == null)
                         {
-                            errorLogs.Add($"Satır {row}: '{customerName}' sistemde bulunamadı. Lütfen tanımlı bir Müşteri adı girin.");
-                            continue;
+                            customer = new Customer
+                            {
+                                CustomerId = Guid.NewGuid().ToString(),
+                                CustomerName = customerName,
+                                CustomerType = "Genel",
+                                CustomerStatus = "Aktif",
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            db.Customers.Add(customer);
                         }
 
-                        // 3. Proje Yöneticisini Bul
-                        var pmUser = await db.Users.FirstOrDefaultAsync(u => u.Email == pmEmail);
+                        // 3. Proje Yöneticisini Bul (Hem E-posta hem de UserId desteği)
+                        var pmUser = await db.Users.FirstOrDefaultAsync(u => u.Email == pmIdentifier || u.UserId == pmIdentifier);
                         if (pmUser == null)
                         {
-                            errorLogs.Add($"Satır {row}: '{pmEmail}' adresine sahip bir kullanıcı bulunamadı.");
+                            errorLogs.Add($"Satır {row}: '{pmIdentifier}' bilgisine sahip bir kullanıcı (PM) bulunamadı.");
                             continue;
                         }
 
@@ -110,21 +130,21 @@ public static class ExcelImportEndpoints
 
                         decimal.TryParse(bacStr, out decimal bacValue);
 
-                        // Eşleştirilen ID'lerle Projeyi Oluştur
+                        // Projeyi Oluştur
                         var newProject = new Project
                         {
                             ProjectId = "PRJ-" + Guid.NewGuid().ToString()[..8].ToUpper(),
                             ProjectCode = projectCode,
                             ProjectName = projectName,
-                            ProgramId = program.ProgramId, // Backend bulduğu ID'yi basıyor
-                            CustomerId = customer.CustomerId, // Backend bulduğu ID'yi basıyor
-                            ProjectManagerUserId = pmUser.UserId, // Backend bulduğu ID'yi basıyor
+                            ProgramId = program.ProgramId,
+                            CustomerId = customer.CustomerId,
+                            ProjectManagerUserId = pmUser.UserId, 
                             StartDate = startDate,
                             BaselineFinishDate = endDate,
                             ForecastFinishDate = endDate,
                             ActualFinishDate = null,
                             ProjectStatus = status,
-                            ManualHealth = "Nötr",
+                            ManualHealth = "Yeşil",
                             PlannedProgress = 0m,
                             ActualProgress = 0m,
                             Bac = bacValue,
@@ -160,6 +180,7 @@ public static class ExcelImportEndpoints
                 TotalFailed: errorLogs.Count,
                 Errors: errorLogs
             ));
-        });
+        })
+        .DisableAntiforgery(); // 👈 2. Form yüklemelerinde .NET 8 Anti-Forgery doğrulaması kapatıldı
     }
 }

@@ -1,6 +1,7 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { projectService } from '../services/projectService'
+import * as XLSX from 'xlsx'
 import './ProjectsPage.css'
 
 // Filtre Seçenekleri
@@ -68,17 +69,21 @@ const initialFormState = {
   customerId: '',
   projectManagerUserId: '',
   confidentiality: 'Şirket İçi',
-  isActive: 1 // ➕ BACKEND UYUMU: Boolean yerine int (1 = Aktif, 0 = Pasif)
+  isActive: 1
 }
 
 function ProjectsPage() {
   const navigate = useNavigate()
+  const fileInputRef = useRef(null)
 
   const [rawProjects, setRawProjects] = useState([])
   const [programs, setPrograms] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  
+  // 📊 Excel Import State
+  const [isImporting, setIsImporting] = useState(false)
 
   // --- MODAL & FORM STATE'LERİ ---
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -192,7 +197,7 @@ function ProjectsPage() {
   }
 
   const handleOpenEditModal = async (e, project) => {
-    e.stopPropagation() // Satır tıklama olayını engeller
+    e.stopPropagation() 
     setEditingProjectId(project.projectId)
     setModalError('')
 
@@ -219,7 +224,7 @@ function ProjectsPage() {
         customerId: detail.customerId || 'CUST-001',
         projectManagerUserId: detail.projectManagerUserId || '',
         confidentiality: detail.confidentiality || 'Şirket İçi',
-        isActive: detail.isActive !== undefined ? Number(detail.isActive) : 1 // ➕ EKLENDİ
+        isActive: detail.isActive !== undefined ? Number(detail.isActive) : 1
       })
       setIsModalOpen(true)
     } catch (err) {
@@ -245,7 +250,6 @@ function ProjectsPage() {
 
     try {
       if (editingProjectId) {
-        // --- GÜNCELLEME (PATCH/PUT) ---
         const updatePayload = {
           projectName: formData.projectName,
           projectDescription: formData.projectDescription,
@@ -258,18 +262,16 @@ function ProjectsPage() {
           forecastFinishDate: formData.forecastFinishDate ? new Date(formData.forecastFinishDate).toISOString() : null,
           confidentiality: formData.confidentiality,
           projectManagerUserId: formData.projectManagerUserId || null,
-          isActive: Number(formData.isActive) // ➕ BACKEND UYUMU: Sayısal int (1 veya 0)
+          isActive: Number(formData.isActive)
         }
-
         await projectService.updateProject(editingProjectId, updatePayload)
       } else {
-        // --- YENİ OLUŞTURMA (POST) ---
         const createPayload = {
           ...formData,
           plannedProgress: Number(formData.plannedProgress),
           actualProgress: Number(formData.actualProgress),
           bac: Number(formData.bac),
-          isActive: Number(formData.isActive ?? 1), // ➕ BACKEND UYUMU: Sayısal int (1 veya 0)
+          isActive: Number(formData.isActive ?? 1),
           startDate: new Date(formData.startDate).toISOString(),
           baselineFinishDate: new Date(formData.baselineFinishDate).toISOString(),
           forecastFinishDate: new Date(formData.forecastFinishDate || formData.baselineFinishDate).toISOString()
@@ -278,17 +280,66 @@ function ProjectsPage() {
         if (!createPayload.programId || !createPayload.customerId || !createPayload.projectManagerUserId) {
           throw new Error('Program, müşteri ve proje yöneticisi ID alanları zorunludur.')
         }
-
         await projectService.createProject(createPayload)
       }
 
       handleModalClose()
-      fetchProjects() // Başarılı işlem sonrası listeyi yenile
+      fetchProjects() 
     } catch (err) {
       const apiErrorMessage = err.response?.data?.message || err.message || 'İşlem sırasında bir hata oluştu.'
       setModalError(apiErrorMessage)
     } finally {
       setFormSubmitting(false)
+    }
+  }
+
+  // 📂 EXCEL İÇE AKTARMA İŞLEMİ (C# Backend'e Direkt Dosya Gönderimi)
+  const handleExcelImport = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsImporting(true)
+    try {
+      // 1. Dosyayı FormData içerisine ekliyoruz (C# parametre adı 'file' ile aynı olmalı)
+      const formData = new FormData()
+      formData.append('file', file)
+
+      // 2. Servis üzerinden backend'e gönderiyoruz
+      const response = await projectService.importProjectsExcel(formData)
+      const resData = response.data || response
+
+      // C# tarafının döndüğü JSON verileri
+      const isSuccess = resData.success ?? resData.Success
+      const importedCount = resData.totalImported ?? resData.TotalImported ?? 0
+      const failedCount = resData.totalFailed ?? resData.TotalFailed ?? 0
+      const errorList = resData.errors ?? resData.Errors ?? []
+
+      if (isSuccess && failedCount === 0) {
+        alert(`Excel içe aktarma başarıyla tamamlandı!\nEklenen Proje Sayısı: ${importedCount}`)
+      } else {
+        const errorDetails = errorList.length > 0 ? `\n\nHata Detayları:\n${errorList.join('\n')}` : ''
+        alert(
+          `İşlem tamamlandı:\n` +
+          `Başarılı: ${importedCount}\n` +
+          `Hatalı/Atlanan: ${failedCount}` + 
+          errorDetails
+        )
+      }
+
+      // 3. Tabloları/Listeleri güncelliyoruz
+      if (typeof fetchProjects === 'function') fetchProjects()
+
+    } catch (error) {
+      console.error('Excel yüklenirken hata oluştu:', error)
+      const message = error.response?.data?.message || 'Excel dosyası yüklenirken sunucuda bir hata oluştu.'
+      alert(message)
+    } finally {
+      setIsImporting(false)
+      // Input'u sıfırla ki aynı dosya tekrar seçildiğinde change eventi tetiklensin
+      e.target.value = '' 
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -315,9 +366,28 @@ function ProjectsPage() {
       {/* 🚀 ÜST BAŞLIK */}
       <div className="projects-header-bar">
         <h2>Projeler</h2>
-        <button className="add-project-btn" onClick={handleOpenCreateModal}>
-          + Yeni Proje Oluştur
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {/* GİZLİ DOSYA INPUTU */}
+          <input 
+            type="file" 
+            accept=".xlsx, .xls" 
+            ref={fileInputRef} 
+            style={{ display: 'none' }} 
+            onChange={handleExcelImport} 
+          />
+          <button 
+            className="import-project-btn" 
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={isImporting}
+            style={{ backgroundColor: '#10b981', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            {isImporting ? '⏳ Aktarılıyor...' : '📂 Excel İçe Aktar'}
+          </button>
+          
+          <button className="add-project-btn" onClick={handleOpenCreateModal}>
+            + Yeni Proje Oluştur
+          </button>
+        </div>
       </div>
 
       {/* 🔍 FİLTRE FORMU */}
@@ -503,7 +573,6 @@ function ProjectsPage() {
                 </select>
               </div>
 
-              {/* ➕ AKTİFLİK DURUMU (int 1/0 UYUMLU SEÇENEK) */}
               <div className="form-group">
                 <label>Aktiflik Kaydı</label>
                 <select 
@@ -593,7 +662,7 @@ function ProjectsPage() {
                 />
               </div>
 
-                    <div className="form-group">
+              <div className="form-group">
                 <label>Program *</label>
                 <select
                   className="form-control"
