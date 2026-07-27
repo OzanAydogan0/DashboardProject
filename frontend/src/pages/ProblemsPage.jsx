@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { projectService } from '../services/projectService';
+import { useAlert } from '../components/AlertProvider';
 import './ProblemsPage.css';
 
 const getCurrentUserId = () => {
@@ -26,6 +27,7 @@ const emptyForm = {
 
 function ProblemsPage() {
     const { id: projectId } = useParams();
+    const { addAlert } = useAlert();
 
     const [issues, setIssues] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -147,9 +149,11 @@ function ProblemsPage() {
 
             closeIssueModal();
             await fetchIssues();
+            addAlert(editingIssueId ? 'Sorun kaydı güncellendi.' : 'Yeni sorun kaydı eklendi.', 'success');
         } catch (err) {
             const backendMessage = err.response?.data?.message || err.message || 'Sorun kaydı işlenemedi.';
             setError(backendMessage);
+            addAlert(backendMessage, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -187,9 +191,11 @@ function ProblemsPage() {
                 issueImpact: issue.issueImpact || 'Orta'
             });
             await fetchIssues();
+            addAlert('Sorun başarıyla kapatıldı.', 'success');
         } catch (err) {
             const backendMessage = err.response?.data?.message || err.message || 'Sorun kapatılamadı.';
             setError(backendMessage);
+            addAlert(backendMessage, 'error');
         } finally {
             setIsDeletingId(null);
         }

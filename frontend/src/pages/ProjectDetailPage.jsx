@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { projectService } from '../services/projectService'
+import { useAlert } from '../components/AlertProvider'
 import './ProjectDetailPage.css'
 import MileStone from './MileStonePage'
 import ProjectRisksPage from './ProjectRisksPage'
@@ -12,6 +13,7 @@ import ReportsPage from './ProjectReportsPage'
 function ProjectDetailPage() {
   // 1. ROUTER VE URL PARAMETRELERİ
   const { id } = useParams()
+  const { addAlert } = useAlert()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -64,8 +66,11 @@ function ProjectDetailPage() {
       })
     } catch (err) {
       const backendMessage = err.response?.data?.message || err.message
-      if (err.response?.status === 403) setError(backendMessage || 'Bu projeyi görme yetkiniz yok!')
-      else setError('Proje detayları veritabanından çekilemedi.')
+      const message = err.response?.status === 403
+        ? (backendMessage || 'Bu projeyi görme yetkiniz yok!')
+        : 'Proje detayları veritabanından çekilemedi.'
+      setError(message)
+      addAlert(message, 'error')
     } finally {
       setLoading(false)
     }

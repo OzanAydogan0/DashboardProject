@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { projectService } from '../services/projectService'
+import { useAlert } from '../components/AlertProvider'
 import * as XLSX from 'xlsx'
 import './ProjectsPage.css'
 
@@ -75,6 +76,7 @@ const initialFormState = {
 function ProjectsPage() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
+  const { addAlert } = useAlert()
 
   const [rawProjects, setRawProjects] = useState([])
   const [programs, setPrograms] = useState([])
@@ -103,6 +105,8 @@ function ProjectsPage() {
     finish: '',
     finishSort: 'Yok',
   })
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 10
 
   const formatCurrency = (value, currency = 'TRY') => {
     if (value === null || value === undefined || value === '') return '-'
@@ -196,6 +200,16 @@ function ProjectsPage() {
       })
   }, [rawProjects, filters])
 
+  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / pageSize))
+  const paginatedProjects = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredProjects.slice(startIndex, startIndex + pageSize)
+  }, [filteredProjects, currentPage])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filters, rawProjects])
+
   // --- MODAL İŞLEMLERİ ---
   const handleOpenCreateModal = () => {
     setEditingProjectId(null)
@@ -239,7 +253,7 @@ function ProjectsPage() {
       })
       setIsModalOpen(true)
     } catch (err) {
-      alert('Proje detayları alınırken bir hata oluştu.')
+      addAlert('Proje detayları alınırken bir hata oluştu.', 'error')
     }
   }
 
@@ -295,7 +309,8 @@ function ProjectsPage() {
       }
 
       handleModalClose()
-      fetchProjects() 
+      fetchProjects()
+      addAlert(editingProjectId ? 'Proje başarıyla güncellendi.' : 'Yeni proje başarıyla eklendi.', 'success')
     } catch (err) {
       const apiErrorMessage = err.response?.data?.message || err.message || 'İşlem sırasında bir hata oluştu.'
       setModalError(apiErrorMessage)
@@ -326,15 +341,10 @@ function ProjectsPage() {
       const errorList = resData.errors ?? resData.Errors ?? []
 
       if (isSuccess && failedCount === 0) {
-        alert(`Excel içe aktarma başarıyla tamamlandı!\nEklenen Proje Sayısı: ${importedCount}`)
+        addAlert(`Excel içe aktarma başarıyla tamamlandı. Eklenen proje sayısı: ${importedCount}`, 'success')
       } else {
-        const errorDetails = errorList.length > 0 ? `\n\nHata Detayları:\n${errorList.join('\n')}` : ''
-        alert(
-          `İşlem tamamlandı:\n` +
-          `Başarılı: ${importedCount}\n` +
-          `Hatalı/Atlanan: ${failedCount}` + 
-          errorDetails
-        )
+        const errorDetails = errorList.length > 0 ? ` Hata detayları: ${errorList.join(' • ')}` : ''
+        addAlert(`İşlem tamamlandı. Başarılı: ${importedCount}, Hatalı/Atlanan: ${failedCount}${errorDetails}`, 'info')
       }
 
       // 3. Tabloları/Listeleri güncelliyoruz
@@ -343,7 +353,7 @@ function ProjectsPage() {
     } catch (error) {
       console.error('Excel yüklenirken hata oluştu:', error)
       const message = error.response?.data?.message || 'Excel dosyası yüklenirken sunucuda bir hata oluştu.'
-      alert(message)
+      addAlert(message, 'error')
     } finally {
       setIsImporting(false)
       // Input'u sıfırla ki aynı dosya tekrar seçildiğinde change eventi tetiklensin
@@ -355,11 +365,16 @@ function ProjectsPage() {
   }
 
   const handleFilterChange = (key, value) => setDraftFilters(c => ({ ...c, [key]: value }))
-  const applyFilters = (e) => { e.preventDefault(); setFilters(draftFilters); }
+  const applyFilters = (e) => {
+    e.preventDefault()
+    setFilters(draftFilters)
+    setCurrentPage(1)
+  }
   const resetFilters = () => {
     const empty = { name: '', code: '', progress: 'Hepsi', health: 'Hepsi', budgetSort: 'Yok', finish: '', finishSort: 'Yok' }
     setDraftFilters(empty)
     setFilters(empty)
+    setCurrentPage(1)
   }
 
   const formatDate = (dateString) => {
@@ -479,7 +494,7 @@ function ProjectsPage() {
           {loading ? (
             <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>Yükleniyor...</td></tr>
           ) : filteredProjects.length > 0 ? (
-            filteredProjects.map((project) => {
+            paginatedProjects.map((project) => {
               const healthStyle = getHealthBadgeStyle(project.manualHealth)
               const progressStyle = getProgressBadgeStyle(project.projectStatus)
 
@@ -521,6 +536,45 @@ function ProjectsPage() {
           )}
         </tbody>
       </table>
+
+      <div className="pagination-bar">
+        <span className="pagination-summary">
+          Toplam {filteredProjects.length} proje • Sayfa {currentPage} / {totalPages}
+        </span>
+        <div className="pagination-controls">
+          <button
+            type="button"
+            className="pagination-btn"
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={currentPage === 1}
+          >
+            Önceki
+          </button>
+
+          {Array.from({ length: totalPages }, (_, index) => {
+            const pageNumber = index + 1
+            return (
+              <button
+                key={pageNumber}
+                type="button"
+                className={`pagination-page-btn ${currentPage === pageNumber ? 'active' : ''}`}
+                onClick={() => setCurrentPage(pageNumber)}
+              >
+                {pageNumber}
+              </button>
+            )
+          })}
+
+          <button
+            type="button"
+            className="pagination-btn"
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Sonraki
+          </button>
+        </div>
+      </div>
 
       {/* 🪟 YENİ PROJE / DÜZENLEME MODALI */}
       {isModalOpen && (
