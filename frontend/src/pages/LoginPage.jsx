@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authService } from '../services/authService'
+import { useAlert } from '../components/AlertProvider'
 import './LoginPage.css'
 
 function LoginPage() {
@@ -9,19 +10,20 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
+  const { addAlert } = useAlert()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      // Artık doğrudan authService üzerinden login oluyoruz
       await authService.login(email, password)
+      addAlert('Giriş başarılı. Hoş geldiniz!', 'success')
       navigate("/") 
     } catch (error) {
       console.error("Giriş hatası:", error)
       const errorMessage = error.response?.data?.message || "Giriş başarısız! E-posta veya şifre hatalı."
-      alert(errorMessage)
+      addAlert(errorMessage, 'error')
     } finally {
       setIsLoading(false)
     }

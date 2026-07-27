@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { projectService } from '../services/projectService'
+import { useAlert } from '../components/AlertProvider'
 import './MileStonePage.css'
 
 /**
@@ -13,6 +14,7 @@ import './MileStonePage.css'
 function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestoneAdded }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const { addAlert } = useAlert()
   
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -122,7 +124,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
   // Silme İşlemi Fonksiyonu
   const handleDelete = async (milestoneId) => {
     if (!milestoneId) {
-      alert("Silinecek ögenin ID bilgisi bulunamadı.");
+      addAlert("Silinecek ögenin ID bilgisi bulunamadı.", "error");
       return;
     }
 
@@ -131,7 +133,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
 
     try {
       await projectService.deleteProjectMilestone(milestoneId);
-      alert("Kilometre taşı başarıyla silindi!");
+      addAlert("Kilometre taşı başarıyla silindi!", "success");
       
       // Listeyi yenile
       if (onMilestoneUpdated) onMilestoneUpdated();
@@ -140,7 +142,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
       console.error("Silme işlemi başarısız:", error);
       // Backend'den dönen özel hata mesajını gösterelim
       const serverErrorMsg = error.response?.data?.message || "Silme işlemi başarısız oldu. Oturumunuz kapanmış veya yetkiniz olmayabilir.";
-      alert(serverErrorMsg);
+      addAlert(serverErrorMsg, "error");
     }
   };
 

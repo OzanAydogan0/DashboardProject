@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectService } from '../services/projectService';
+import { useAlert } from '../components/AlertProvider';
 import './ActionsPage.css';
 
 function ActionsPage({ projectId }) {
   const navigate = useNavigate();
+  const { addAlert } = useAlert();
   const [actions, setActions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -35,7 +37,9 @@ function ActionsPage({ projectId }) {
         setActions(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Aksiyon verileri çekilirken hata oluştu:", err);
-        setError(err.response?.data?.message || "Veritabanından aksiyon verileri çekilemedi.");
+        const message = err.response?.data?.message || "Veritabanından aksiyon verileri çekilemedi.";
+        setError(message);
+        addAlert(message, 'error');
       } finally {
         setLoading(false);
       }

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectService } from '../services/projectService';
+import { useAlert } from '../components/AlertProvider';
 import './RisksPage.css';
 
 function RisksPage({ projectId }) {
   const navigate = useNavigate();
+  const { addAlert } = useAlert();
   const [risks, setRisks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -39,7 +41,9 @@ function RisksPage({ projectId }) {
         setRisks(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Risk verileri çekilirken hata oluştu:", err);
-        setError(err.response?.data?.message || "Veritabanından risk verileri alınamadı.");
+        const message = err.response?.data?.message || "Veritabanından risk verileri alınamadı.";
+        setError(message);
+        addAlert(message, 'error');
       } finally {
         setLoading(false);
       }

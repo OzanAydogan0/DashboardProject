@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { projectService } from '../services/projectService';
+import { useAlert } from '../components/AlertProvider';
 import './ProjectRisksPage.css';
 
 const getCurrentUserId = () => {
@@ -26,6 +27,7 @@ const emptyForm = {
 
 const ProjectRisksPage = () => {
     const { id: projectId } = useParams();
+    const { addAlert } = useAlert();
 
     const [risks, setRisks] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -121,9 +123,11 @@ const ProjectRisksPage = () => {
             resetForm();
             setShowRiskModal(false);
             await fetchRisks();
+            addAlert(editingRiskId ? 'Risk kaydı güncellendi.' : 'Yeni risk kaydı eklendi.', 'success');
         } catch (err) {
             const backendMessage = err.response?.data?.message || err.message || 'Risk kaydı işlenemedi.';
             setError(backendMessage);
+            addAlert(backendMessage, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -153,9 +157,11 @@ const ProjectRisksPage = () => {
         try {
             await projectService.deleteRisk(riskId);
             await fetchRisks();
+            addAlert('Risk kaydı başarıyla silindi.', 'success');
         } catch (err) {
             const backendMessage = err.response?.data?.message || err.message || 'Risk silinemedi.';
             setError(backendMessage);
+            addAlert(backendMessage, 'error');
         } finally {
             setIsDeletingId(null);
         }

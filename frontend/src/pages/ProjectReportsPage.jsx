@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { projectService } from '../services/projectService'
+import { useAlert } from '../components/AlertProvider'
 import './ProjectReportsPage.css'
 
 const getCanWrite = () => {
@@ -17,6 +18,7 @@ const getCanWrite = () => {
 
 function ReportsPage({ reports = [], onRefresh }) {
   const { id: projectId } = useParams()
+  const { addAlert } = useAlert()
   const [form, setForm] = useState({
     period: '',
     reportDate: '',
@@ -126,8 +128,11 @@ function ReportsPage({ reports = [], onRefresh }) {
 
       closeModal()
       if (onRefresh) await onRefresh()
+      addAlert(editingId ? 'Rapor güncellendi.' : 'Yeni rapor oluşturuldu.', 'success')
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Rapor işlenemedi.')
+      const message = err.response?.data?.message || err.message || 'Rapor işlenemedi.'
+      setError(message)
+      addAlert(message, 'error')
     } finally {
       setIsSubmitting(false)
     }
@@ -138,8 +143,11 @@ function ReportsPage({ reports = [], onRefresh }) {
     try {
       await projectService.deleteProjectReport(report.pirReportId || report.id)
       if (onRefresh) await onRefresh()
+      addAlert('Rapor başarıyla silindi.', 'success')
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Rapor silinemedi.')
+      const message = err.response?.data?.message || err.message || 'Rapor silinemedi.'
+      setError(message)
+      addAlert(message, 'error')
     }
   }
 

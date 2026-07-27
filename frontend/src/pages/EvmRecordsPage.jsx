@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useAlert } from '../components/AlertProvider';
 import './EvmRecordsPage.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5074';
@@ -37,6 +38,7 @@ const getUserRoleFromToken = (token) => {
 
 function EvmRecordsPage() {
     const { id: projectId } = useParams();
+    const { addAlert } = useAlert();
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -128,10 +130,12 @@ function EvmRecordsPage() {
             if (!response.ok) throw new Error(data?.message || 'İşlem başarısız oldu.');
 
             setSuccessMessage(data?.message || 'EVM kaydı kaydedildi.');
+            addAlert(data?.message || 'EVM kaydı kaydedildi.', 'success');
             resetForm();
             await fetchEvmRecords();
         } catch (err) {
             setError(err.message);
+            addAlert(err.message, 'error');
         }
     };
 
@@ -150,9 +154,11 @@ function EvmRecordsPage() {
             if (!response.ok) throw new Error(data?.message || 'Silme işlemi başarısız oldu.');
 
             setSuccessMessage(data?.message || 'EVM kaydı silindi.');
+            addAlert(data?.message || 'EVM kaydı silindi.', 'success');
             await fetchEvmRecords();
         } catch (err) {
             setError(err.message);
+            addAlert(err.message, 'error');
         }
     };
 

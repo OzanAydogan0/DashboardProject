@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { projectService } from '../services/projectService'
+import { useAlert } from '../components/AlertProvider'
 import './HomePage.css'
 
 function HomePage() {
+  const { addAlert } = useAlert()
   const [activeTab, setActiveTab] = useState('overview')
   const [rawProjects, setRawProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -14,6 +16,8 @@ function HomePage() {
     health: '',
     status: ''
   })
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 10
 
   // 🔄 1. İlk Sayfa Yüklenmesi (useEffect için senkron setState barındırmayan yapı)
   useEffect(() => {
@@ -28,7 +32,9 @@ function HomePage() {
       } catch (err) {
         console.error('API Veri çekme hatası:', err)
         if (isMounted) {
-          setError('Veriler backend servisinden alınamadı. Lütfen bağlantınızı kontrol edin.')
+          const message = 'Veriler backend servisinden alınamadı. Lütfen bağlantınızı kontrol edin.'
+          setError(message)
+          addAlert(message, 'error')
         }
       } finally {
         if (isMounted) {
@@ -53,7 +59,9 @@ function HomePage() {
       setRawProjects(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('API Veri çekme hatası:', err)
-      setError('Veriler backend servisinden alınamadı. Lütfen bağlantınızı kontrol edin.')
+      const message = 'Veriler backend servisinden alınamadı. Lütfen bağlantınızı kontrol edin.'
+      setError(message)
+      addAlert(message, 'error')
     } finally {
       setLoading(false)
     }
@@ -79,6 +87,16 @@ function HomePage() {
       return matchCode && matchHealth && matchStatus
     })
   }, [activeProjects, filters])
+
+  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / pageSize))
+  const paginatedProjects = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredProjects.slice(startIndex, startIndex + pageSize)
+  }, [filteredProjects, currentPage])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filters, rawProjects])
 
   // 🧮 Gelen DTO Verisinden Dinamik KPI Hesaplamaları
   const kpis = useMemo(() => {
@@ -158,6 +176,7 @@ function HomePage() {
 
   const handleFilterSubmit = (e) => {
     e.preventDefault()
+    setCurrentPage(1)
     handleRefetch()
   }
 
@@ -413,7 +432,7 @@ function HomePage() {
                   <td colSpan="10" style={{ textAlign: 'center', padding: '20px' }}>Yükleniyor...</td>
                 </tr>
               ) : filteredProjects.length > 0 ? (
-                filteredProjects.map((prj) => {
+                paginatedProjects.map((prj) => {
                   const deviation = calculateDeviation(prj.baselineFinishDate, prj.forecastFinishDate)
                   const healthStr = prj.manualHealth || 'Yeşil'
 
@@ -449,8 +468,39 @@ function HomePage() {
 
         <div className="table-footer">
           <span className="pagination-info">
-            1 - {filteredProjects.length} / {activeProjects.length} Proje
+            {filteredProjects.length === 0 ? '0' : (currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredProjects.length)} / {filteredProjects.length} Proje
           </span>
+          <div className="pagination-controls">
+            <button
+              type="button"
+              className="pagination-btn"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1}
+            >
+              Önceki
+            </button>
+            {Array.from({ length: totalPages }, (_, index) => {
+              const pageNumber = index + 1
+              return (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  className={`pagination-page-btn ${currentPage === pageNumber ? 'active' : ''}`}
+                  onClick={() => setCurrentPage(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              className="pagination-btn"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Sonraki
+            </button>
+          </div>
         </div>
       </div>
     </div>

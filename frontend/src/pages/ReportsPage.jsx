@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { projectService } from '../services/projectService';
+import { useAlert } from '../components/AlertProvider';
 import './ReportsPage.css';
 
 function ReportsPage() {
+  const { addAlert } = useAlert();
   const [reportType, setReportType] = useState('pir');
   const [projectId, setProjectId] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -56,7 +58,9 @@ function ReportsPage() {
   const handleGenerateReport = async (e) => {
     e.preventDefault();
     if (!projectId) {
-      setError("Lütfen rapor oluşturmak için bir proje seçin.");
+      const message = "Lütfen rapor oluşturmak için bir proje seçin.";
+      setError(message);
+      addAlert(message, 'error');
       return;
     }
 
@@ -82,7 +86,9 @@ function ReportsPage() {
 
     } catch (err) {
       console.error('Hata:', err);
-      setError(err.message || err.response?.data?.message || 'Rapor indirilirken bir hata oluştu.');
+      const message = err.message || err.response?.data?.message || 'Rapor indirilirken bir hata oluştu.';
+      setError(message);
+      addAlert(message, 'error');
     } finally {
       setIsLoading(false);
     }

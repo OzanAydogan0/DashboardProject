@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { projectService } from '../services/projectService';
+import { useAlert } from '../components/AlertProvider';
 import './ProjectActionsPage.css';
 
 const SOURCE_TYPES = ['Risk', 'Sorun', 'Kilometre Taşı', 'PIR', 'Yönetim Kararı', 'Diğer'];
@@ -28,6 +29,7 @@ const emptyForm = {
 
 function ProjectActionsPage() {
     const { id: projectId } = useParams();
+    const { addAlert } = useAlert();
 
     const [actions, setActions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -156,9 +158,11 @@ function ProjectActionsPage() {
 
             closeActionModal();
             await fetchActions();
+            addAlert(editingActionId ? 'Aksiyon güncellendi.' : 'Yeni aksiyon eklendi.', 'success');
         } catch (err) {
             const backendMessage = err.response?.data?.message || err.message || 'Aksiyon kaydı işlenemedi.';
             setError(backendMessage);
+            addAlert(backendMessage, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -197,9 +201,11 @@ function ProjectActionsPage() {
                 actionOwnerUserId: action.actionOwnerUserId
             });
             await fetchActions();
+            addAlert('Aksiyon başarıyla iptal edildi.', 'success');
         } catch (err) {
             const backendMessage = err.response?.data?.message || err.message || 'Aksiyon kapatılamadı.';
             setError(backendMessage);
+            addAlert(backendMessage, 'error');
         } finally {
             setIsDeletingId(null);
         }
