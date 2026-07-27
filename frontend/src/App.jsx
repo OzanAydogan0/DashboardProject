@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, Link, useNavigate } from 'react-router-dom'
 import './App.css'
 import api from './services/api'
@@ -35,6 +35,8 @@ const ProtectedLayout = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [profileUser, setProfileUser] = useState(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const closeSidebarTimerRef = useRef(null)
 
   // Kullanıcı verisini güvenli bir şekilde okuyoruz
   const userString = localStorage.getItem('user');
@@ -46,6 +48,29 @@ const ProtectedLayout = () => {
   } catch (error) {
     console.error("Kullanıcı bilgisi okunurken hata oluştu:", error);
   }
+
+  const clearSidebarCloseTimer = () => {
+    if (closeSidebarTimerRef.current) {
+      window.clearTimeout(closeSidebarTimerRef.current)
+      closeSidebarTimerRef.current = null
+    }
+  }
+
+  const handleSidebarMouseEnter = () => {
+    clearSidebarCloseTimer()
+    setIsSidebarOpen(true)
+  }
+
+  const handleSidebarMouseLeave = () => {
+    clearSidebarCloseTimer()
+    closeSidebarTimerRef.current = window.setTimeout(() => {
+      setIsSidebarOpen(false)
+    }, 0)
+  }
+
+  useEffect(() => {
+    return () => clearSidebarCloseTimer()
+  }, [])
 
   useEffect(() => {
     if (!token) return
@@ -97,33 +122,37 @@ const ProtectedLayout = () => {
   const userRole = currentUser?.userRole || currentUser?.UserRole || currentUser?.role || currentUser?.Role || 'Rol Tanımsız';
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={`app-shell ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+      <aside
+        className={`sidebar ${isSidebarOpen ? 'is-open' : ''}`}
+        onMouseEnter={handleSidebarMouseEnter}
+        onMouseLeave={handleSidebarMouseLeave}
+      >
         <div className="sidebar-brand">PİR Dashboard</div>
         <nav className="sidebar-nav">
           <Link to="/" className={`sidebar-nav-link${isActiveLink('/') ? ' active' : ''}`}>
             <img src={homeIcon} alt="Ana Sayfa" className="sidebar-link-icon" />
-            Ana Sayfa
+            <span className="sidebar-link-label">Ana Sayfa</span>
           </Link>
           <Link to="/projects" className={`sidebar-nav-link${isActiveLink('/projects') ? ' active' : ''}`}>
             <img src={folderOpenIcon} alt="Projeler" className="sidebar-link-icon" />
-            Projeler
+            <span className="sidebar-link-label">Projeler</span>
           </Link>
           <Link to="/reports" className={`sidebar-nav-link${isActiveLink('/reports') ? ' active' : ''}`}>
             <img src={reportIcon} alt="Raporlar" className="sidebar-link-icon" />
-            Raporlar
+            <span className="sidebar-link-label">Raporlar</span>
           </Link>
           <Link to="/risks" className={`sidebar-nav-link${isActiveLink('/risks') ? ' active' : ''}`}>
             <img src={riskIcon} alt="Riskler" className="sidebar-link-icon" />
-            Riskler
+            <span className="sidebar-link-label">Riskler</span>
           </Link>
           <Link to="/actions" className={`sidebar-nav-link${isActiveLink('/actions') ? ' active' : ''}`}>
             <img src={actionsIcon} alt="Aksiyonlar" className="sidebar-link-icon" />
-            Aksiyonlar
+            <span className="sidebar-link-label">Aksiyonlar</span>
           </Link>
           <Link to="/settings" className={`sidebar-nav-link${isActiveLink('/settings') ? ' active' : ''}`}>
             <img src={settingsIcon} alt="Ayarlar" className="sidebar-link-icon" />
-            Ayarlar
+            <span className="sidebar-link-label">Ayarlar</span>
           </Link>
         </nav>
 

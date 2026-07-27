@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import './SettingsPage.css'
 import { projectService } from '../services/projectService'
+import { useAlert } from '../components/AlertProvider'
 
 const roleOptions = [
   'Sistem Yöneticisi',
@@ -14,6 +15,7 @@ const customerTypeOptions = ['Kurumsal', 'Hükümet', 'Sivil Toplum', 'Diğer']
 const customerStatusOptions = ['Aktif', 'Pasif']
 
 function SettingsPage() {
+  const { addAlert } = useAlert()
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -129,9 +131,11 @@ function SettingsPage() {
       if (editingCustomerId) {
         await projectService.updateCustomer(editingCustomerId, newCustomer)
         setMessage('Müşteri başarıyla güncellendi.')
+        addAlert('Müşteri başarıyla güncellendi.', 'success')
       } else {
         await projectService.createCustomer(newCustomer)
         setMessage('Müşteri başarıyla oluşturuldu.')
+        addAlert('Müşteri başarıyla oluşturuldu.', 'success')
       }
       setMessageType('success')
       handleCancelCustomerEdit()
@@ -139,8 +143,10 @@ function SettingsPage() {
       await loadAdminData()
     } catch (createError) {
       const serverMessage = createError?.response?.data?.message
-      setError(serverMessage || 'Müşteri kaydedilirken hata oluştu. Lütfen alanları kontrol edin.')
+      const errorMessage = serverMessage || 'Müşteri kaydedilirken hata oluştu. Lütfen alanları kontrol edin.'
+      setError(errorMessage)
       setMessage('')
+      addAlert(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
@@ -156,14 +162,13 @@ function SettingsPage() {
       await projectService.deleteCustomer(id)
       setMessage('Müşteri başarıyla silindi.')
       setMessageType('success')
+      addAlert('Müşteri başarıyla silindi.', 'success')
       await loadAdminData()
     } catch (deleteError) {
       const serverMessage = deleteError?.response?.data?.message
-      if (serverMessage) {
-        setError(serverMessage)
-      } else {
-        setError('Müşteri silinirken hata oluştu.')
-      }
+      const errorMessage = serverMessage || 'Müşteri silinirken hata oluştu.'
+      setError(errorMessage)
+      addAlert(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
@@ -185,10 +190,13 @@ function SettingsPage() {
       })
       setMessage('Kullanıcı başarıyla oluşturuldu.')
       setMessageType('success')
+      addAlert('Kullanıcı başarıyla oluşturuldu.', 'success')
       await loadAdminData()
     } catch (createError) {
       const serverMessage = createError?.response?.data?.message
-      setError(serverMessage || 'Kullanıcı oluşturulurken hata oluştu. Lütfen bilgileri kontrol edin.')
+      const errorMessage = serverMessage || 'Kullanıcı oluşturulurken hata oluştu. Lütfen bilgileri kontrol edin.'
+      setError(errorMessage)
+      addAlert(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
@@ -209,10 +217,13 @@ function SettingsPage() {
       })
       setMessage('Kullanıcı başarıyla güncellendi.')
       setMessageType('success')
+      addAlert('Kullanıcı başarıyla güncellendi.', 'success')
       await loadAdminData()
     } catch (updateError) {
       const serverMessage = updateError?.response?.data?.message
-      setError(serverMessage || 'Kullanıcı güncellenirken hata oluştu.')
+      const errorMessage = serverMessage || 'Kullanıcı güncellenirken hata oluştu.'
+      setError(errorMessage)
+      addAlert(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
@@ -228,10 +239,13 @@ function SettingsPage() {
       await projectService.deleteUser(id)
       setMessage('Kullanıcı başarıyla silindi.')
       setMessageType('success')
+      addAlert('Kullanıcı başarıyla silindi.', 'success')
       await loadAdminData()
     } catch (deleteError) {
       const serverMessage = deleteError?.response?.data?.message
-      setError(serverMessage || 'Kullanıcı silinirken hata oluştu.')
+      const errorMessage = serverMessage || 'Kullanıcı silinirken hata oluştu.'
+      setError(errorMessage)
+      addAlert(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
@@ -239,11 +253,6 @@ function SettingsPage() {
 
   return (
     <div className="settings-page page-content">
-      <div className="dashboard-card full-width">
-        <h2>Sistem Ayarları</h2>
-        <p>Bu sayfa yalnızca Sistem Yöneticisi tarafından kullanılabilir. Buradan müşteri ve kullanıcı yönetimini gerçekleştirebilirsiniz.</p>
-      </div>
-
       {!isAdmin ? (
         <div className="dashboard-card full-width settings-access-warning">
           <h3>Erişim Reddedildi</h3>
