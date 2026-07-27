@@ -180,6 +180,7 @@ public sealed class EvmTests
         var request = new CreateEvmRecordRequest(
             ProjectId: "PRJ-003",
             Period: "2026-11",
+            Currency: "TRY",
             Bac: 1000m,
             Pv: 500m,
             Ev: 400m,
@@ -253,6 +254,7 @@ public sealed class EvmTests
         var zeroPvRequest = new CreateEvmRecordRequest(
             ProjectId: "PRJ-003",
             Period: "2026-10",
+            Currency: "TRY",
             Bac: 1000m,
             Pv: 0m,
             Ev: 400m,
@@ -261,6 +263,7 @@ public sealed class EvmTests
         var zeroAcRequest = new CreateEvmRecordRequest(
             ProjectId: "PRJ-003",
             Period: "2026-12",
+            Currency: "TRY",
             Bac: 1000m,
             Pv: 500m,
             Ev: 400m,
