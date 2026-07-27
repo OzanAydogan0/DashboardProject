@@ -205,8 +205,43 @@ importProjectsExcel: (formData) => {
     return response.data;
   },
 
+  createCustomer: async (customerData) => {
+    const response = await api.post('/customers', customerData);
+    return response.data;
+  },
+
+  updateCustomer: async (customerId, customerData) => {
+    const response = await api.patch(`/customers/${customerId}`, customerData);
+    return response.data;
+  },
+
+  deleteCustomer: async (customerId) => {
+    const response = await api.delete(`/customers/${customerId}`);
+    return response.data;
+  },
+
   getPrograms: async () => {
     const response = await api.get('/programs');
+    return response.data;
+  },
+
+  getUsers: async () => {
+    const response = await api.get('/users');
+    return response.data;
+  },
+
+  createUser: async (userData) => {
+    const response = await api.post('/users', userData);
+    return response.data;
+  },
+
+  updateUser: async (userId, userData) => {
+    const response = await api.patch(`/users/${userId}`, userData);
+    return response.data;
+  },
+
+  deleteUser: async (userId) => {
+    const response = await api.delete(`/users/${userId}`);
     return response.data;
   },
 

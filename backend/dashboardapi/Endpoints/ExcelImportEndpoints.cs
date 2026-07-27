@@ -52,21 +52,25 @@ public static class ExcelImportEndpoints
                     {
                         var projectCode = worksheet.Cells[row, 1].Value?.ToString()?.Trim();
                         var projectName = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
-                        var programName = worksheet.Cells[row, 3].Value?.ToString()?.Trim(); 
-                        var customerName = worksheet.Cells[row, 4].Value?.ToString()?.Trim(); 
-                        var pmIdentifier = worksheet.Cells[row, 5].Value?.ToString()?.Trim(); // PM ID veya E-posta
-                        var startDateStr = worksheet.Cells[row, 6].Value?.ToString();
-                        var endDateStr = worksheet.Cells[row, 7].Value?.ToString();
-                        var bacStr = worksheet.Cells[row, 8].Value?.ToString()?.Trim();
-                        var currency = worksheet.Cells[row, 9].Value?.ToString()?.Trim() ?? "TRY";
-                        var confidentiality = worksheet.Cells[row, 10].Value?.ToString()?.Trim() ?? "Şirket İçi";
-                        var reportingFreq = worksheet.Cells[row, 11].Value?.ToString()?.Trim() ?? "Aylık";
-                        var status = worksheet.Cells[row, 12].Value?.ToString()?.Trim() ?? "Planlandı";
+                        var customerName = worksheet.Cells[row, 3].Value?.ToString()?.Trim(); 
+                        var pmIdentifier = worksheet.Cells[row, 4].Value?.ToString()?.Trim(); // PM ID veya E-posta
+                        var startDateStr = worksheet.Cells[row, 5].Value?.ToString();
+                        var endDateStr = worksheet.Cells[row, 6].Value?.ToString();
+                        var bacStr = worksheet.Cells[row, 7].Value?.ToString()?.Trim();
+                        var currency = worksheet.Cells[row, 8].Value?.ToString()?.Trim() ?? "TRY";
+                        var confidentiality = worksheet.Cells[row, 9].Value?.ToString()?.Trim() ?? "Şirket İçi";
+                        var reportingFreq = worksheet.Cells[row, 10].Value?.ToString()?.Trim() ?? "Aylık";
+                        var status = worksheet.Cells[row, 11].Value?.ToString()?.Trim() ?? "Planlandı";
+                        var projectDescription = worksheet.Cells[row, 12].Value?.ToString()?.Trim();
+                        var manualHealth = worksheet.Cells[row, 13].Value?.ToString()?.Trim() ?? "Yeşil";
+                        var plannedProgressStr = worksheet.Cells[row, 14].Value?.ToString()?.Trim();
+                        var actualProgressStr = worksheet.Cells[row, 15].Value?.ToString()?.Trim();
+                        var isActiveStr = worksheet.Cells[row, 16].Value?.ToString()?.Trim();
 
                         if (string.IsNullOrEmpty(projectCode) || string.IsNullOrEmpty(projectName) || 
-                            string.IsNullOrEmpty(pmIdentifier) || string.IsNullOrEmpty(programName) || string.IsNullOrEmpty(customerName))
+                            string.IsNullOrEmpty(pmIdentifier) || string.IsNullOrEmpty(customerName))
                         {
-                            errorLogs.Add($"Satır {row}: Proje Kodu, Adı, Program Adı, Müşteri Adı ve PM ID/E-posta alanları zorunludur.");
+                            errorLogs.Add($"Satır {row}: Proje Kodu, Adı, Müşteri Adı ve PM ID/E-posta alanları zorunludur.");
                             continue;
                         }
 
@@ -79,16 +83,16 @@ public static class ExcelImportEndpoints
 
                         // 🧠 AKILLI EŞLEŞTİRME & OTOMATİK OLUŞTURMA (Get or Create)
                         
-                        // 1. Programı Bul veya Otomatik Oluştur
-                        var program = db.Programs.Local.FirstOrDefault(p => p.ProgramName == programName) 
-                                      ?? await db.Programs.FirstOrDefaultAsync(p => p.ProgramName == programName);
+                        // 1. Varsayılan bir Programı Bul ya da Oluştur
+                        var program = db.Programs.Local.FirstOrDefault(p => p.ProgramStatus == "Aktif")
+                                      ?? await db.Programs.Where(p => p.ProgramStatus == "Aktif").OrderBy(p => p.CreatedAt).FirstOrDefaultAsync();
 
                         if (program == null)
                         {
                             program = new dashboardapi.Models.Program
                             {
                                 ProgramId = Guid.NewGuid().ToString(),
-                                ProgramName = programName,
+                                ProgramName = "Genel Program",
                                 ProgramDescription = "Excel içe aktarımı ile otomatik oluşturuldu.",
                                 ProgramStatus = "Aktif",
                                 CreatedAt = DateTime.UtcNow,
@@ -130,6 +134,16 @@ public static class ExcelImportEndpoints
                         if (endDate == DateTime.MinValue) endDate = DateTime.UtcNow.AddMonths(6);
 
                         decimal.TryParse(bacStr, out decimal bacValue);
+                        decimal.TryParse(plannedProgressStr, out decimal plannedProgressValue);
+                        decimal.TryParse(actualProgressStr, out decimal actualProgressValue);
+                        int isActiveValue = 1;
+                        if (!string.IsNullOrEmpty(isActiveStr))
+                        {
+                            if (!int.TryParse(isActiveStr, out isActiveValue))
+                            {
+                                isActiveValue = isActiveStr.Trim().Equals("Pasif", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+                            }
+                        }
 
                         // Projeyi Oluştur
                         var newProject = new Project
@@ -145,15 +159,15 @@ public static class ExcelImportEndpoints
                             ForecastFinishDate = endDate,
                             ActualFinishDate = null,
                             ProjectStatus = status,
-                            ManualHealth = "Yeşil",
-                            PlannedProgress = 0m,
-                            ActualProgress = 0m,
+                            ManualHealth = string.IsNullOrEmpty(manualHealth) ? "Yeşil" : manualHealth,
+                            PlannedProgress = plannedProgressValue,
+                            ActualProgress = actualProgressValue,
                             Bac = bacValue,
                             Currency = currency,
                             ReportingFrequency = reportingFreq,
                             Confidentiality = confidentiality,
-                            ProjectDescription = null,
-                            IsActive = 1,
+                            ProjectDescription = projectDescription,
+                            IsActive = isActiveValue == 0 ? 0 : 1,
                             CreatedByUserId = userId,
                             UpdatedByUserId = userId,
                             CreatedAt = DateTime.UtcNow,

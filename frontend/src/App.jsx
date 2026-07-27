@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, Link, useNavigate } from 'react-router-dom'
 import './App.css'
+import api from './services/api'
 
 // İkonlar
 import homeIcon from './icons/home_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.png'
@@ -32,17 +34,49 @@ const ProtectedLayout = () => {
   const token = localStorage.getItem('token')
   const navigate = useNavigate()
   const location = useLocation()
+  const [profileUser, setProfileUser] = useState(null)
 
   // Kullanıcı verisini güvenli bir şekilde okuyoruz
   const userString = localStorage.getItem('user');
-  let user = null;
+  let storedUser = null;
   try {
     if (userString && userString !== "undefined") {
-      user = JSON.parse(userString);
+      storedUser = JSON.parse(userString);
     }
   } catch (error) {
     console.error("Kullanıcı bilgisi okunurken hata oluştu:", error);
   }
+
+  useEffect(() => {
+    if (!token) return
+
+    let isActive = true
+
+    const loadProfile = async () => {
+      try {
+        const response = await api.get('/auth/me')
+        const payload = response.data || {}
+        const nextUser = {
+          userId: payload.userId || payload.UserId,
+          fullName: payload.fullName || payload.FullName,
+          userRole: payload.role || payload.userRole || payload.Role || payload.UserRole,
+        }
+
+        if (isActive) {
+          setProfileUser(nextUser)
+          localStorage.setItem('user', JSON.stringify(nextUser))
+        }
+      } catch (error) {
+        console.error('Kullanıcı profili alınamadı:', error)
+      }
+    }
+
+    loadProfile()
+
+    return () => {
+      isActive = false
+    }
+  }, [token])
 
   if (!token) {
     return <Navigate to="/login" replace />
@@ -58,8 +92,9 @@ const ProtectedLayout = () => {
   const isActiveLink = (path) => path === '/' ? location.pathname === '/' : location.pathname === path || location.pathname.startsWith(`${path}/`)
 
   // DİNAMİK ROL VE İSİM OKUMA
-  const userName = user?.fullName || user?.FullName || user?.name || user?.Name || 'Kullanıcı';
-  const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || 'Rol Tanımsız';
+  const currentUser = profileUser || storedUser
+  const userName = currentUser?.fullName || currentUser?.FullName || currentUser?.name || currentUser?.Name || 'Kullanıcı';
+  const userRole = currentUser?.userRole || currentUser?.UserRole || currentUser?.role || currentUser?.Role || 'Rol Tanımsız';
 
   return (
     <div className="app-shell">

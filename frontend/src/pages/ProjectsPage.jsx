@@ -79,6 +79,7 @@ function ProjectsPage() {
   const [rawProjects, setRawProjects] = useState([])
   const [programs, setPrograms] = useState([])
   const [customers, setCustomers] = useState([])
+  const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   
@@ -137,14 +138,21 @@ function ProjectsPage() {
 
   const fetchAuxData = async () => {
     try {
-      const [programData, customerData] = await Promise.all([
+      const [programData, customerData, userData] = await Promise.all([
         projectService.getPrograms(),
-        projectService.getCustomers()
+        projectService.getCustomers(),
+        projectService.getUsers()
       ])
-      setPrograms(Array.isArray(programData) ? programData : [])
+      const programsList = Array.isArray(programData) ? programData : []
+      setPrograms(programsList)
       setCustomers(Array.isArray(customerData) ? customerData : [])
+      setUsers(Array.isArray(userData) ? userData : [])
+
+      if (!formData.programId && programsList.length > 0) {
+        setFormData(prev => ({ ...prev, programId: programsList[0].programId }))
+      }
     } catch (err) {
-      console.error('Programlar veya müşteriler yüklenemedi:', err)
+      console.error('Programlar, müşteriler veya kullanıcılar yüklenemedi:', err)
     }
   }
 
@@ -191,7 +199,10 @@ function ProjectsPage() {
   // --- MODAL İŞLEMLERİ ---
   const handleOpenCreateModal = () => {
     setEditingProjectId(null)
-    setFormData(initialFormState)
+    setFormData(prev => ({
+      ...initialFormState,
+      programId: programs[0]?.programId || ''
+    }))
     setModalError('')
     setIsModalOpen(true)
   }
@@ -663,23 +674,6 @@ function ProjectsPage() {
               </div>
 
               <div className="form-group">
-                <label>Program *</label>
-                <select
-                  className="form-control"
-                  required
-                  value={formData.programId}
-                  onChange={(e) => handleFormChange('programId', e.target.value)}
-                >
-                  <option value="">Program seçin</option>
-                  {programs.map((program) => (
-                    <option key={program.programId} value={program.programId}>
-                      {program.programName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
                 <label>Müşteri *</label>
                 <select
                   className="form-control"
@@ -697,16 +691,22 @@ function ProjectsPage() {
               </div>
 
               <div className="form-group">
-                <label>Proje Yöneticisi ID *</label>
-                <input
-                  type="text"
-                  required
+                <label>Proje Yöneticisi *</label>
+                <select
                   className="form-control"
+                  required
                   value={formData.projectManagerUserId}
                   onChange={(e) => handleFormChange('projectManagerUserId', e.target.value)}
-                  placeholder="Kullanıcı ID"
-                />
+                >
+                  <option value="">Proje yöneticisi seçin</option>
+                  {users.map((user) => (
+                    <option key={user.userId} value={user.userId}>
+                      {user.fullName} {user.userRole ? `(${user.userRole})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
+              <input type="hidden" value={formData.programId} />
 
               <div className="modal-actions full-width-field">
                 <button type="button" className="reset-button" onClick={handleModalClose}>
