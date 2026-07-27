@@ -10,6 +10,18 @@ namespace dashboardapi.Endpoints;
 
 public static class SystemEndpoints
 {
+    private static (decimal? Sv, decimal? Cv, decimal? Spi, decimal? Cpi, decimal? Eac, decimal? Vac) CalculateEvmMetrics(decimal bac, decimal pv, decimal ev, decimal ac)
+    {
+        decimal? sv = ev - pv;
+        decimal? cv = ev - ac;
+        decimal? spi = pv != 0 ? Math.Round(ev / pv, 2) : null;
+        decimal? cpi = ac != 0 ? Math.Round(ev / ac, 2) : null;
+        decimal? eac = (cpi != null && cpi != 0) ? Math.Round(bac / cpi.Value, 2) : null;
+        decimal? vac = eac != null ? bac - eac : null;
+
+        return (sv, cv, spi, cpi, eac, vac);
+    }
+
     public static void MapSystemEndpoints(this IEndpointRouteBuilder app)
     {
         // ==========================================
@@ -71,15 +83,7 @@ public static class SystemEndpoints
                 return Results.Json(new { message = "Bu projeye EVM kaydı ekleme yetkiniz yok!" }, statusCode: 403);
 
             // --- EVM FORMÜLLERİ (BACKEND'DE OTOMATİK HESAPLANIYOR) ---
-            decimal? sv = request.Ev - request.Pv; // Zaman Sapması
-            decimal? cv = request.Ev - request.Ac; // Maliyet Sapması
-            
-            // Sıfıra bölünme hatalarını (DivideByZeroException) önlemek için kontroller:
-            decimal? spi = request.Pv != 0 ? Math.Round(request.Ev / request.Pv, 2) : null; 
-            decimal? cpi = request.Ac != 0 ? Math.Round(request.Ev / request.Ac, 2) : null; 
-            
-            decimal? eac = (cpi != null && cpi != 0) ? Math.Round(request.Bac / cpi.Value, 2) : null;
-            decimal? vac = eac != null ? request.Bac - eac : null;
+            var (sv, cv, spi, cpi, eac, vac) = CalculateEvmMetrics(request.Bac, request.Pv, request.Ev, request.Ac);
 
             var newRecord = new EvmRecord
             {
@@ -108,6 +112,72 @@ public static class SystemEndpoints
             await db.SaveChangesAsync();
 
             return Results.Json(new { message = "EVM kaydı başarıyla oluşturuldu ve metrikler hesaplandı.", evmRecordId = newRecord.EvmRecordId }, statusCode: 201);
+        });
+
+        app.MapPut("evm-records/{id}", async (string id, UpdateEvmRecordRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü EVM kaydını güncelleyemez!" }, statusCode: 403);
+
+            var existingRecord = await db.Set<EvmRecord>().FirstOrDefaultAsync(e => e.EvmRecordId == id);
+            if (existingRecord is null)
+                return Results.Json(new { message = "EVM kaydı bulunamadı." }, statusCode: 404);
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, existingRecord.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye EVM kaydı güncelleme yetkiniz yok!" }, statusCode: 403);
+
+            if (!string.IsNullOrWhiteSpace(request.ProjectId) && request.ProjectId != existingRecord.ProjectId)
+                return Results.Json(new { message = "EVM kaydının proje bilgisi değiştirilemez." }, statusCode: 400);
+
+            var periodConflict = await db.Set<EvmRecord>().AnyAsync(e => e.ProjectId == existingRecord.ProjectId && e.Period == request.Period && e.EvmRecordId != id);
+            if (periodConflict)
+                return Results.Json(new { message = "Bu dönem için zaten bir EVM kaydı bulunuyor." }, statusCode: 409);
+
+            var (sv, cv, spi, cpi, eac, vac) = CalculateEvmMetrics(request.Bac, request.Pv, request.Ev, request.Ac);
+
+            existingRecord.Period = request.Period;
+            existingRecord.Bac = request.Bac;
+            existingRecord.Pv = request.Pv;
+            existingRecord.Ev = request.Ev;
+            existingRecord.Ac = request.Ac;
+            existingRecord.Sv = sv;
+            existingRecord.Cv = cv;
+            existingRecord.Spi = spi;
+            existingRecord.Cpi = cpi;
+            existingRecord.Eac = eac;
+            existingRecord.Vac = vac;
+            existingRecord.UpdatedByUserId = userId;
+            existingRecord.UpdatedAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return Results.Json(new { message = "EVM kaydı başarıyla güncellendi.", evmRecordId = existingRecord.EvmRecordId }, statusCode: 200);
+        });
+
+        app.MapDelete("evm-records/{id}", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü EVM kaydını silemez!" }, statusCode: 403);
+
+            var existingRecord = await db.Set<EvmRecord>().FirstOrDefaultAsync(e => e.EvmRecordId == id);
+            if (existingRecord is null)
+                return Results.Json(new { message = "EVM kaydı bulunamadı." }, statusCode: 404);
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, existingRecord.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye EVM kaydı silme yetkiniz yok!" }, statusCode: 403);
+
+            db.Set<EvmRecord>().Remove(existingRecord);
+            await db.SaveChangesAsync();
+
+            return Results.Json(new { message = "EVM kaydı başarıyla silindi.", evmRecordId = existingRecord.EvmRecordId }, statusCode: 200);
         });
 
         // ==========================================

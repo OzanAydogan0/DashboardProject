@@ -221,7 +221,7 @@ function ProjectsPage() {
         baselineFinishDate: detail.baselineFinishDate ? detail.baselineFinishDate.split('T')[0] : '',
         forecastFinishDate: detail.forecastFinishDate ? detail.forecastFinishDate.split('T')[0] : '',
         programId: detail.programId || 'PRG-001',
-        customerId: detail.customerId || 'CUST-001',
+        customerId: detail.customerId || 'CST-001',
         projectManagerUserId: detail.projectManagerUserId || '',
         confidentiality: detail.confidentiality || 'Şirket İçi',
         isActive: detail.isActive !== undefined ? Number(detail.isActive) : 1

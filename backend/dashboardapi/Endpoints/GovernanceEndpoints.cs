@@ -142,6 +142,71 @@ public static class GovernanceEndpoints
             return Results.Json(new { message = "PIR Raporu oluşturuldu.", pirId = newPir.PirReportId }, statusCode: 201);
         });
 
+        app.MapPatch("pirs/{id}", async (string id, UpdatePirReportRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü PIR raporu düzenleyemez!" }, statusCode: 403);
+
+            var existingPir = await db.PirReports.FirstOrDefaultAsync(p => p.PirReportId == id);
+            if (existingPir == null)
+                return Results.NotFound(new { message = "PIR raporu bulunamadı." });
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, existingPir.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye PIR düzenleme yetkiniz yok!" }, statusCode: 403);
+
+            if (request.Period is not null) existingPir.Period = request.Period;
+            if (request.ReportDate.HasValue) existingPir.ReportDate = request.ReportDate.Value;
+            if (request.ExecutiveSummary is not null) existingPir.ExecutiveSummary = request.ExecutiveSummary;
+            if (request.CompletedWork is not null) existingPir.CompletedWork = request.CompletedWork;
+            if (request.Delays is not null) existingPir.Delays = request.Delays;
+            if (request.NextPeriodPlan is not null) existingPir.NextPeriodPlan = request.NextPeriodPlan;
+            if (request.ManagementExpectations is not null) existingPir.ManagementExpectations = request.ManagementExpectations;
+            if (request.ManualHealth is not null) existingPir.ManualHealth = request.ManualHealth;
+            if (request.ReportStatus is not null) existingPir.ReportStatus = request.ReportStatus;
+
+            if (request.ReportStatus == "Yayımlandı")
+            {
+                existingPir.PublishedByUserId = userId;
+                existingPir.PublishedAt = DateTime.UtcNow;
+            }
+            else if (request.ReportStatus is not null && request.ReportStatus != "Yayımlandı")
+            {
+                existingPir.PublishedByUserId = null;
+                existingPir.PublishedAt = null;
+            }
+
+            existingPir.UpdatedByUserId = userId;
+            existingPir.UpdatedAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "PIR raporu güncellendi." });
+        });
+
+        app.MapDelete("pirs/{id}", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü PIR raporu silemez!" }, statusCode: 403);
+
+            var existingPir = await db.PirReports.FirstOrDefaultAsync(p => p.PirReportId == id);
+            if (existingPir == null)
+                return Results.NotFound(new { message = "PIR raporu bulunamadı." });
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, existingPir.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye PIR silme yetkiniz yok!" }, statusCode: 403);
+
+            db.PirReports.Remove(existingPir);
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "PIR raporu silindi." });
+        });
+
         // 5. PIR Raporunu PDF olarak dışa aktarma
         app.MapGet("pirs/{id}/export/pdf", async (string id, AppDbContext db) =>
 {

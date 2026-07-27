@@ -157,8 +157,18 @@ importProjectsExcel: (formData) => {
   },
 
   createProjectReport: async (projectId, reportData) => {
-    const payload = { ...reportData, projectId };z
+    const payload = { ...reportData, projectId };
     const response = await api.post(`/pirs`, payload);
+    return response.data;
+  },
+
+  updateProjectReport: async (reportId, reportData) => {
+    const response = await api.patch(`/pirs/${reportId}`, reportData);
+    return response.data;
+  },
+
+  deleteProjectReport: async (reportId) => {
+    const response = await api.delete(`/pirs/${reportId}`);
     return response.data;
   },
 

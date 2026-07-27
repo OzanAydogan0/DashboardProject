@@ -24,11 +24,21 @@ public record EvmRecordDto(
 public record CreateEvmRecordRequest(
     string ProjectId,
     string Period,
-    string Currency,
     decimal Bac,
     decimal Pv,
     decimal Ev,
-    decimal Ac
+    decimal Ac,
+    string? Currency = null
+);
+
+public record UpdateEvmRecordRequest(
+    string ProjectId,
+    string Period,
+    decimal Bac,
+    decimal Pv,
+    decimal Ev,
+    decimal Ac,
+    string? Currency = null
 );
 
 // ==========================================

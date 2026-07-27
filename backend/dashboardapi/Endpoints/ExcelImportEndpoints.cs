@@ -6,6 +6,7 @@ using OfficeOpenXml;
 using dashboardapi.Data;
 using dashboardapi.Models;
 using dashboardapi.DTOs;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
@@ -104,7 +105,7 @@ public static class ExcelImportEndpoints
                         {
                             customer = new Customer
                             {
-                                CustomerId = Guid.NewGuid().ToString(),
+                                CustomerId = await CustomerIdGenerator.GenerateAsync(db),
                                 CustomerName = customerName,
                                 CustomerType = "Genel",
                                 CustomerStatus = "Aktif",

@@ -320,6 +320,104 @@ public sealed class EvmTests
         Assert.Null(zeroAcRecord.Eac);
         Assert.Null(zeroAcRecord.Vac);
     }
+
+    [Fact]
+    public async Task UpdateEvmRecord_ValidValues_UpdatesMetricsAndPersistsChanges()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(factory, role: "Sistem Yöneticisi");
+        var loginRequest = new LoginRequest(credentials.User.Email, credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync("/auth/login", loginRequest);
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.NotNull(loginResult);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", loginResult!.Token);
+
+        var createRequest = new CreateEvmRecordRequest(
+            ProjectId: "PRJ-003",
+            Period: "2026-09",
+            Bac: 1000m,
+            Pv: 400m,
+            Ev: 300m,
+            Ac: 500m);
+
+        using var createResponse = await client.PostAsJsonAsync("/evm-records", createRequest);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var createdPayload = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var evmRecordId = createdPayload.GetProperty("evmRecordId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(evmRecordId));
+
+        var updateRequest = new UpdateEvmRecordRequest(
+            ProjectId: "PRJ-003",
+            Period: "2026-09",
+            Bac: 2000m,
+            Pv: 800m,
+            Ev: 700m,
+            Ac: 600m);
+
+        using var updateResponse = await client.PutAsJsonAsync($"/evm-records/{evmRecordId}", updateRequest);
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+        using var getResponse = await client.GetAsync("/projects/PRJ-003/evm-records");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var records = await getResponse.Content.ReadFromJsonAsync<List<EvmRecordDto>>();
+        Assert.NotNull(records);
+
+        var updatedRecord = Assert.Single(records!, record => record.EvmRecordId == evmRecordId);
+        Assert.Equal(2000m, updatedRecord.Bac);
+        Assert.Equal(0.83m, updatedRecord.Cpi);
+        Assert.Equal(2400m, updatedRecord.Eac);
+        Assert.Equal(-400m, updatedRecord.Vac);
+    }
+
+    [Fact]
+    public async Task DeleteEvmRecord_ValidValues_RemovesRecord()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(factory, role: "Sistem Yöneticisi");
+        var loginRequest = new LoginRequest(credentials.User.Email, credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync("/auth/login", loginRequest);
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.NotNull(loginResult);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", loginResult!.Token);
+
+        var createRequest = new CreateEvmRecordRequest(
+            ProjectId: "PRJ-003",
+            Period: "2026-08",
+            Bac: 500m,
+            Pv: 250m,
+            Ev: 200m,
+            Ac: 300m);
+
+        using var createResponse = await client.PostAsJsonAsync("/evm-records", createRequest);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var createdPayload = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var evmRecordId = createdPayload.GetProperty("evmRecordId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(evmRecordId));
+
+        using var deleteResponse = await client.DeleteAsync($"/evm-records/{evmRecordId}");
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+
+        using var getResponse = await client.GetAsync("/projects/PRJ-003/evm-records");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var records = await getResponse.Content.ReadFromJsonAsync<List<EvmRecordDto>>();
+        Assert.NotNull(records);
+        Assert.DoesNotContain(records!, record => record.EvmRecordId == evmRecordId);
+    }
+
     private static async Task<TestUserCredentials> CreateActiveUserAsync(
         TestWebApplicationFactory factory,
         string role)

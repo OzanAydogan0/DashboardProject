@@ -202,6 +202,77 @@ public sealed class PirReportTests
             createdReport.UpdatedByUserId);
     }
 
+    [Fact]
+    public async Task UpdatePirReport_WithWritePermission_UpdatesExistingReport()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(factory, role: "Proje Yöneticisi");
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            new LoginRequest(credentials.User.Email, credentials.PlainTextPassword));
+
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.NotNull(loginResult);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", loginResult.Token);
+
+        var updatePayload = new
+        {
+            period = "2026-09",
+            executiveSummary = "Dönem özeti güncellendi.",
+            reportStatus = "Taslak",
+            completedWork = "Test adımları tamamlandı.",
+            nextPeriodPlan = "Sonraki dönem test planı hazırlanacak."
+        };
+
+        using var response = await client.PatchAsJsonAsync("/pirs/PIR-01", updatePayload);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var updatedReport = await db.PirReports.SingleAsync(report => report.PirReportId == "PIR-01");
+        Assert.Equal("2026-09", updatedReport.Period);
+        Assert.Equal("Dönem özeti güncellendi.", updatedReport.ExecutiveSummary);
+        Assert.Equal("Taslak", updatedReport.ReportStatus);
+    }
+
+    [Fact]
+    public async Task DeletePirReport_WithWritePermission_DeletesExistingReport()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(factory, role: "Proje Yöneticisi");
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            new LoginRequest(credentials.User.Email, credentials.PlainTextPassword));
+
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.NotNull(loginResult);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", loginResult.Token);
+
+        using var response = await client.DeleteAsync("/pirs/PIR-01");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var deletedReport = await db.PirReports.SingleOrDefaultAsync(report => report.PirReportId == "PIR-01");
+        Assert.Null(deletedReport);
+    }
+
     /*GET projects/{id}/pirs endpoint’i korumasız kalmış.*/
         [Fact]
     public async Task GetProjectPirs_WithoutAuthentication_ReturnsUnauthorized()

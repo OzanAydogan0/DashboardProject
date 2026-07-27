@@ -1,0 +1,94 @@
+.evm-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.evm-action-button,
+.evm-secondary-button,
+.evm-link-button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.evm-action-button {
+  background: #2563eb;
+  color: #fff;
+}
+
+.evm-secondary-button {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.evm-link-button {
+  background: transparent;
+  color: #2563eb;
+  padding: 0;
+  margin-right: 8px;
+}
+
+.evm-link-button.danger {
+  color: #dc2626;
+}
+
+.evm-alert {
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.evm-alert.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.evm-alert.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.evm-form-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.evm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.evm-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.evm-form-grid input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.evm-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.evm-row-actions {
+  display: flex;
+  gap: 10px;
+}

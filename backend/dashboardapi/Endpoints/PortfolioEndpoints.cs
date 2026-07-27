@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models; // Customer için
+using dashboardapi.Services;
 // Program için dashboardapi.Models.Program kullanacağız!
 
 namespace dashboardapi.Endpoints;
@@ -31,9 +32,11 @@ public static class PortfolioEndpoints
             if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
                 return Results.Json(new { message = "Müşteri ekleme yetkiniz yok!" }, statusCode: 403);
 
+            var customerId = await CustomerIdGenerator.GenerateAsync(db);
+
             var newCustomer = new Customer
             {
-                CustomerId = Guid.NewGuid().ToString(),
+                CustomerId = customerId,
                 CustomerName = request.CustomerName,
                 CustomerType = request.CustomerType,
                 CustomerStatus = request.CustomerStatus,

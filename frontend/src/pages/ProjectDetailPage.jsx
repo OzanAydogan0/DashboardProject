@@ -353,7 +353,7 @@ function ProjectDetailPage() {
       {activeTab === 'issues' && <ProblemsPage issues={subData.issues} />}
       {activeTab === 'actions' && <ActionsPage actions={subData.actions} />}
       {activeTab === 'evm' && <EvmRecordsPage evmRecords={subData.evmRecords} currency={project.currency} />}
-      {activeTab === 'reports' && <ReportsPage reports={subData.reports} />}
+      {activeTab === 'reports' && <ReportsPage reports={subData.reports} onRefresh={fetchProjectData} />}
 
     </div>
   )

@@ -14,6 +14,48 @@ namespace DashboardApi.Tests.Integration;
 public sealed class PortfolioTests
 {
     [Fact]
+    public async Task CreateCustomer_GeneratesStandardCustomerIdFormat()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        TestUserCredentials credentials;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var builder = new TestDataBuilder(db);
+
+            credentials = await builder.CreateActiveUserAsync(role: "Sistem Yöneticisi");
+        }
+
+        var loginRequest = new LoginRequest(credentials.User.Email, credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync("/auth/login", loginRequest);
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.NotNull(loginResult);
+        Assert.False(string.IsNullOrWhiteSpace(loginResult.Token));
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", loginResult.Token);
+
+        var request = new CreateCustomerRequest("Yeni Müşteri", "Kamu", "Aktif");
+
+        using var response = await client.PostAsJsonAsync("/customers", request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var responseBody = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        Assert.NotNull(responseBody);
+        Assert.True(responseBody.TryGetValue("customerId", out var customerIdValue));
+        var customerId = customerIdValue?.ToString();
+
+        Assert.NotNull(customerId);
+        Assert.Matches("^CST-\\d{3}$", customerId);
+    }
+
+    [Fact]
     public async Task GetPortfolio_WithSelectedProjectIds_ReturnsOnlySelectedProjects()
     {
         // Arrange
