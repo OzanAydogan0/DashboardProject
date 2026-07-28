@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
@@ -22,17 +23,23 @@ public static class DashboardEndpoints
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
             // Önce görünüm sorgusunu hazırlıyoruz
-            var query = db.Set<VwDashboard>().AsQueryable();
+            var activeProjectIds = await db.Projects
+                .Where(p => p.IsActive == 1)
+                .Select(p => p.ProjectId)
+                .ToListAsync();
 
-            // ROL KONTROLÜ: Eğer Admin veya Üst Yönetim değilse, sadece yetkili olduğu projelerin özetlerini görsün
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+            var query = db.Set<VwDashboard>()
+                .Where(v => v.ProjectId != null && activeProjectIds.Contains(v.ProjectId))
+                .AsQueryable();
+
+            if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
                 var allowedProjectIds = await db.Projects
-                    .Where(p => p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId))
+                    .Where(p => p.IsActive == 1 && (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)))
                     .Select(p => p.ProjectId)
                     .ToListAsync();
 
-                query = query.Where(v => allowedProjectIds.Contains(v.ProjectId!));
+                query = query.Where(v => v.ProjectId != null && allowedProjectIds.Contains(v.ProjectId));
             }
 
             // SQLite'ın byte[] verilerini hafızada işlemek için listeyi çekiyoruz
@@ -64,18 +71,11 @@ public static class DashboardEndpoints
         // 2. GET /dashboard/projects/{id}/evm -> Projeye Ait Dönemsel EVM Grafikleri (vw_evm verisi)
         group.MapGet("projects/{id}/evm", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
 
-            // GÜVENLİK KONTROLÜ: Kullanıcı bu projeyi görmeye yetkili mi?
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == id && 
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-                
-                if (!hasAccess) 
-                    return Results.Json(new { message = "Bu projenin finansal analiz verilerini görmeye yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanAccessProjectAsync(db, id, userId!, userRole))
+                return Results.Json(new { message = "Bu projenin finansal analiz verilerini görmeye yetkiniz yok!" }, statusCode: 403);
 
             // İlgili projenin EVM geçmişini çekiyoruz
             var rawEvmData = await db.Set<VwEvm>()

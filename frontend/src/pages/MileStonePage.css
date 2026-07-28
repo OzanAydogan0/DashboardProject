@@ -1,0 +1,340 @@
+/* ==========================================
+   1. GENEL DÜZEN VE KART STİLLERİ
+   ========================================== */
+
+.tab-content-wrapper {
+  width: 100%;
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.timeline-card {
+  background-color: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+}
+
+.shadow-card {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+/* ==========================================
+   2. ÜST KISIM VE EKLE BUTONU (PUNTO BÜYÜTÜLDÜ)
+   ========================================== */
+
+.timeline-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.btn-add-milestone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: #2563eb;
+  color: #ffffff;
+  font-size: 16px; /* Büyütüldü: 14px -> 16px */
+  font-weight: 600;
+  font-family: inherit;
+  padding: 12px 22px; /* Buton içi alan genişletildi */
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-add-milestone:hover {
+  background-color: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  transform: translateY(-2px);
+}
+
+.btn-add-milestone:active {
+  transform: translateY(0);
+}
+
+.btn-add-milestone:disabled {
+  background-color: #93c5fd;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ==========================================
+   3. TABLO VE TIMELINE STİLLERİ (PUNTO BÜYÜTÜLDÜ)
+   ========================================== */
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.timeline-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.timeline-table th {
+  padding: 14px 18px;
+  color: #475569;
+  font-weight: 700;
+  border-bottom: 2px solid #e2e8f0;
+  text-transform: uppercase;
+  font-size: 14px; /* Büyütüldü: 12px -> 14px */
+  letter-spacing: 0.05em;
+}
+
+.timeline-table td {
+  padding: 18px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  font-size: 16px; /* Büyütüldü: 14px -> 16px */
+  vertical-align: middle;
+}
+
+.timeline-table td.font-medium {
+  font-weight: 600;
+  font-size: 17px; /* Milestone ismi ekstra vurgulandı */
+}
+
+.timeline-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+/* Timeline Nokta Yapısı */
+.timeline-td {
+  position: relative;
+  text-align: center;
+}
+
+.timeline-dot {
+  width: 14px; /* Hafif büyütüldü: 12px -> 14px */
+  height: 14px;
+  border-radius: 50%;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+
+/* Duruma Göre Nokta Renkleri */
+.status-completed-dot {
+  background-color: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+}
+
+.status-inprogress-dot {
+  background-color: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
+}
+
+.status-planned-dot {
+  background-color: #94a3b8;
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.2);
+}
+
+/* ==========================================
+   4. DURUM ROZETLERİ VEYA İŞLEM BUTONLARI (PUNTO BÜYÜTÜLDÜ)
+   ========================================== */
+
+.milestone-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 14px;
+  font-size: 14px; /* Büyütüldü: 12px -> 14px */
+  font-weight: 600;
+}
+
+.status-completed-badge {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.status-inprogress-badge {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.status-planned-badge {
+  background-color: #f1f5f9;
+  color: #475569;
+}
+
+/* Tablo İçi Düzenle Butonu */
+.btn-action-edit {
+  background-color: #f1f5f9;
+  color: #2563eb;
+  border: 1px solid #cbd5e1;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 15px; /* Büyütüldü: 13px -> 15px */
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-action-edit:hover {
+  background-color: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+/* ==========================================
+   5. MODAL VE FORM STİLLERİ (PUNTO BÜYÜTÜLDÜ)
+   ========================================== */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.modal-content {
+  background-color: #ffffff;
+  padding: 30px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 22px;
+  font-size: 1.4rem; /* Büyütüldü: 1.25rem -> 1.4rem */
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.form-group {
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 1rem; /* Büyütüldü: 0.875rem -> 1rem */
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-group input,
+.form-group select {
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 1.05rem; /* Büyütüldü: 0.95rem -> 1.05rem */
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.btn-cancel {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-cancel:hover {
+  background-color: #e2e8f0;
+}
+
+.btn-submit {
+  background-color: #10b981;
+  color: #ffffff;
+  border: none;
+  padding: 12px 22px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+
+
+.btn-submit:hover {
+  background-color: #059669;
+}
+
+
+/* --- KİLOMETRE TAŞI SİL/İPTAL BUTONU --- */
+
+/* 1. Butonun Temel Görünümü */
+.btn-delete-milestone {
+  background-color: #dc3545; /* Dikkat çekici, standart silme (tehlike) kırmızısı */
+  color: white;              /* Yazı rengi beyaz */
+  border: none;              /* Standart çirkin kenarlıkları kaldırır */
+  padding: 8px 16px;         /* İç boşluklar: Yukarı/Aşağı 8px, Sağ/Sol 16px */
+  border-radius: 6px;        /* Köşeleri yumuşatır (daha modern görünüm) */
+  cursor: pointer;           /* Fare üzerine gelince imlecin el şeklini almasını sağlar */
+  font-size: 14px;           /* Yazı boyutu */
+  font-weight: 600;          /* Yazı kalınlığı (yarı kalın) */
+  margin-left: 8px;          /* Yanında başka buton varsa araya mesafe koyar */
+  transition: all 0.3s ease; /* Renk ve boyut değişimlerinin aniden değil, 0.3 saniyede yumuşakça olmasını sağlar */
+}
+
+/* 2. Fareyle Üzerine Gelindiğinde (Hover) */
+.btn-delete-milestone:hover {
+  background-color: #c82333; /* Rengi biraz daha koyu kırmızı yapar */
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4); /* Dışarıya doğru hafif kırmızımsı bir gölge verir */
+}
+
+/* 3. Butona Tıklandığı An (Active) */
+.btn-delete-milestone:active {
+  transform: scale(0.95);    /* Fiziksel tıklama hissiyatı için butonu %5 oranında küçültür */
+  box-shadow: none;          /* Küçüldüğünde gölgeyi kaldırarak derinlik hissini artırır */
+}
+
+/* ==========================================
+   6. ANİMASYONLAR
+   ========================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  } 
+
+
+  
+}

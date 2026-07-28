@@ -6,6 +6,7 @@ using OfficeOpenXml;
 using dashboardapi.Data;
 using dashboardapi.Models;
 using dashboardapi.DTOs;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
@@ -14,7 +15,7 @@ public static class ExcelImportEndpoints
     public static void MapExcelImportEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("projects/import", async (
-            IFormFile file, 
+            [FromForm] IFormFile file, // 👈 1. [FromForm] özniteliği eklendi (415 hatasını çözer)
             ClaimsPrincipal userClaims, 
             AppDbContext db) =>
         {
@@ -38,7 +39,7 @@ public static class ExcelImportEndpoints
             {
                 await file.CopyToAsync(stream);
                 using var package = new ExcelPackage(stream);
-                var worksheet = package.Workbook.Worksheets[0];
+                var worksheet = package.Workbook.Worksheets.FirstOrDefault();
                 
                 if (worksheet == null) return Results.BadRequest(new { message = "Çalışma sayfası bulunamadı." });
 
@@ -51,21 +52,25 @@ public static class ExcelImportEndpoints
                     {
                         var projectCode = worksheet.Cells[row, 1].Value?.ToString()?.Trim();
                         var projectName = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
-                        var programName = worksheet.Cells[row, 3].Value?.ToString()?.Trim(); // Kullanıcı Adı yazar
-                        var customerName = worksheet.Cells[row, 4].Value?.ToString()?.Trim(); // Kullanıcı Adı yazar
-                        var pmEmail = worksheet.Cells[row, 5].Value?.ToString()?.Trim(); // Kullanıcı E-posta yazar
-                        var startDateStr = worksheet.Cells[row, 6].Value?.ToString();
-                        var endDateStr = worksheet.Cells[row, 7].Value?.ToString();
-                        var bacStr = worksheet.Cells[row, 8].Value?.ToString()?.Trim();
-                        var currency = worksheet.Cells[row, 9].Value?.ToString()?.Trim() ?? "TRY";
-                        var confidentiality = worksheet.Cells[row, 10].Value?.ToString()?.Trim() ?? "Şirket İçi";
-                        var reportingFreq = worksheet.Cells[row, 11].Value?.ToString()?.Trim() ?? "Aylık";
-                        var status = worksheet.Cells[row, 12].Value?.ToString()?.Trim() ?? "Planlandı";
+                        var customerName = worksheet.Cells[row, 3].Value?.ToString()?.Trim(); 
+                        var pmIdentifier = worksheet.Cells[row, 4].Value?.ToString()?.Trim(); // PM ID veya E-posta
+                        var startDateStr = worksheet.Cells[row, 5].Value?.ToString();
+                        var endDateStr = worksheet.Cells[row, 6].Value?.ToString();
+                        var bacStr = worksheet.Cells[row, 7].Value?.ToString()?.Trim();
+                        var currency = worksheet.Cells[row, 8].Value?.ToString()?.Trim() ?? "TRY";
+                        var confidentiality = worksheet.Cells[row, 9].Value?.ToString()?.Trim() ?? "Şirket İçi";
+                        var reportingFreq = worksheet.Cells[row, 10].Value?.ToString()?.Trim() ?? "Aylık";
+                        var status = worksheet.Cells[row, 11].Value?.ToString()?.Trim() ?? "Planlandı";
+                        var projectDescription = worksheet.Cells[row, 12].Value?.ToString()?.Trim();
+                        var manualHealth = worksheet.Cells[row, 13].Value?.ToString()?.Trim() ?? "Yeşil";
+                        var plannedProgressStr = worksheet.Cells[row, 14].Value?.ToString()?.Trim();
+                        var actualProgressStr = worksheet.Cells[row, 15].Value?.ToString()?.Trim();
+                        var isActiveStr = worksheet.Cells[row, 16].Value?.ToString()?.Trim();
 
                         if (string.IsNullOrEmpty(projectCode) || string.IsNullOrEmpty(projectName) || 
-                            string.IsNullOrEmpty(pmEmail) || string.IsNullOrEmpty(programName) || string.IsNullOrEmpty(customerName))
+                            string.IsNullOrEmpty(pmIdentifier) || string.IsNullOrEmpty(customerName))
                         {
-                            errorLogs.Add($"Satır {row}: Proje Kodu, Adı, Program Adı, Müşteri Adı ve PM E-posta alanları zorunludur.");
+                            errorLogs.Add($"Satır {row}: Proje Kodu, Adı, Müşteri Adı ve PM ID/E-posta alanları zorunludur.");
                             continue;
                         }
 
@@ -76,29 +81,49 @@ public static class ExcelImportEndpoints
                             continue;
                         }
 
-                        // 🧠 AKILLI EŞLEŞTİRME (İsimden ID'ye)
+                        // 🧠 AKILLI EŞLEŞTİRME & OTOMATİK OLUŞTURMA (Get or Create)
                         
-                        // 1. Programı Bul
-                        var program = await db.Programs.FirstOrDefaultAsync(p => p.ProgramName == programName);
+                        // 1. Varsayılan bir Programı Bul ya da Oluştur
+                        var program = db.Programs.Local.FirstOrDefault(p => p.ProgramStatus == "Aktif")
+                                      ?? await db.Programs.Where(p => p.ProgramStatus == "Aktif").OrderBy(p => p.CreatedAt).FirstOrDefaultAsync();
+
                         if (program == null)
                         {
-                            errorLogs.Add($"Satır {row}: '{programName}' sistemde bulunamadı. Lütfen tanımlı bir Program adı girin.");
-                            continue;
+                            program = new dashboardapi.Models.Program
+                            {
+                                ProgramId = Guid.NewGuid().ToString(),
+                                ProgramName = "Genel Program",
+                                ProgramDescription = "Excel içe aktarımı ile otomatik oluşturuldu.",
+                                ProgramStatus = "Aktif",
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            db.Programs.Add(program);
                         }
 
-                        // 2. Müşteriyi Bul (Müşteri tablosundaki İsim alanının "CustomerName" olduğunu varsayıyoruz, modeline göre düzeltebilirsin)
-                        var customer = await db.Customers.FirstOrDefaultAsync(c => c.CustomerName == customerName);
+                        // 2. Müşteriyi Bul veya Otomatik Oluştur
+                        var customer = db.Customers.Local.FirstOrDefault(c => c.CustomerName == customerName) 
+                                       ?? await db.Customers.FirstOrDefaultAsync(c => c.CustomerName == customerName);
+
                         if (customer == null)
                         {
-                            errorLogs.Add($"Satır {row}: '{customerName}' sistemde bulunamadı. Lütfen tanımlı bir Müşteri adı girin.");
-                            continue;
+                            customer = new Customer
+                            {
+                                CustomerId = await CustomerIdGenerator.GenerateAsync(db),
+                                CustomerName = customerName,
+                                CustomerType = "Genel",
+                                CustomerStatus = "Aktif",
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            db.Customers.Add(customer);
                         }
 
-                        // 3. Proje Yöneticisini Bul
-                        var pmUser = await db.Users.FirstOrDefaultAsync(u => u.Email == pmEmail);
+                        // 3. Proje Yöneticisini Bul (Hem E-posta hem de UserId desteği)
+                        var pmUser = await db.Users.FirstOrDefaultAsync(u => u.Email == pmIdentifier || u.UserId == pmIdentifier);
                         if (pmUser == null)
                         {
-                            errorLogs.Add($"Satır {row}: '{pmEmail}' adresine sahip bir kullanıcı bulunamadı.");
+                            errorLogs.Add($"Satır {row}: '{pmIdentifier}' bilgisine sahip bir kullanıcı (PM) bulunamadı.");
                             continue;
                         }
 
@@ -109,30 +134,40 @@ public static class ExcelImportEndpoints
                         if (endDate == DateTime.MinValue) endDate = DateTime.UtcNow.AddMonths(6);
 
                         decimal.TryParse(bacStr, out decimal bacValue);
+                        decimal.TryParse(plannedProgressStr, out decimal plannedProgressValue);
+                        decimal.TryParse(actualProgressStr, out decimal actualProgressValue);
+                        int isActiveValue = 1;
+                        if (!string.IsNullOrEmpty(isActiveStr))
+                        {
+                            if (!int.TryParse(isActiveStr, out isActiveValue))
+                            {
+                                isActiveValue = isActiveStr.Trim().Equals("Pasif", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+                            }
+                        }
 
-                        // Eşleştirilen ID'lerle Projeyi Oluştur
+                        // Projeyi Oluştur
                         var newProject = new Project
                         {
                             ProjectId = "PRJ-" + Guid.NewGuid().ToString()[..8].ToUpper(),
                             ProjectCode = projectCode,
                             ProjectName = projectName,
-                            ProgramId = program.ProgramId, // Backend bulduğu ID'yi basıyor
-                            CustomerId = customer.CustomerId, // Backend bulduğu ID'yi basıyor
-                            ProjectManagerUserId = pmUser.UserId, // Backend bulduğu ID'yi basıyor
+                            ProgramId = program.ProgramId,
+                            CustomerId = customer.CustomerId,
+                            ProjectManagerUserId = pmUser.UserId, 
                             StartDate = startDate,
                             BaselineFinishDate = endDate,
                             ForecastFinishDate = endDate,
                             ActualFinishDate = null,
                             ProjectStatus = status,
-                            ManualHealth = "Nötr",
-                            PlannedProgress = 0m,
-                            ActualProgress = 0m,
+                            ManualHealth = string.IsNullOrEmpty(manualHealth) ? "Yeşil" : manualHealth,
+                            PlannedProgress = plannedProgressValue,
+                            ActualProgress = actualProgressValue,
                             Bac = bacValue,
                             Currency = currency,
                             ReportingFrequency = reportingFreq,
                             Confidentiality = confidentiality,
-                            ProjectDescription = null,
-                            IsActive = 1,
+                            ProjectDescription = projectDescription,
+                            IsActive = isActiveValue == 0 ? 0 : 1,
                             CreatedByUserId = userId,
                             UpdatedByUserId = userId,
                             CreatedAt = DateTime.UtcNow,
@@ -160,6 +195,7 @@ public static class ExcelImportEndpoints
                 TotalFailed: errorLogs.Count,
                 Errors: errorLogs
             ));
-        });
+        })
+        .DisableAntiforgery(); // 👈 2. Form yüklemelerinde .NET 8 Anti-Forgery doğrulaması kapatıldı
     }
 }

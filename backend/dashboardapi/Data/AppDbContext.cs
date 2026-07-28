@@ -787,6 +787,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.RiskImpact).HasColumnName("risk_impact");
             entity.Property(e => e.RiskOwnerFullName).HasColumnName("risk_owner_full_name");
             entity.Property(e => e.RiskOwnerUserId).HasColumnName("risk_owner_user_id");
+            entity.Property(e => e.RiskMitigation).HasColumnName("risk_mitigation");
             entity.Property(e => e.RiskProbability).HasColumnName("risk_probability");
             entity.Property(e => e.RiskScore).HasColumnName("risk_score");
             entity.Property(e => e.RiskStatus).HasColumnName("risk_status");

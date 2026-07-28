@@ -15,6 +15,7 @@ public record RiskDto(
     DateTime? RiskDueDate,
     string? RiskOwnerUserId,
     string? RiskOwnerFullName,
+    string? RiskMitigation,
     string RiskHealth
 );
 
@@ -25,10 +26,10 @@ public record CreateRiskRequest(
     string RiskCategory,
     int RiskProbability,
     int RiskImpact,
-    string RiskOwnerUserId,
-    string RiskMitigation,
-    DateTime RiskDueDate,
-    string RiskStatus
+    string? RiskOwnerUserId,
+    string? RiskMitigation,
+    DateTime? RiskDueDate,
+    string? RiskStatus
 );
 
 public record UpdateRiskRequest(

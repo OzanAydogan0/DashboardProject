@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
@@ -16,18 +17,12 @@ public static class GovernanceEndpoints
 
         app.MapGet("projects/{id}/decisions", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            // Sadece Yönetici/Üst Yönetim veya projeye dahil olanlar görebilir
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
-            {
-                var hasAccess = await db.Projects.AnyAsync(p => p.ProjectId == id &&
-                    (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
-
-                if (!hasAccess) return Results.Json(new { message = "Yetkiniz yok!" }, statusCode: 403);
-            }
+            if (!await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+                return Results.Json(new { message = "Yetkiniz yok!" }, statusCode: 403);
 
             var decisions = await db.Set<ManagementDecision>()
                 .Include(d => d.DecisionOwnerUser)
@@ -46,8 +41,15 @@ public static class GovernanceEndpoints
 
         app.MapPost("decisions", async (CreateManagementDecisionRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü karar ekleyemez!" }, statusCode: 403);
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, request.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye karar ekleme yetkiniz yok!" }, statusCode: 403);
 
             var newDecision = new ManagementDecision
             {
@@ -80,7 +82,13 @@ public static class GovernanceEndpoints
 
         app.MapGet("projects/{id}/pirs", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            // View üzerinden okuma yapıyoruz (Hızlı ve Join gerektirmez)
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (!await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+                return Results.Json(new { message = "Yetkiniz yok!" }, statusCode: 403);
+
             var pirs = await db.Set<VwPir>()
                 .Where(p => p.ProjectId == id)
                 .OrderByDescending(p => p.ReportDate)
@@ -97,8 +105,15 @@ public static class GovernanceEndpoints
 
         app.MapPost("pirs", async (CreatePirReportRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü PIR raporu ekleyemez!" }, statusCode: 403);
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, request.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye PIR ekleme yetkiniz yok!" }, statusCode: 403);
 
             var newPir = new PirReport
             {
@@ -113,8 +128,8 @@ public static class GovernanceEndpoints
                 ManagementExpectations = request.ManagementExpectations,
                 ManualHealth = request.ManualHealth,
                 ReportStatus = request.ReportStatus,
-                PublishedByUserId = request.ReportStatus == "Yayınlandı" ? userId : null,
-                PublishedAt = request.ReportStatus == "Yayınlandı" ? DateTime.UtcNow : null,
+                PublishedByUserId = request.ReportStatus == "Yayımlandı" ? userId : null,
+                PublishedAt = request.ReportStatus == "Yayımlandı" ? DateTime.UtcNow : null,
                 CreatedByUserId = userId,
                 UpdatedByUserId = userId,
                 CreatedAt = DateTime.UtcNow,
@@ -125,6 +140,71 @@ public static class GovernanceEndpoints
             await db.SaveChangesAsync();
 
             return Results.Json(new { message = "PIR Raporu oluşturuldu.", pirId = newPir.PirReportId }, statusCode: 201);
+        });
+
+        app.MapPatch("pirs/{id}", async (string id, UpdatePirReportRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü PIR raporu düzenleyemez!" }, statusCode: 403);
+
+            var existingPir = await db.PirReports.FirstOrDefaultAsync(p => p.PirReportId == id);
+            if (existingPir == null)
+                return Results.NotFound(new { message = "PIR raporu bulunamadı." });
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, existingPir.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye PIR düzenleme yetkiniz yok!" }, statusCode: 403);
+
+            if (request.Period is not null) existingPir.Period = request.Period;
+            if (request.ReportDate.HasValue) existingPir.ReportDate = request.ReportDate.Value;
+            if (request.ExecutiveSummary is not null) existingPir.ExecutiveSummary = request.ExecutiveSummary;
+            if (request.CompletedWork is not null) existingPir.CompletedWork = request.CompletedWork;
+            if (request.Delays is not null) existingPir.Delays = request.Delays;
+            if (request.NextPeriodPlan is not null) existingPir.NextPeriodPlan = request.NextPeriodPlan;
+            if (request.ManagementExpectations is not null) existingPir.ManagementExpectations = request.ManagementExpectations;
+            if (request.ManualHealth is not null) existingPir.ManualHealth = request.ManualHealth;
+            if (request.ReportStatus is not null) existingPir.ReportStatus = request.ReportStatus;
+
+            if (request.ReportStatus == "Yayımlandı")
+            {
+                existingPir.PublishedByUserId = userId;
+                existingPir.PublishedAt = DateTime.UtcNow;
+            }
+            else if (request.ReportStatus is not null && request.ReportStatus != "Yayımlandı")
+            {
+                existingPir.PublishedByUserId = null;
+                existingPir.PublishedAt = null;
+            }
+
+            existingPir.UpdatedByUserId = userId;
+            existingPir.UpdatedAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "PIR raporu güncellendi." });
+        });
+
+        app.MapDelete("pirs/{id}", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
+        {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+            if (PermissionHelper.IsExecutive(userRole))
+                return Results.Json(new { message = "Üst Yönetim rolü PIR raporu silemez!" }, statusCode: 403);
+
+            var existingPir = await db.PirReports.FirstOrDefaultAsync(p => p.PirReportId == id);
+            if (existingPir == null)
+                return Results.NotFound(new { message = "PIR raporu bulunamadı." });
+
+            if (!await PermissionHelper.CanWriteProjectAsync(db, existingPir.ProjectId, userId, userRole))
+                return Results.Json(new { message = "Bu projeye PIR silme yetkiniz yok!" }, statusCode: 403);
+
+            db.PirReports.Remove(existingPir);
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "PIR raporu silindi." });
         });
 
         // 5. PIR Raporunu PDF olarak dışa aktarma

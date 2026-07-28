@@ -71,5 +71,17 @@ public static class UserEndpoints
 
             return Results.Ok(new UserDto(user.UserId, user.Email, user.FullName, user.UserRole, user.UserStatus));
         });
+
+        group.MapDelete("{id}", async (string id, AppDbContext db) =>
+        {
+            var user = await db.Users.FindAsync(id);
+            if (user == null)
+                return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
+
+            db.Users.Remove(user);
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { message = "Kullanıcı başarıyla silindi." });
+        });
     }
 }

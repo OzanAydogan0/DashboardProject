@@ -9,8 +9,10 @@ public static class PirExcelGenerator
 {
     public static byte[] Generate(PirPdfData pdfData)
     {
-        var report = pdfData.Report;
 
+
+        var report = pdfData.Report;
+        
         using var package = new ExcelPackage();
         var ws = package.Workbook.Worksheets.Add("PIR Raporu");
 

@@ -1,388 +1,376 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { projectService } from '../services/projectService'
+import { useAlert } from '../components/AlertProvider'
 import './ProjectDetailPage.css'
+import MileStone from './MileStonePage'
+import ProjectRisksPage from './ProjectRisksPage'
+import ProblemsPage from './ProblemsPage'
+import ActionsPage from './ProjectActionsPage'
+import EvmRecordsPage from './EvmRecordsPage'
+import ReportsPage from './ProjectReportsPage'
 
 function ProjectDetailPage() {
+  // 1. ROUTER VE URL PARAMETRELERİ
   const { id } = useParams()
+  const { addAlert } = useAlert()
   const navigate = useNavigate()
+  const location = useLocation()
 
-  // Aktif Sekme State'i
-  const [activeTab, setActiveTab] = useState('summary') 
+  const queryParams = new URLSearchParams(location.search)
+  const activeTab = queryParams.get('tab') || 'overview'
   
-  const [projectData, setProjectData] = useState(null)
+  // 2. STATE (DURUM) YÖNETİMİ
+  const [project, setProject] = useState(null)
+  const [users, setUsers] = useState([])
+  const [subData, setSubData] = useState({
+    milestones: [],
+    risks: [],
+    issues: [],
+    actions: [],
+    reports: [],
+    evmRecords: [],
+    customers: []
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // 3. VERİ ÇEKME İŞLEMİ
+  const fetchProjectData = async () => {
+    if (!id) return
+
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const projectDetailData = await projectService.getProjectById(id)
+
+      const [milestonesRes, risksRes, issuesRes, actionsRes, reportsRes, evmRes, customersRes, usersRes] = await Promise.allSettled([
+        projectService.getProjectMilestones(id),
+        projectService.getProjectRisks(id),
+        projectService.getProjectIssues(id),
+        projectService.getProjectActions(id),
+        projectService.getProjectReports(id),
+        projectService.getEvmRecords(id),
+        projectService.getCustomers(),
+        projectService.getUsers()
+      ])
+
+      setProject(projectDetailData)
+      setUsers(usersRes.status === 'fulfilled' && Array.isArray(usersRes.value) ? usersRes.value : [])
+      setSubData({
+        milestones: milestonesRes.status === 'fulfilled' && Array.isArray(milestonesRes.value) ? milestonesRes.value : [],
+        risks: risksRes.status === 'fulfilled' && Array.isArray(risksRes.value) ? risksRes.value : [],
+        issues: issuesRes.status === 'fulfilled' && Array.isArray(issuesRes.value) ? issuesRes.value : [],
+        actions: actionsRes.status === 'fulfilled' && Array.isArray(actionsRes.value) ? actionsRes.value : [],
+        reports: reportsRes.status === 'fulfilled' && Array.isArray(reportsRes.value) ? reportsRes.value : [],
+        evmRecords: evmRes.status === 'fulfilled' && Array.isArray(evmRes.value) ? evmRes.value : [],
+        customers: customersRes.status === 'fulfilled' && Array.isArray(customersRes.value) ? customersRes.value : []
+      })
+    } catch (err) {
+      const backendMessage = err.response?.data?.message || err.message
+      const message = err.response?.status === 403
+        ? (backendMessage || 'Bu projeyi görme yetkiniz yok!')
+        : 'Proje detayları veritabanından çekilemedi.'
+      setError(message)
+      addAlert(message, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    let isMounted = true
-
-    const fetchProjectDetails = async () => {
-      try {
-        setLoading(true)
-        
-        // ⚡ Backend'deki iki endpoint'ten (Dashboard Özeti ve EVM Geçmişi) verileri eşzamanlı çekiyoruz
-        const [dashboardData, evmData] = await Promise.all([
-          projectService.getProjectDashboard(id),
-          projectService.getProjectEvm(id).catch((err) => {
-            console.warn('EVM verisi çekilemedi veya boş:', err)
-            return null // EVM API'si hata verirse sayfanın tamamı çökmesin
-          })
-        ])
-
-        if (isMounted) {
-          // İki veriyi tek bir state objesinde birleştiriyoruz
-          setProjectData({
-            ...dashboardData,
-            evmDetails: evmData || dashboardData.evm || {} 
-          })
-        }
-      } catch (err) {
-        console.error('Proje detayları alınamadı:', err)
-        if (isMounted) {
-          setError('Proje detayları veritabanından çekilemedi.')
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
-      }
-    }
-
-    if (id) {
-      fetchProjectDetails()
-    }
-
-    return () => { isMounted = false }
+    fetchProjectData()
   }, [id])
 
+  // 4. BİÇİMLENDİRME YARDIMCILARI
   const formatDate = (dateString) => {
     if (!dateString) return '-'
     return new Date(dateString).toLocaleDateString('tr-TR')
   }
 
-  if (loading) {
-    return <div className="page-content"><div className="dashboard-card"><p>Proje detayları yükleniyor...</p></div></div>
+  const formatCurrency = (val, currency = 'TRY') => {
+    if (val == null) return '-'
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency, maximumFractionDigits: 0 }).format(val)
   }
 
-  if (error || !projectData) {
-    return (
-      <div className="page-content">
-        <div className="dashboard-card">
-          <p style={{ color: '#ef4444' }}>{error || 'Proje bulunamadı.'}</p>
-          <button className="reset-button" onClick={() => navigate('/projects')}>← Projelere Dön</button>
-        </div>
-      </div>
-    )
+  const getSpiCpiClass = (val) => {
+    if (val >= 0.95) return 'text-success' 
+    if (val >= 0.85) return 'text-warning' 
+    return 'text-danger'                   
   }
 
-  // Güvenli veri erişimi için varsayılanlar
-  const milestones = projectData.milestones || []
-  const risks = projectData.risks || []
-  const issues = projectData.issues || []
-  const actions = projectData.actions || []
-  const pirReports = projectData.reports || []
-  
-  // EVM verisi nesne mi yoksa dizi mi (Geçmiş listesi) olarak geliyor kontrolü
-  const evm = Array.isArray(projectData.evmDetails) 
-    ? projectData.evmDetails[0] || {} // Dizi ise en güncel (ilk) kaydı al
-    : projectData.evmDetails || {}
+  const getFinishVarianceClass = (days) => {
+    if (days === '-' || isNaN(days)) return 'text-neutral' 
+    if (days <= 15) return 'text-success'  
+    if (days <= 45) return 'text-warning'  
+    return 'text-danger'                   
+  }
+
+  if (loading) return <div className="page-content"><div className="loading-state">Yükleniyor...</div></div>
+  if (error || !project) return <div className="page-content"><div className="error-state">{error || 'Proje verisi bulunamadı.'}</div></div>
+
+  // Müşteri & Yönetici Bilgileri
+  const customerObj = subData.customers.find(c => c.customerId === project.customerId || c.CustomerId === project.customerId)
+  const displayCustomer = customerObj ? `${customerObj.customerName || customerObj.CustomerName} (${project.customerId})` : project.customerId || '-'
+
+  const managerName = project.projectManagerFullName || project.ProjectManagerFullName || project.projectManagerName || project.ProjectManagerName || ''
+  const managerUser = users.find((user) => {
+    const candidateId = user.userId || user.UserId || user.id || user.Id
+    return candidateId && candidateId === (project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId)
+  })
+  const displayManager = managerName
+    ? `${managerName} (${project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId || '-'})`
+    : managerUser
+      ? `${managerUser.fullName || managerUser.FullName || managerUser.userName || managerUser.UserName || '-'} (${project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId || managerUser.userId || managerUser.UserId || '-'})`
+      : `${project.projectManagerName || project.projectManagerFullName || project.projectManager || '-'} (${project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId || '-'})`
+
+  // EVM Metrikleri
+  const latestEvm = subData.evmRecords[0] || {}
+  const pv = latestEvm.pv ?? 0
+  const ev = latestEvm.ev ?? 0
+  const ac = latestEvm.ac ?? 0
+  const spi = latestEvm.spi ?? 0
+  const cpi = latestEvm.cpi ?? 0
+  const sv = latestEvm.sv ?? 0
+  const cv = latestEvm.cv ?? 0
+
+  const finishVarianceDays = project.forecastFinishDate && project.baselineFinishDate 
+    ? Math.floor((new Date(project.forecastFinishDate) - new Date(project.baselineFinishDate)) / (1000 * 60 * 60 * 24))
+    : '-'
+
+  const latestReport = subData.reports.find(r => r.status === 'Yayımlandı') || subData.reports[0]
+  const executiveSummaryText = latestReport?.executiveSummary || 'Bu proje için henüz yayımlanmış bir PİR dönemi özeti bulunmamaktadır.'
+
+  // Yatay EVM Yüzdeleri
+  const maxEvmValue = Math.max(pv, ev, ac, 1)
+  const pvWidth = (pv / maxEvmValue) * 100
+  const evWidth = (ev / maxEvmValue) * 100
+  const acWidth = (ac / maxEvmValue) * 100
+
+  // -------------------------------------------------------------
+  // KRONOLOJİK SIRALAMA VE DİNAMİK HASSAS "BUGÜN" ÇİZGİSİ HESABI
+  // -------------------------------------------------------------
+  const today = new Date()
+
+  // 1. Dönüm noktalarını tarihlerine göre kronolojik sıralayalım
+  const sortedMilestones = [...subData.milestones].sort((a, b) => {
+    const dateA = new Date(a.forecastDate || a.plannedDate || 0).getTime()
+    const dateB = new Date(b.forecastDate || b.plannedDate || 0).getTime()
+    return dateA - dateB
+  })
+
+  // 2. Bugün çizgisinin ekrandaki kartların görsel konumuna göre yüzdesini bulalım
+  const calculateTodayPercent = () => {
+    const count = sortedMilestones.length
+    if (count === 0) return 50
+
+    const todayTime = today.getTime()
+
+    // Space-around düzeninde her i. kartın ekranın yüzde kaçında olduğunu verir
+    const getNodePercent = (index) => ((index + 0.5) / count) * 100
+
+    const firstDate = new Date(sortedMilestones[0].forecastDate || sortedMilestones[0].plannedDate).getTime()
+    const lastDate = new Date(sortedMilestones[count - 1].forecastDate || sortedMilestones[count - 1].plannedDate).getTime()
+
+    // Bugün ilk karttan da önceyse
+    if (todayTime <= firstDate) {
+      return Math.max(2, getNodePercent(0) - 10)
+    }
+    // Bugün son karttan da sonraysa
+    if (todayTime >= lastDate) {
+      return Math.min(98, getNodePercent(count - 1) + 10)
+    }
+
+    // Bugün iki kart arasındaysa oransal interpolasyon yap
+    for (let i = 0; i < count - 1; i++) {
+      const d1 = new Date(sortedMilestones[i].forecastDate || sortedMilestones[i].plannedDate).getTime()
+      const d2 = new Date(sortedMilestones[i + 1].forecastDate || sortedMilestones[i + 1].plannedDate).getTime()
+
+      if (todayTime >= d1 && todayTime <= d2) {
+        const p1 = getNodePercent(i)
+        const p2 = getNodePercent(i + 1)
+        const ratio = (d2 - d1) > 0 ? (todayTime - d1) / (d2 - d1) : 0
+        return p1 + ratio * (p2 - p1)
+      }
+    }
+
+    return 50
+  }
+
+  const todayPercent = calculateTodayPercent()
 
   return (
     <div className="page-content project-detail-container">
-      {/* 🔴 ÜST BAŞLIK ALANI */}
+      
+      {/* ÜST BAŞLIK VE NAVİGASYON */}
       <div className="dashboard-header project-detail-header">
         <div className="header-top-row">
           <button className="back-btn" onClick={() => navigate('/projects')}>
             ← Projelere Dön
           </button>
-          <span className={`badge-health badge-${(projectData.manualHealth || 'yesil').toLowerCase()}`}>
-            ● Sağlık: {projectData.manualHealth || 'Yeşil'}
-          </span>
         </div>
 
         <div className="project-title-section">
-          <h1>{projectData.projectName || 'Proje Detayı'}</h1>
+          <h1>{project.projectName || 'İsimsiz Proje'}</h1>
           <div className="project-meta-pills">
-            <span><strong>Kod:</strong> {projectData.projectCode}</span>
-            <span><strong>Müşteri:</strong> {projectData.customerName || '-'}</span>
-            <span><strong>Yönetici:</strong> {projectData.projectManager || '-'}</span>
-            <span><strong>Durum:</strong> {projectData.projectStatus || 'Aktif'}</span>
+            <span className="pill"><strong>Kod:</strong> {project.projectCode || '-'}</span>
+            <span className="pill"><strong>Müşteri:</strong> {displayCustomer}</span>
+            <span className="pill"><strong>Yönetici:</strong> {displayManager}</span>
+            <span className={`pill status-${(project.projectStatus || 'taslak').toLowerCase().replace(/\s+/g, '-')}`}>
+              {project.projectStatus || 'Taslak'}
+            </span>
           </div>
         </div>
 
-        {/* 📌 İSTENEN 7 SEKMELİ NAVBAR */}
         <div className="project-nav-tabs">
-          <button className={`tab-item ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>
-            Genel Özet
-          </button>
-          <button className={`tab-item ${activeTab === 'milestones' ? 'active' : ''}`} onClick={() => setActiveTab('milestones')}>
-            Kilometre Taşları ({milestones.length})
-          </button>
-          <button className={`tab-item ${activeTab === 'risks' ? 'active' : ''}`} onClick={() => setActiveTab('risks')}>
-            Riskler ({risks.length})
-          </button>
-          <button className={`tab-item ${activeTab === 'issues' ? 'active' : ''}`} onClick={() => setActiveTab('issues')}>
-            Sorunlar ({issues.length})
-          </button>
-          <button className={`tab-item ${activeTab === 'actions' ? 'active' : ''}`} onClick={() => setActiveTab('actions')}>
-            Aksiyonlar ({actions.length})
-          </button>
-          <button className={`tab-item ${activeTab === 'evm' ? 'active' : ''}`} onClick={() => setActiveTab('evm')}>
-            EVM
-          </button>
-          <button className={`tab-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
-            PİR Dönemleri ({pirReports.length})
-          </button>
+          {['overview', 'milestones', 'risks', 'issues', 'actions', 'evm', 'reports'].map(tab => (
+            <button 
+              key={tab}
+              className={`tab-item ${activeTab === tab ? 'active' : ''}`} 
+              onClick={() => navigate(`/projects/${id}?tab=${tab}`)}>
+              {tab === 'overview' ? 'Genel Bakış' :
+               tab === 'milestones' ? 'Kilometre Taşları' :
+               tab === 'risks' ? 'Riskler' :
+               tab === 'issues' ? 'Sorunlar' :
+               tab === 'actions' ? 'Aksiyonlar' :
+               tab === 'evm' ? 'EVM Verileri' : 'Rapor Dönemleri'}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* 📊 1. SEKME: GENEL ÖZET */}
-      {activeTab === 'summary' && (
-        <div className="tab-content-wrapper">
-          <div className="dashboard-grid">
-            <div className="dashboard-card">
-              <h3>Planlanan İlerleme</h3>
-              <p className="kpi-large-num">%{projectData.plannedProgress || 0}</p>
+      {/* SEKME 1: GENEL BAKIŞ */}
+      {activeTab === 'overview' && (
+        <div className="tab-content-wrapper fade-in">
+          
+          {/* METRİK KARTLARI */}
+          <div className="kpi-grid">
+            <div className="kpi-card hover-lift"><div className="kpi-details"><h3>SV (Zaman Sapması)</h3><p className={`kpi-value ${sv >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(sv, project.currency)}</p></div></div>
+            <div className="kpi-card hover-lift"><div className="kpi-details"><h3>CV (Maliyet Sapması)</h3><p className={`kpi-value ${cv >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(cv, project.currency)}</p></div></div>
+            <div className="kpi-card hover-lift"><div className="kpi-details"><h3>SPI (Zaman Performansı)</h3><p className={`kpi-value ${getSpiCpiClass(spi)}`}>{spi}</p></div></div>
+            <div className="kpi-card hover-lift"><div className="kpi-details"><h3>CPI (Maliyet Performansı)</h3><p className={`kpi-value ${getSpiCpiClass(cpi)}`}>{cpi}</p></div></div>
+            <div className="kpi-card hover-lift"><div className="kpi-details"><h3>Bitiş Sapması</h3><p className={`kpi-value ${getFinishVarianceClass(finishVarianceDays)}`}>{finishVarianceDays !== '-' ? `${finishVarianceDays} Gün` : '-'}</p></div></div>
+            <div className="kpi-card hover-lift"><div className="kpi-details"><h3>Sağlık Durumu</h3><div className="kpi-value"><span className={`badge-health badge-${(project.manualHealth || 'yesil').toLowerCase()}`}>{project.manualHealth || 'Yeşil'}</span></div></div></div>
+          </div>
+
+          {/* DÜZEN: YÖNETİCİ ÖZETİ VE EVM KARTLARI */}
+          <div className="dashboard-grid overview-top-grid">
+            <div className="dashboard-card shadow-card">
+              <div className="card-header"><h2>Yönetici Özeti</h2><span className="period-badge">{latestReport?.period || 'Son Dönem'}</span></div>
+              <div className="summary-text-box"><p>{executiveSummaryText}</p></div>
             </div>
-            <div className="dashboard-card">
-              <h3>Gerçekleşen İlerleme</h3>
-              <p className="kpi-large-num">%{projectData.actualProgress || 0}</p>
-            </div>
-            <div className="dashboard-card">
-              <h3>SPI (Zaman Performansı)</h3>
-              <p className="kpi-large-num">{evm.spi ?? '-'}</p>
-            </div>
-            <div className="dashboard-card">
-              <h3>CPI (Maliyet Performansı)</h3>
-              <p className="kpi-large-num">{evm.cpi ?? '-'}</p>
+
+            <div className="dashboard-card shadow-card evm-chart-card-compact">
+              <div className="card-header">
+                <h2>Kazanılmış Değer Grafiği</h2>
+                <span className="period-badge">{latestEvm.period || 'Mevcut Dönem'}</span>
+              </div>
+
+              <div className="modern-horizontal-bar-chart compact">
+                <div className="horizontal-bar-group">
+                  <span className="bar-label-left">PV</span>
+                  <div className="bar-track">
+                    <div className="bar pv-bar" style={{ '--bar-width': `${Math.max(pvWidth, 4)}%` }}>
+                      <span className="bar-value-inside">{formatCurrency(pv, project.currency)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="horizontal-bar-group">
+                  <span className="bar-label-left">EV</span>
+                  <div className="bar-track">
+                    <div className="bar ev-bar" style={{ '--bar-width': `${Math.max(evWidth, 4)}%` }}>
+                      <span className="bar-value-inside">{formatCurrency(ev, project.currency)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="horizontal-bar-group">
+                  <span className="bar-label-left">AC</span>
+                  <div className="bar-track">
+                    <div className="bar ac-bar" style={{ '--bar-width': `${Math.max(acWidth, 4)}%` }}>
+                      <span className="bar-value-inside">{formatCurrency(ac, project.currency)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="dashboard-card full-width" style={{ marginTop: '24px' }}>
-            <h2>Yönetici Özeti</h2>
-            <p className="summary-text-box">
-              {projectData.executiveSummary || 'Bu proje için henüz yayımlanmış son bir PİR yönetici özeti bulunmuyor.'}
-            </p>
-          </div>
-
-          <div className="dashboard-grid" style={{ marginTop: '24px' }}>
-            <div className="dashboard-card">
-              <h2>Tarih Bilgileri</h2>
-              <p><strong>Başlangıç:</strong> {formatDate(projectData.startDate)}</p>
-              <p><strong>Temel Bitiş (Baseline):</strong> {formatDate(projectData.baselineFinishDate)}</p>
-              <p><strong>Tahmini Bitiş (Forecast):</strong> {formatDate(projectData.forecastFinishDate)}</p>
+          {/* ALT BÖLÜM: YOL HARİTASI (HASSAS HİZALANMIŞ DİKEY BUGÜN ÇİZGİSİ) */}
+          <div className="dashboard-card shadow-card roadmap-full-width">
+            <div className="card-header">
+              <div>
+                <h2>Yol Haritası (Zaman Eksenli Dönüm Noktaları)</h2>
+                <p className="section-subtitle">Plan, Tahmin ve Gerçekleşen tarihler ile güncel durum göstergesi</p>
+              </div>
+              <span className="period-badge today-highlight">Bugün: {formatDate(today.toISOString())}</span>
             </div>
-            <div className="dashboard-card">
-              <h2>Açık Kayıt Sayıları</h2>
-              <p><strong>Açık Risk Sayısı:</strong> {projectData.openRiskCount || 0}</p>
-              <p><strong>Açık Sorun Sayısı:</strong> {projectData.openIssueCount || 0}</p>
-              <p><strong>Açık Aksiyon Sayısı:</strong> {projectData.openActionCount || 0}</p>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* 🏁 2. SEKME: KİLOMETRE TAŞLARI */}
-      {activeTab === 'milestones' && (
-        <div className="dashboard-card full-width">
-          <h2>Kilometre Taşları</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Adı</th>
-                <th>Sorumlu</th>
-                <th>Planlanan Tarih</th>
-                <th>Tahmini Tarih</th>
-                <th>Gerçekleşen Tarih</th>
-                <th>Kritik</th>
-                <th>Durum</th>
-              </tr>
-            </thead>
-            <tbody>
-              {milestones.length > 0 ? (
-                milestones.map((m, idx) => (
-                  <tr key={m.id || idx}>
-                    <td className="fw-medium">{m.name}</td>
-                    <td>{m.owner || '-'}</td>
-                    <td>{formatDate(m.plannedDate)}</td>
-                    <td>{formatDate(m.forecastDate)}</td>
-                    <td>{formatDate(m.actualDate)}</td>
-                    <td>{m.critical ? '⚠️ Evet' : 'Hayır'}</td>
-                    <td>{m.status || 'Planlandı'}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr><td colSpan={7} style={{ textAlign: 'center' }}>Tanımlı kilometre taşı bulunmuyor.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+            <div className="timeline-scroll-wrapper">
+              <div className="modern-timeline-axis">
+                
+                {/* YATAY EKSEN ÇİZGİSİ */}
+                <div className="timeline-horizontal-track"></div>
 
-      {/* ⚠️ 3. SEKME: RİSKLER */}
-      {activeTab === 'risks' && (
-        <div className="dashboard-card full-width">
-          <h2>Proje Riskleri</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Risk Başlığı</th>
-                <th>Kategori</th>
-                <th>Olasılık (1-5)</th>
-                <th>Etki (1-5)</th>
-                <th>Risk Puanı</th>
-                <th>Sorumlu</th>
-                <th>Durum</th>
-              </tr>
-            </thead>
-            <tbody>
-              {risks.length > 0 ? (
-                risks.map((r, idx) => {
-                  const score = (r.probability || 0) * (r.impact || 0)
-                  return (
-                    <tr key={r.id || idx}>
-                      <td className="fw-medium">{r.title}</td>
-                      <td>{r.category || '-'}</td>
-                      <td>{r.probability || '-'}</td>
-                      <td>{r.impact || '-'}</td>
-                      <td>
-                        <span className={`risk-score-badge ${score >= 16 ? 'high' : score >= 8 ? 'mid' : 'low'}`}>
-                          {score || '-'}
-                        </span>
-                      </td>
-                      <td>{r.owner || '-'}</td>
-                      <td>{r.status || 'Açık'}</td>
-                    </tr>
-                  )
-                })
-              ) : (
-                <tr><td colSpan={7} style={{ textAlign: 'center' }}>Tanımlı risk bulunmuyor.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                {/* DİNAMİK VE HASSAS HİZALANMIŞ "BUGÜN" ÇİZGİSİ */}
+                <div className="today-vertical-line" style={{ left: `${todayPercent}%` }}>
+                  <div className="today-flag">📍 BUGÜN</div>
+                  <div className="today-dashed-line"></div>
+                </div>
 
-      {/* 🚨 4. SEKME: SORUNLAR */}
-      {activeTab === 'issues' && (
-        <div className="dashboard-card full-width">
-          <h2>Proje Sorunları</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Sorun Başlığı</th>
-                <th>Öncelik</th>
-                <th>Hedef Tarih</th>
-                <th>Sorumlu</th>
-                <th>Durum</th>
-              </tr>
-            </thead>
-            <tbody>
-              {issues.length > 0 ? (
-                issues.map((i, idx) => (
-                  <tr key={i.id || idx}>
-                    <td className="fw-medium">{i.title}</td>
-                    <td>{i.priority || 'Normal'}</td>
-                    <td>{formatDate(i.dueDate)}</td>
-                    <td>{i.owner || '-'}</td>
-                    <td>{i.status || 'Açık'}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr><td colSpan={5} style={{ textAlign: 'center' }}>Tanımlı sorun bulunmuyor.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                {/* KRONOLOJİK SIRALI KİLOMETRE TAŞLARI */}
+                <div className="milestones-nodes-container">
+                  {sortedMilestones.map((m, idx) => (
+                    <div key={idx} className="milestone-axis-card">
+                      <div className={`milestone-status-dot ${m.critical ? 'critical' : 'normal'}`}>
+                        {m.critical && <span className="pulse-ring"></span>}
+                      </div>
 
-      {/* ✅ 5. SEKME: AKSİYONLAR */}
-      {activeTab === 'actions' && (
-        <div className="dashboard-card full-width">
-          <h2>Aksiyon Listesi</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Açıklama</th>
-                <th>Kaynak</th>
-                <th>Sorumlu</th>
-                <th>Hedef Tarih</th>
-                <th>İlerleme</th>
-                <th>Durum</th>
-              </tr>
-            </thead>
-            <tbody>
-              {actions.length > 0 ? (
-                actions.map((a, idx) => (
-                  <tr key={a.id || idx}>
-                    <td className="fw-medium">{a.description}</td>
-                    <td>{a.sourceType || 'Genel'}</td>
-                    <td>{a.owner || '-'}</td>
-                    <td>{formatDate(a.dueDate)}</td>
-                    <td>%{a.progress || 0}</td>
-                    <td>{a.status || 'Devam Ediyor'}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr><td colSpan={6} style={{ textAlign: 'center' }}>Tanımlı aksiyon bulunmuyor.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                      <div className="milestone-card-body">
+                        <h4 className="milestone-name">{m.milestoneName}</h4>
+                        
+                        <div className="milestone-dates-grid">
+                          <div className="date-pill plan">
+                            <span className="date-label">Plan:</span>
+                            <span className="date-val">{formatDate(m.plannedDate)}</span>
+                          </div>
+                          <div className="date-pill forecast">
+                            <span className="date-label">Tahmin:</span>
+                            <span className="date-val">{formatDate(m.forecastDate)}</span>
+                          </div>
+                          <div className={`date-pill actual ${m.actualDate ? 'completed' : 'pending'}`}>
+                            <span className="date-label">Gerçek:</span>
+                            <span className="date-val">{formatDate(m.actualDate)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
 
-      {/* 📈 6. SEKME: EVM (KAZANILMIŞ DEĞER YÖNETİMİ) */}
-      {activeTab === 'evm' && (
-        <div className="dashboard-card full-width">
-          <h2>EVM Göstergeleri ve Hesaplamaları</h2>
-          <div className="dashboard-grid" style={{ marginTop: '16px' }}>
-            <div className="dashboard-card">
-              <p><strong>BAC (Tamamlanma Bütçesi):</strong> {evm.bac ?? '-'}</p>
-              <p><strong>PV (Planlanan Değer):</strong> {evm.pv ?? '-'}</p>
-              <p><strong>EV (Kazanılan Değer):</strong> {evm.ev ?? '-'}</p>
-              <p><strong>AC (Gerçekleşen Maliyet):</strong> {evm.ac ?? '-'}</p>
-            </div>
-            <div className="dashboard-card">
-              <p><strong>SV (Takvim Sapması):</strong> {evm.sv ?? '-'}</p>
-              <p><strong>CV (Maliyet Sapması):</strong> {evm.cv ?? '-'}</p>
-              <p><strong>EAC (Tahmini Tamamlanma Maliyeti):</strong> {evm.eac ?? '-'}</p>
-              <p><strong>VAC (Tamamlanma Sapması):</strong> {evm.vac ?? '-'}</p>
+                  {sortedMilestones.length === 0 && (
+                    <p className="text-muted" style={{ padding: '30px', textAlign: 'center', width: '100%' }}>
+                      Henüz tanımlanmış bir kilometre taşı bulunmuyor.
+                    </p>
+                  )}
+                </div>
+
+              </div>
             </div>
           </div>
+
         </div>
       )}
 
-      {/* 📅 7. SEKME: PİR DÖNEMLERİ */}
-      {activeTab === 'reports' && (
-        <div className="dashboard-card full-width">
-          <h2>Aylık PİR Rapor Dönemleri</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Dönem</th>
-                <th>Rapor Tarihi</th>
-                <th>Durum</th>
-                <th>Yönetici Özeti</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pirReports.length > 0 ? (
-                pirReports.map((rep, idx) => (
-                  <tr key={rep.id || idx}>
-                    <td className="fw-bold">{rep.period}</td>
-                    <td>{formatDate(rep.reportDate)}</td>
-                    <td>{rep.status || 'Yayımlandı'}</td>
-                    <td>{rep.executiveSummary ? `${rep.executiveSummary.slice(0, 60)}...` : '-'}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr><td colSpan={4} style={{ textAlign: 'center' }}>Henüz PİR rapor dönemi girilmemiş.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* DİĞER SEKMELER */}
+      {activeTab === 'milestones' && <MileStone milestones={subData.milestones} projectId={project.projectId || project.ProjectId || id} onMilestoneAdded={fetchProjectData} onMilestoneUpdated={fetchProjectData} />}
+      {activeTab === 'risks' && <ProjectRisksPage risks={subData.risks} />}
+      {activeTab === 'issues' && <ProblemsPage issues={subData.issues} />}
+      {activeTab === 'actions' && <ActionsPage actions={subData.actions} />}
+      {activeTab === 'evm' && <EvmRecordsPage evmRecords={subData.evmRecords} currency={project.currency} />}
+      {activeTab === 'reports' && <ReportsPage reports={subData.reports} onRefresh={fetchProjectData} />}
+
     </div>
   )
 }

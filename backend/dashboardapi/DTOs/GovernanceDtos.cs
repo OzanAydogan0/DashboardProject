@@ -63,3 +63,15 @@ public record CreatePirReportRequest(
     string ManualHealth,
     string ReportStatus
 );
+
+public record UpdatePirReportRequest(
+    string? Period,
+    DateTime? ReportDate,
+    string? ExecutiveSummary,
+    string? CompletedWork,
+    string? Delays,
+    string? NextPeriodPlan,
+    string? ManagementExpectations,
+    string? ManualHealth,
+    string? ReportStatus
+);

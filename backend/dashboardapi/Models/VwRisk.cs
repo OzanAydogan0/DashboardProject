@@ -31,5 +31,7 @@ public partial class VwRisk
 
     public string? RiskOwnerFullName { get; set; }
 
+    public string? RiskMitigation { get; set; }
+
     public byte[]? RiskHealth { get; set; }
 }
