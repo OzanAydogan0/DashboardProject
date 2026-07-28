@@ -51,15 +51,14 @@ public sealed class MilestoneTests
         var forecastDate = new DateTime(2026, 11, 20);
 
         var request = new CreateMilestoneRequest(
-            ProjectId: "PRJ-003",
-            MilestoneName: "Entegrasyon kabulünün tamamlanması",
-            PlannedDate: plannedDate,
-            ForecastDate: forecastDate,
-            MilestoneStatus: "Planlandı",
-            Critical: 1,
-            MilestoneOwnerUserId: credentials.User.UserId,
-            AcceptanceCriteria: "Entegrasyon testlerinin başarıyla tamamlanması",
-            MilestoneDescription: "Test 25 için oluşturulan kilometre taşı");
+        MilestoneName: "Entegrasyon kabulünün tamamlanması",
+        PlannedDate: plannedDate,
+        ForecastDate: forecastDate,
+        MilestoneStatus: "Planlandı",
+        Critical: 1,
+        MilestoneOwnerUserId: credentials.User.UserId,
+        AcceptanceCriteria: "Entegrasyon testlerinin başarıyla tamamlanması",
+        MilestoneDescription: "Test 25 için oluşturulan kilometre taşı");
 
         // Act
         using var response = await client.PostAsJsonAsync(
@@ -174,7 +173,6 @@ public sealed class MilestoneTests
             "Geçersiz tarih sıralı kilometre taşı";
 
         var request = new CreateMilestoneRequest(
-            ProjectId: "PRJ-003",
             MilestoneName: milestoneName,
             PlannedDate: new DateTime(2026, 12, 20),
 

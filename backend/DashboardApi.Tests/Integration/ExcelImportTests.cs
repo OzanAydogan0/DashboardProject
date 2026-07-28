@@ -13,7 +13,6 @@ namespace DashboardApi.Tests.Integration;
 
 public sealed class ExcelImportTests
 {
-    //Endpoint sorunu çözülünce testler yazılacak
     [Fact]
     public async Task ImportProjects_RowWithMissingRequiredField_ReturnsErrorWithoutImportingRow()
     {
@@ -48,11 +47,14 @@ public sealed class ExcelImportTests
                 "Bearer",
                 loginResult.Token);
 
-        const string projectName = "Eksik Kodlu Excel Test Projesi";
+        const string projectName =
+            "Eksik Kodlu Excel Test Projesi";
 
-        var excelBytes = CreateInvalidExcelFile(projectName);
+        var excelBytes =
+            CreateInvalidExcelFile(projectName);
 
-        using var multipartContent = new MultipartFormDataContent();
+        using var multipartContent =
+            new MultipartFormDataContent();
 
         using var fileContent =
             new ByteArrayContent(excelBytes);
@@ -94,13 +96,16 @@ public sealed class ExcelImportTests
             "zorunludur",
             error);
 
-        using var scope = factory.Services.CreateScope();
+        using var scope =
+            factory.Services.CreateScope();
 
         var db = scope.ServiceProvider
             .GetRequiredService<AppDbContext>();
 
-        var projectWasImported = await db.Projects.AnyAsync(
-            project => project.ProjectName == projectName);
+        var projectWasImported =
+            await db.Projects.AnyAsync(
+                project =>
+                    project.ProjectName == projectName);
 
         Assert.False(projectWasImported);
     }
@@ -108,8 +113,12 @@ public sealed class ExcelImportTests
     [Fact]
     public async Task ImportProjects_ValidRow_SetsManualHealthAndImportsProject()
     {
-        await using var factory = new TestWebApplicationFactory();
-        using var client = factory.CreateHttpsClient();
+        // Arrange
+        await using var factory =
+            new TestWebApplicationFactory();
+
+        using var client =
+            factory.CreateHttpsClient();
 
         var credentials = await CreateActiveUserAsync(
             factory,
@@ -119,31 +128,49 @@ public sealed class ExcelImportTests
             credentials.User.Email,
             credentials.PlainTextPassword);
 
-        using var loginResponse = await client.PostAsJsonAsync(
-            "/auth/login",
-            loginRequest);
+        using var loginResponse =
+            await client.PostAsJsonAsync(
+                "/auth/login",
+                loginRequest);
 
-        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            loginResponse.StatusCode);
 
         var loginResult =
             await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
 
         Assert.NotNull(loginResult);
-        Assert.False(string.IsNullOrWhiteSpace(loginResult.Token));
+        Assert.False(
+            string.IsNullOrWhiteSpace(
+                loginResult.Token));
 
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue(
                 "Bearer",
                 loginResult.Token);
 
-        const string projectCode = "PRJ-EXCEL-001";
-        const string projectName = "Manuel Sağlık Test Projesi";
-        const string manualHealth = "Sarı";
+        const string projectCode =
+            "PRJ-EXCEL-001";
 
-        var excelBytes = CreateValidExcelFile(projectCode, projectName, manualHealth);
+        const string projectName =
+            "Manuel Sağlık Test Projesi";
 
-        using var multipartContent = new MultipartFormDataContent();
-        using var fileContent = new ByteArrayContent(excelBytes);
+        const string manualHealth =
+            "Sarı";
+
+        var excelBytes =
+            CreateValidExcelFile(
+                projectCode,
+                projectName,
+                manualHealth);
+
+        using var multipartContent =
+            new MultipartFormDataContent();
+
+        using var fileContent =
+            new ByteArrayContent(excelBytes);
+
         fileContent.Headers.ContentType =
             new MediaTypeHeaderValue(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -153,11 +180,16 @@ public sealed class ExcelImportTests
             "file",
             "valid-project-import.xlsx");
 
-        using var response = await client.PostAsync(
-            "/projects/import",
-            multipartContent);
+        // Act
+        using var response =
+            await client.PostAsync(
+                "/projects/import",
+                multipartContent);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
 
         var result =
             await response.Content.ReadFromJsonAsync<ExcelImportResponse>();
@@ -168,51 +200,50 @@ public sealed class ExcelImportTests
         Assert.Equal(0, result.TotalFailed);
         Assert.Empty(result.Errors);
 
-        using var scope = factory.Services.CreateScope();
+        using var scope =
+            factory.Services.CreateScope();
+
         var db = scope.ServiceProvider
             .GetRequiredService<AppDbContext>();
 
-        var importedProject = await db.Projects
-            .FirstOrDefaultAsync(p => p.ProjectCode == projectCode);
+        var importedProject =
+            await db.Projects.FirstOrDefaultAsync(
+                project =>
+                    project.ProjectCode == projectCode);
 
         Assert.NotNull(importedProject);
-        Assert.Equal(projectName, importedProject.ProjectName);
-        Assert.Equal(manualHealth, importedProject.ManualHealth);
-        Assert.Equal(1, importedProject.IsActive);
+
+        Assert.Equal(
+            projectName,
+            importedProject.ProjectName);
+
+        Assert.Equal(
+            manualHealth,
+            importedProject.ManualHealth);
+
+        Assert.Equal(
+            1,
+            importedProject.IsActive);
     }
 
     private static byte[] CreateInvalidExcelFile(
         string projectName)
     {
-        ExcelPackage.License.SetNonCommercialPersonal(
-    "DashboardApi Tests");
+        ExcelPackage.LicenseContext =
+            LicenseContext.NonCommercial;
 
-        using var package = new ExcelPackage();
+        using var package =
+            new ExcelPackage();
 
         var worksheet =
-            package.Workbook.Worksheets.Add("Projeler");
+            package.Workbook.Worksheets.Add(
+                "Projeler");
 
-        // Başlık satırı
-        worksheet.Cells[1, 1].Value = "Proje Kodu";
-        worksheet.Cells[1, 2].Value = "Proje Adı";
-        worksheet.Cells[1, 3].Value = "Müşteri Adı";
-        worksheet.Cells[1, 4].Value = "PM E-posta";
-        worksheet.Cells[1, 5].Value = "Başlangıç Tarihi";
-        worksheet.Cells[1, 6].Value = "Bitiş Tarihi";
-        worksheet.Cells[1, 7].Value = "BAC";
-        worksheet.Cells[1, 8].Value = "Para Birimi";
-        worksheet.Cells[1, 9].Value = "Gizlilik";
-        worksheet.Cells[1, 10].Value = "Raporlama Sıklığı";
-        worksheet.Cells[1, 11].Value = "Durum";
-        worksheet.Cells[1, 12].Value = "Açıklama";
-        worksheet.Cells[1, 13].Value = "Sağlık";
-        worksheet.Cells[1, 14].Value = "Planlanan İlerleme";
-        worksheet.Cells[1, 15].Value = "Gerçekleşen İlerleme";
-        worksheet.Cells[1, 16].Value = "Aktiflik";
+        AddHeaders(worksheet);
 
         /*
          * Proje kodu özellikle boş bırakılıyor.
-         * Bu nedenle satır içe aktarılmamalıdır.
+         * Satırın içe aktarılmaması beklenir.
          */
         worksheet.Cells[2, 1].Value = null;
         worksheet.Cells[2, 2].Value = projectName;
@@ -225,7 +256,8 @@ public sealed class ExcelImportTests
         worksheet.Cells[2, 9].Value = "Şirket İçi";
         worksheet.Cells[2, 10].Value = "Aylık";
         worksheet.Cells[2, 11].Value = "Aktif";
-        worksheet.Cells[2, 12].Value = "Test proje açıklaması";
+        worksheet.Cells[2, 12].Value =
+            "Test proje açıklaması";
         worksheet.Cells[2, 13].Value = "Sarı";
         worksheet.Cells[2, 14].Value = 40;
         worksheet.Cells[2, 15].Value = 30;
@@ -234,17 +266,83 @@ public sealed class ExcelImportTests
         return package.GetAsByteArray();
     }
 
-    private static async Task<TestUserCredentials> CreateActiveUserAsync(
-        TestWebApplicationFactory factory,
-        string role)
+    private static byte[] CreateValidExcelFile(
+        string projectCode,
+        string projectName,
+        string manualHealth)
     {
-        using var scope = factory.Services.CreateScope();
+        ExcelPackage.LicenseContext =
+            LicenseContext.NonCommercial;
+
+        using var package =
+            new ExcelPackage();
+
+        var worksheet =
+            package.Workbook.Worksheets.Add(
+                "Projeler");
+
+        AddHeaders(worksheet);
+
+        worksheet.Cells[2, 1].Value = projectCode;
+        worksheet.Cells[2, 2].Value = projectName;
+        worksheet.Cells[2, 3].Value = "Test Müşterisi";
+        worksheet.Cells[2, 4].Value = "pm1@pir.local";
+        worksheet.Cells[2, 5].Value = "2026-08-01";
+        worksheet.Cells[2, 6].Value = "2027-08-01";
+        worksheet.Cells[2, 7].Value = 500000;
+        worksheet.Cells[2, 8].Value = "TRY";
+        worksheet.Cells[2, 9].Value = "Şirket İçi";
+        worksheet.Cells[2, 10].Value = "Aylık";
+        worksheet.Cells[2, 11].Value = "Aktif";
+        worksheet.Cells[2, 12].Value =
+            "Manuel sağlık alanı içe aktarma testi";
+        worksheet.Cells[2, 13].Value = manualHealth;
+        worksheet.Cells[2, 14].Value = 40;
+        worksheet.Cells[2, 15].Value = 30;
+        worksheet.Cells[2, 16].Value = 1;
+
+        return package.GetAsByteArray();
+    }
+
+    private static void AddHeaders(
+        ExcelWorksheet worksheet)
+    {
+        worksheet.Cells[1, 1].Value = "Proje Kodu";
+        worksheet.Cells[1, 2].Value = "Proje Adı";
+        worksheet.Cells[1, 3].Value = "Müşteri Adı";
+        worksheet.Cells[1, 4].Value = "PM E-posta";
+        worksheet.Cells[1, 5].Value = "Başlangıç Tarihi";
+        worksheet.Cells[1, 6].Value = "Bitiş Tarihi";
+        worksheet.Cells[1, 7].Value = "BAC";
+        worksheet.Cells[1, 8].Value = "Para Birimi";
+        worksheet.Cells[1, 9].Value = "Gizlilik";
+        worksheet.Cells[1, 10].Value =
+            "Raporlama Sıklığı";
+        worksheet.Cells[1, 11].Value = "Durum";
+        worksheet.Cells[1, 12].Value = "Açıklama";
+        worksheet.Cells[1, 13].Value = "Sağlık";
+        worksheet.Cells[1, 14].Value =
+            "Planlanan İlerleme";
+        worksheet.Cells[1, 15].Value =
+            "Gerçekleşen İlerleme";
+        worksheet.Cells[1, 16].Value = "Aktiflik";
+    }
+
+    private static async Task<TestUserCredentials>
+        CreateActiveUserAsync(
+            TestWebApplicationFactory factory,
+            string role)
+    {
+        using var scope =
+            factory.Services.CreateScope();
 
         var db = scope.ServiceProvider
             .GetRequiredService<AppDbContext>();
 
-        var builder = new TestDataBuilder(db);
+        var builder =
+            new TestDataBuilder(db);
 
-        return await builder.CreateActiveUserAsync(role);
+        return await builder.CreateActiveUserAsync(
+            role);
     }
 }
