@@ -113,6 +113,23 @@ public sealed class RiskTests
         Assert.Equal(
             credentials.User.UserId,
             createdRisk.UpdatedByUserId);
+
+        using var listResponse = await client.GetAsync("/projects/PRJ-001/risks");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            listResponse.StatusCode);
+
+        var riskList = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Array, riskList.ValueKind);
+
+        var listedRisk = Assert.Single(
+            riskList.EnumerateArray(),
+            item => item.GetProperty("riskId").GetString() == riskId);
+
+        Assert.Equal(
+            "Alternatif test ortamı hazırlanacak.",
+            listedRisk.GetProperty("riskMitigation").GetString());
     }
 
         [Fact]

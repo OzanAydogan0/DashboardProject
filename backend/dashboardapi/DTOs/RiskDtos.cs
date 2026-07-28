@@ -15,6 +15,7 @@ public record RiskDto(
     DateTime? RiskDueDate,
     string? RiskOwnerUserId,
     string? RiskOwnerFullName,
+    string? RiskMitigation,
     string RiskHealth
 );
 

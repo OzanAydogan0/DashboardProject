@@ -86,8 +86,12 @@ function RisksPage({ projectId }) {
       ) : error ? (
         <div className="status-message error">{error}</div>
       ) : (
-        <div className="table-responsive">
-          <table className="risk-table">
+        <>
+          <div className="table-description">
+            Bu tabloda projelere ait risklerin başlığı, puanı, olasılığı, etkisi, seviyesi, azaltım/müdahale bilgisi ve sorumlusu görüntülenir.
+          </div>
+          <div className="table-responsive">
+            <table className="risk-table">
             <thead>
               <tr>
                 {!projectId && <th>Proje Adı</th>}
@@ -96,6 +100,7 @@ function RisksPage({ projectId }) {
                 <th className="text-center">Olasılık</th>
                 <th className="text-center">Etki</th>
                 <th className="text-center">Seviye</th>
+                <th>Azaltım / Müdahale</th>
                 <th>Sahip</th>
                 <th>Durum</th>
               </tr>
@@ -122,6 +127,7 @@ function RisksPage({ projectId }) {
                       {risk.riskHealth || 'Belirsiz'}
                     </span>
                   </td>
+                  <td className="mitigation-cell">{risk.riskMitigation || '-'}</td>
                   <td>{risk.riskOwnerFullName || 'Atanmadı'}</td>
                   <td>{risk.riskStatus || 'Açık'}</td>
                 </tr>
@@ -129,14 +135,15 @@ function RisksPage({ projectId }) {
 
               {risks.length === 0 && (
                 <tr>
-                  <td colSpan={!projectId ? 8 : 7} className="text-center status-message">
+                  <td colSpan={!projectId ? 9 : 8} className="text-center status-message">
                     Veritabanında kayıtlı risk bulunmamaktadır.
                   </td>
                 </tr>
               )}
             </tbody>
-          </table>
-        </div>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

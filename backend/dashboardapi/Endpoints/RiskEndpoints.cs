@@ -23,26 +23,13 @@ public static class RiskEndpoints
             if (!await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
                 return Results.Json(new { message = "Bu projenin risk verilerini görmeye yetkiniz yok!" }, statusCode: 403);
 
-            var rawRisks = await db.Set<VwRisk>()
+            var rawRisks = await db.Risks
                 .Where(r => r.ProjectId == id)
+                .Include(r => r.Project)
+                .Include(r => r.RiskOwnerUser)
                 .ToListAsync();
 
-            var result = rawRisks.Select(r => new RiskDto(
-                r.RiskId,
-                r.ProjectId,
-                r.ProjectCode,
-                r.ProjectName,
-                r.RiskTitle,
-                r.RiskCategory,
-                r.RiskProbability,
-                r.RiskImpact,
-                r.RiskScore,
-                r.RiskStatus,
-                r.RiskDueDate,
-                r.RiskOwnerUserId,
-                r.RiskOwnerFullName,
-                ParseString(r.RiskHealth)
-            )).ToList();
+            var result = rawRisks.Select(MapRiskToDto).ToList();
 
             return Results.Ok(result);
         });
@@ -161,51 +148,60 @@ public static class RiskEndpoints
 
                 if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-var activeProjectIds = await db.Projects
+            var activeProjectIds = await db.Projects
                 .Where(p => p.IsActive == 1)
                 .Select(p => p.ProjectId)
                 .ToListAsync();
 
-            var query = db.Set<VwRisk>()
-                .Where(r => r.ProjectId != null && activeProjectIds.Contains(r.ProjectId))
+            var query = db.Risks
+                .Where(r => activeProjectIds.Contains(r.ProjectId))
+                .Include(r => r.Project)
+                .Include(r => r.RiskOwnerUser)
                 .AsQueryable();
 
             if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
                 var accessibleProjectIds = await db.Projects
                     .Where(p => p.IsActive == 1 && (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)))
-                        .Select(p => p.ProjectId)
-                        .ToListAsync();
+                    .Select(p => p.ProjectId)
+                    .ToListAsync();
 
-                    query = query.Where(r => r.ProjectId != null && accessibleProjectIds.Contains(r.ProjectId));
-                }
+                query = query.Where(r => accessibleProjectIds.Contains(r.ProjectId));
+            }
 
-                var rawRisks = await query.ToListAsync();
+            var rawRisks = await query.ToListAsync();
 
-                var result = rawRisks.Select(r => new RiskDto(
-                    r.RiskId,
-                    r.ProjectId,
-                    r.ProjectCode,
-                    r.ProjectName,
-                    r.RiskTitle,
-                    r.RiskCategory,
-                    r.RiskProbability,
-                    r.RiskImpact,
-                    r.RiskScore,
-                    r.RiskStatus,
-                    r.RiskDueDate,
-                    r.RiskOwnerUserId,
-                    r.RiskOwnerFullName,
-                    ParseString(r.RiskHealth)
-                )).ToList();
+            var result = rawRisks.Select(MapRiskToDto).ToList();
 
                 return Results.Ok(result);
             });
     }
 
-    private static string ParseString(byte[]? bytes)
+    private static RiskDto MapRiskToDto(Risk risk)
     {
-        if (bytes == null || bytes.Length == 0) return "Belirsiz";
-        return Encoding.UTF8.GetString(bytes);
+        var riskHealth = risk.RiskScore switch
+        {
+            <= 4 => "Yeşil",
+            <= 15 => "Sarı",
+            _ => "Kırmızı"
+        };
+
+        return new RiskDto(
+            risk.RiskId,
+            risk.ProjectId,
+            risk.Project?.ProjectCode,
+            risk.Project?.ProjectName,
+            risk.RiskTitle,
+            risk.RiskCategory,
+            risk.RiskProbability,
+            risk.RiskImpact,
+            risk.RiskScore,
+            risk.RiskStatus,
+            risk.RiskDueDate,
+            risk.RiskOwnerUserId,
+            risk.RiskOwnerUser?.FullName,
+            risk.RiskMitigation,
+            riskHealth
+        );
     }
 }

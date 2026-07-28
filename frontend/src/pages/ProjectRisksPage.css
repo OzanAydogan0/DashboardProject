@@ -152,6 +152,18 @@
   padding: 16px;
   text-align: center;
   color: #475569;
+  font-size: 15px;
+}
+
+.table-description {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 15px;
+  line-height: 1.6;
+  border: 1px solid #e2e8f0;
 }
 
 .error-text {
@@ -162,22 +174,33 @@
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  font-size: 15px;
 }
 
 .modern-table th,
 .modern-table td {
   padding: 10px 12px;
   border-bottom: 1px solid #e2e8f0;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .modern-table th {
   color: #64748b;
   font-weight: 700;
+  font-size: 15px;
 }
 
 .font-medium {
   font-weight: 600;
+  font-size: 15px;
+}
+
+.mitigation-cell {
+  max-width: 280px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  font-size: 15px;
 }
 
 .risk-score-pill {
@@ -186,6 +209,7 @@
   border-radius: 12px;
   font-weight: bold;
   display: inline-block;
+  font-size: 14px;
 }
 
 @media (max-width: 840px) {

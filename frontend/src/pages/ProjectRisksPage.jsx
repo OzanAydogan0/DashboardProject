@@ -186,6 +186,10 @@ const ProjectRisksPage = () => {
                     <div className="permission-note">Bu projede risk ekleme/düzenleme yetkiniz bulunmuyor.</div>
                 )}
 
+                <div className="table-description">
+                    Bu tabloda proje risklerinin başlığı, kategorisi, olasılığı, etkisi, skoru, azaltım/müdahale bilgisi ve sorumlusu görüntülenir.
+                </div>
+
                 {showRiskModal && canWrite && (
                     <div className="risk-modal-overlay" onClick={closeRiskModal}>
                         <div className="risk-modal" onClick={(e) => e.stopPropagation()}>
@@ -273,6 +277,7 @@ const ProjectRisksPage = () => {
                                     <th>Etki</th>
                                     <th>Skor</th>
                                     <th>Durum</th>
+                                    <th>Azaltım / Müdahale</th>
                                     <th>Sorumlu</th>
                                     <th>Bitiş Tarihi</th>
                                     {canWrite && <th>İşlem</th>}
@@ -292,6 +297,7 @@ const ProjectRisksPage = () => {
                                             </span>
                                         </td>
                                         <td>{risk.riskStatus || '-'}</td>
+                                        <td className="mitigation-cell">{risk.riskMitigation || '-'}</td>
                                         <td>{risk.riskOwnerFullName || 'Atanmamış'}</td>
                                         <td>
                                             {risk.riskDueDate
