@@ -168,7 +168,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
             <thead>
               <tr>
                 <th style={{ width: '50px' }}></th>
-                <th>Milestone Adı</th>
+                <th>Kilometre Taşı Adı</th>
                 <th>Planlanan Tarih</th>
                 <th>Gerçekleşen Tarih</th>
                 <th>Durum</th>
@@ -241,7 +241,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
             <form onSubmit={handleSubmit}>
               
               <div className="form-group">
-                <label>Milestone Adı</label>
+                <label>Kilometre Taşı Adı</label>
                 <input 
                   type="text" 
                   name="milestoneName"

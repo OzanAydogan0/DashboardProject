@@ -60,7 +60,7 @@ public static class RiskEndpoints
 
             var newRisk = new Risk
             {
-                RiskId = "RSK-" + Guid.NewGuid().ToString()[..8].ToUpper(),
+                RiskId = await IdentifierGenerator.GenerateAsync(db.Set<Risk>(), r => r.RiskId, "RSK-"),
                 ProjectId = request.ProjectId,
                 RiskTitle = request.RiskTitle,
                 RiskCategory = request.RiskCategory,
@@ -106,15 +106,37 @@ public static class RiskEndpoints
             if (!string.IsNullOrEmpty(request.RiskCategory)) risk.RiskCategory = request.RiskCategory;
             if (request.RiskProbability.HasValue) risk.RiskProbability = request.RiskProbability.Value;
             if (request.RiskImpact.HasValue) risk.RiskImpact = request.RiskImpact.Value;
-            if (!string.IsNullOrEmpty(request.RiskStatus)) risk.RiskStatus = request.RiskStatus;
+            if (!string.IsNullOrEmpty(request.RiskStatus))
+            {
+                risk.RiskStatus = request.RiskStatus;
+                if (string.Equals(request.RiskStatus, "Kapandı", StringComparison.OrdinalIgnoreCase))
+                    risk.ClosedDate ??= DateTime.UtcNow;
+                else
+                    risk.ClosedDate = null;
+            }
             if (!string.IsNullOrEmpty(request.RiskMitigation)) risk.RiskMitigation = request.RiskMitigation;
             if (request.RiskDueDate.HasValue) risk.RiskDueDate = request.RiskDueDate.Value;
+            if (!string.IsNullOrWhiteSpace(request.RiskOwnerUserId)) risk.RiskOwnerUserId = request.RiskOwnerUserId;
+
+            if (string.IsNullOrWhiteSpace(risk.RiskTitle)) risk.RiskTitle = "Başlık Belirtilmedi";
+            if (string.IsNullOrWhiteSpace(risk.RiskCategory)) risk.RiskCategory = "Genel";
+            if (string.IsNullOrWhiteSpace(risk.RiskStatus)) risk.RiskStatus = "Açık";
+            if (string.IsNullOrWhiteSpace(risk.RiskMitigation)) risk.RiskMitigation = "Belirtilmedi";
+            if (string.IsNullOrWhiteSpace(risk.RiskOwnerUserId)) risk.RiskOwnerUserId = userId;
+            if (risk.RiskDueDate == default) risk.RiskDueDate = DateTime.UtcNow;
             
             risk.UpdatedByUserId = userId;
             risk.UpdatedAt = DateTime.UtcNow;
 
-            await db.SaveChangesAsync();
-            return Results.Ok(new { message = "Risk başarıyla güncellendi." });
+            try
+            {
+                await db.SaveChangesAsync();
+                return Results.Ok(new { message = "Risk başarıyla güncellendi." });
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(new { message = "Risk durumu güncellenemedi. Lütfen tekrar deneyin.", detail = ex.Message }, statusCode: 500);
+            }
         });
 
         // 4. DELETE /risks/{id} -> Risk Silme

@@ -127,6 +127,7 @@ const ProjectRisksPage = () => {
                 riskProbability: Number(form.riskProbability),
                 riskImpact: Number(form.riskImpact),
                 riskDueDate: form.riskDueDate ? new Date(form.riskDueDate).toISOString() : null,
+                riskOwnerUserId: form.riskOwnerUserId || getCurrentUserId(),
             };
 
             if (editingRiskId) {
@@ -163,18 +164,18 @@ const ProjectRisksPage = () => {
         setShowRiskModal(true);
     };
 
-    const handleDelete = async (riskId) => {
-        if (!window.confirm('Bu risk kaydını silmek istediğinize emin misiniz?')) {
+    const handleCloseRisk = async (riskId) => {
+        if (!window.confirm('Bu risk kaydını kapatmak istediğinize emin misiniz?')) {
             return;
         }
 
         setIsDeletingId(riskId);
         try {
-            await projectService.deleteRisk(riskId);
+            await projectService.updateRisk(riskId, { riskStatus: 'Kapandı' });
             await fetchRisks();
-            addAlert('Risk kaydı başarıyla silindi.', 'success');
+            addAlert('Risk kaydı başarıyla kapatıldı.', 'success');
         } catch (err) {
-            const backendMessage = err.response?.data?.message || err.message || 'Risk silinemedi.';
+            const backendMessage = err.response?.data?.message || err.message || 'Risk kapatılamadı.';
             setError(backendMessage);
             addAlert(backendMessage, 'error');
         } finally {
@@ -343,10 +344,10 @@ const ProjectRisksPage = () => {
                                                     <button
                                                         type="button"
                                                         className="btn-danger"
-                                                        onClick={() => handleDelete(risk.riskId)}
-                                                        disabled={isDeletingId === risk.riskId}
+                                                        onClick={() => handleCloseRisk(risk.riskId)}
+                                                        disabled={isDeletingId === risk.riskId || risk.riskStatus === 'Kapandı'}
                                                     >
-                                                        {isDeletingId === risk.riskId ? 'Siliniyor...' : 'Sil'}
+                                                        {isDeletingId === risk.riskId ? 'Kapatılıyor...' : risk.riskStatus === 'Kapandı' ? 'Kapalı' : 'Kapat'}
                                                     </button>
                                                 </div>
                                             </td>

@@ -91,7 +91,7 @@ public static class ExcelImportEndpoints
                         {
                             program = new dashboardapi.Models.Program
                             {
-                                ProgramId = Guid.NewGuid().ToString(),
+                                ProgramId = await IdentifierGenerator.GenerateAsync(db.Set<dashboardapi.Models.Program>(), p => p.ProgramId, "PRG-"),
                                 ProgramName = "Genel Program",
                                 ProgramDescription = "Excel içe aktarımı ile otomatik oluşturuldu.",
                                 ProgramStatus = "Aktif",
@@ -148,7 +148,7 @@ public static class ExcelImportEndpoints
                         // Projeyi Oluştur
                         var newProject = new Project
                         {
-                            ProjectId = "PRJ-" + Guid.NewGuid().ToString()[..8].ToUpper(),
+                            ProjectId = await IdentifierGenerator.GenerateAsync(db.Projects, p => p.ProjectId, "PRJ-"),
                             ProjectCode = projectCode,
                             ProjectName = projectName,
                             ProgramId = program.ProgramId,

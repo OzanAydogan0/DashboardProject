@@ -124,7 +124,7 @@ public static class ProjectEndpoints
 
             var newProject = new Project
             {
-                ProjectId = "PRJ-" + Guid.NewGuid().ToString()[..8].ToUpper(),
+                ProjectId = await IdentifierGenerator.GenerateAsync(db.Projects, p => p.ProjectId, "PRJ-"),
                 ProjectCode = dto.ProjectCode,
                 ProjectName = dto.ProjectName,
                 ProjectDescription = dto.ProjectDescription,

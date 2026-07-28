@@ -2,13 +2,18 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authService } from '../services/authService'
 import { useAlert } from '../components/AlertProvider'
+import { notifyPasswordChangeRequest } from '../utils/adminNotifications'
 import './LoginPage.css'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [forgotName, setForgotName] = useState('')
+  const [forgotEmail, setForgotEmail] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isForgotLoading, setIsForgotLoading] = useState(false)
   const navigate = useNavigate()
   const { addAlert } = useAlert()
 
@@ -26,6 +31,33 @@ function LoginPage() {
       addAlert(errorMessage, 'error')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault()
+
+    if (!forgotName.trim()) {
+      addAlert('Lütfen isim soyisim girin.', 'error')
+      return
+    }
+
+    setIsForgotLoading(true)
+
+    try {
+      const request = notifyPasswordChangeRequest({
+        fullName: forgotName.trim(),
+        email: forgotEmail.trim() || email.trim(),
+      })
+
+      addAlert(`Şifre değiştirme isteğiniz yöneticilere iletildi. ${request.fullName} için işlem takip edilecek.`, 'success')
+      setForgotName('')
+      setForgotEmail('')
+    } catch (error) {
+      console.error('Şifre değiştirme isteği gönderilemedi:', error)
+      addAlert('İstek gönderilirken bir hata oluştu. Lütfen tekrar deneyin.', 'error')
+    } finally {
+      setIsForgotLoading(false)
     }
   }
 
@@ -90,6 +122,47 @@ function LoginPage() {
             <button type="submit" className="login-button" disabled={isLoading}>
               {isLoading ? "Giriş Yapılıyor..." : "Giriş Yap"}
             </button>
+
+            <div className="forgot-password-wrapper">
+              <button
+                type="button"
+                className="forgot-password-link"
+                onClick={() => setShowForgotPassword((prev) => !prev)}
+                disabled={isLoading || isForgotLoading}
+              >
+                {showForgotPassword ? 'Şifremi unuttum alanını kapat' : 'Şifremi unuttum'}
+              </button>
+
+              {showForgotPassword && (
+                <div className="forgot-password-panel">
+                  <label className="forgot-password-field">
+                    <span>İsim Soyisim</span>
+                    <input
+                      type="text"
+                      value={forgotName}
+                      onChange={(e) => setForgotName(e.target.value)}
+                      placeholder="Ad Soyad"
+                      disabled={isLoading || isForgotLoading}
+                    />
+                  </label>
+
+                  <label className="forgot-password-field">
+                    <span>E-posta</span>
+                    <input
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="e-posta"
+                      disabled={isLoading || isForgotLoading}
+                    />
+                  </label>
+
+                  <button type="button" className="forgot-password-button" onClick={handleForgotPassword} disabled={isLoading || isForgotLoading}>
+                    {isForgotLoading ? 'Gönderiliyor...' : 'İsteği Gönder'}
+                  </button>
+                </div>
+              )}
+            </div>
           </form>
         </div>
       </main>

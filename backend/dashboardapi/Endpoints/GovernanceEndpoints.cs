@@ -53,7 +53,7 @@ public static class GovernanceEndpoints
 
             var newDecision = new ManagementDecision
             {
-                ManagementDecisionId = Guid.NewGuid().ToString(),
+                ManagementDecisionId = await IdentifierGenerator.GenerateAsync(db.Set<ManagementDecision>(), d => d.ManagementDecisionId, "DEC-"),
                 ProjectId = request.ProjectId,
                 DecisionTitle = request.DecisionTitle,
                 Decision = request.Decision,
@@ -117,7 +117,7 @@ public static class GovernanceEndpoints
 
             var newPir = new PirReport
             {
-                PirReportId = Guid.NewGuid().ToString(),
+                PirReportId = await IdentifierGenerator.GenerateAsync(db.Set<PirReport>(), p => p.PirReportId, "PIR-"),
                 ProjectId = request.ProjectId,
                 Period = request.Period,
                 ReportDate = request.ReportDate,

@@ -132,6 +132,70 @@ public sealed class RiskTests
             listedRisk.GetProperty("riskMitigation").GetString());
     }
 
+    [Fact]
+    public async Task UpdateRisk_OwnerUserIdChanged_UpdatesResponsibleUser()
+    {
+        // Arrange
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        var credentials = await CreateActiveUserAsync(
+            factory,
+            role: "Sistem Yöneticisi");
+
+        var loginRequest = new LoginRequest(
+            credentials.User.Email,
+            credentials.PlainTextPassword);
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            loginRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            loginResponse.StatusCode);
+
+        var loginResult =
+            await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+
+        Assert.NotNull(loginResult);
+        Assert.False(string.IsNullOrWhiteSpace(loginResult.Token));
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                loginResult.Token);
+
+        var requestBody = new
+        {
+            riskOwnerUserId = credentials.User.UserId
+        };
+
+        // Act
+        using var response = await client.PatchAsJsonAsync(
+            "/risks/RSK-001",
+            requestBody);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+
+        var db = scope.ServiceProvider
+            .GetRequiredService<AppDbContext>();
+
+        var updatedRisk = await db.Risks
+            .AsNoTracking()
+            .SingleAsync(risk =>
+                risk.RiskId == "RSK-001");
+
+        Assert.Equal(
+            credentials.User.UserId,
+            updatedRisk.RiskOwnerUserId);
+    }
+
         [Fact]
     public async Task UpdateRisk_ProbabilityAndImpactChanged_RecalculatesRiskScore()
     {

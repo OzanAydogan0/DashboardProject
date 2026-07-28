@@ -30,6 +30,7 @@ function ProblemsPage() {
     const { addAlert } = useAlert();
 
     const [issues, setIssues] = useState([]);
+    const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [form, setForm] = useState(emptyForm);
@@ -78,6 +79,16 @@ function ProblemsPage() {
         }
     };
 
+    const fetchUsers = async () => {
+        try {
+            const userData = await projectService.getUsers();
+            setUsers(Array.isArray(userData) ? userData : []);
+        } catch (err) {
+            console.error('Kullanıcı listesi alınamadı:', err);
+            setUsers([]);
+        }
+    };
+
     useEffect(() => {
         const userString = localStorage.getItem('user');
         try {
@@ -91,6 +102,7 @@ function ProblemsPage() {
 
         if (projectId) {
             fetchIssues();
+            fetchUsers();
         }
     }, [projectId]);
 
@@ -277,8 +289,19 @@ function ProblemsPage() {
                                         <input type="date" name="issueDueDate" value={form.issueDueDate} onChange={handleInputChange} />
                                     </label>
                                     <label>
-                                        <span>Sorumlu Kullanıcı ID</span>
-                                        <input name="issueOwnerUserId" value={form.issueOwnerUserId} onChange={handleInputChange} />
+                                        <span>Sorumlu Kullanıcı</span>
+                                        <select name="issueOwnerUserId" value={form.issueOwnerUserId} onChange={handleInputChange} required>
+                                            <option value="">-- Proje Yöneticisi Seçiniz --</option>
+                                            {users.map((user) => {
+                                                const userId = user.userId || user.UserId || user.id;
+                                                const userName = user.fullName || user.FullName || user.userName || user.UserName || user.name || userId;
+                                                return (
+                                                    <option key={userId} value={userId}>
+                                                        {userName}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
                                     </label>
                                     <label className="full-width">
                                         <span>Kök Neden</span>

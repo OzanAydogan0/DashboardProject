@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
+using dashboardapi.Services;
 using BCrypt.Net; // 1. BCrypt kütüphanesini yukarıya ekledik
 
 namespace dashboardapi.Endpoints;
@@ -36,7 +37,7 @@ public static class UserEndpoints
 
             var newUser = new dashboardapi.Models.User
             {
-                UserId = "USR-" + Guid.NewGuid().ToString()[..8].ToUpper(),
+                UserId = await IdentifierGenerator.GenerateAsync(db.Users, u => u.UserId, "USR-"),
                 Email = dto.Email,
                 FullName = dto.FullName,
                 UserRole = dto.Role,

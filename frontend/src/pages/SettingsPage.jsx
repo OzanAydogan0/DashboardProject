@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import './SettingsPage.css'
 import { projectService } from '../services/projectService'
 import { useAlert } from '../components/AlertProvider'
+import { getPasswordChangeRequests } from '../utils/adminNotifications'
 
 const roleOptions = [
   'Sistem Yöneticisi',
@@ -36,6 +37,7 @@ function SettingsPage() {
     Password: '',
   })
   const [userEdits, setUserEdits] = useState({})
+  const [passwordChangeRequests, setPasswordChangeRequests] = useState([])
 
   useEffect(() => {
     const userString = localStorage.getItem('user')
@@ -54,6 +56,17 @@ function SettingsPage() {
     if (!isAdmin) return
     loadAdminData()
   }, [isAdmin])
+
+  useEffect(() => {
+    setPasswordChangeRequests(getPasswordChangeRequests())
+
+    const handleNewRequest = () => {
+      setPasswordChangeRequests(getPasswordChangeRequests())
+    }
+
+    window.addEventListener('password-change-request', handleNewRequest)
+    return () => window.removeEventListener('password-change-request', handleNewRequest)
+  }, [])
 
   const loadAdminData = async () => {
     setLoading(true)
@@ -262,6 +275,28 @@ function SettingsPage() {
         <>
           {message && <div className={`settings-message ${messageType}`}>{message}</div>}
           {error && <div className="settings-error">{error}</div>}
+
+          <div className="dashboard-card full-width">
+            <div className="settings-card-header">
+              <h3>Şifre Değiştirme İstekleri</h3>
+              <span>Giriş ekranından gelen şifre değiştirme taleplerini buradan takip edebilirsiniz.</span>
+            </div>
+
+            {passwordChangeRequests.length === 0 ? (
+              <p>Henüz şifre değiştirme isteği yok.</p>
+            ) : (
+              <ul className="password-request-list">
+                {passwordChangeRequests.map((request) => (
+                  <li key={request.id} className="password-request-item">
+                    <strong>{request.fullName}</strong>
+                    <span>{request.email}</span>
+                    <small>{new Date(request.requestedAt).toLocaleString('tr-TR')}</small>
+                    <p>{request.message}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div className="settings-grid">
             <section className="dashboard-card settings-card">

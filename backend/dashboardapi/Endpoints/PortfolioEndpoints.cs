@@ -113,7 +113,7 @@ public static class PortfolioEndpoints
 
             var newProgram = new dashboardapi.Models.Program
             {
-                ProgramId = Guid.NewGuid().ToString(),
+                ProgramId = await IdentifierGenerator.GenerateAsync(db.Set<dashboardapi.Models.Program>(), p => p.ProgramId, "PRG-"),
                 ProgramName = request.ProgramName,
                 ProgramDescription = request.ProgramDescription,
                 ProgramStatus = request.ProgramStatus,

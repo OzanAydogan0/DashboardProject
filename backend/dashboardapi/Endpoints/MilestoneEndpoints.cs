@@ -68,7 +68,7 @@ public static class MilestoneEndpoints
 
             var newMilestone = new Milestone
             {
-                MilestoneId = "MS-" + Guid.NewGuid().ToString()[..8].ToUpper(),
+                MilestoneId = await IdentifierGenerator.GenerateAsync(db.Set<Milestone>(), m => m.MilestoneId, "MS-"),
                 ProjectId = projectId, 
                 MilestoneName = request.MilestoneName,
                 PlannedDate = request.PlannedDate,

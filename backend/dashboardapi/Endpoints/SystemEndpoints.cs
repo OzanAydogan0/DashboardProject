@@ -87,7 +87,7 @@ public static class SystemEndpoints
 
             var newRecord = new EvmRecord
             {
-                EvmRecordId = Guid.NewGuid().ToString(),
+                EvmRecordId = await IdentifierGenerator.GenerateAsync(db.Set<EvmRecord>(), e => e.EvmRecordId, "EVM-"),
                 ProjectId = request.ProjectId,
                 Period = request.Period,
                 // 👈 CS1061 ÇÖZÜMÜ: 'EvmRecord' veritabanı modelinde 'Currency' alanı olmadığı için

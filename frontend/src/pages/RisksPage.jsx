@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
@@ -10,6 +10,8 @@ function RisksPage({ projectId }) {
   const [risks, setRisks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     const fetchRisks = async () => {
@@ -38,6 +40,7 @@ function RisksPage({ projectId }) {
           }
         }
 
+        setCurrentPage(1);
         setRisks(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Risk verileri çekilirken hata oluştu:", err);
@@ -50,7 +53,7 @@ function RisksPage({ projectId }) {
     };
 
     fetchRisks();
-  }, [projectId]);
+  }, [projectId, addAlert]);
 
   // Veritabanından "Kırmızı", "Sarı", "Yeşil" veya "Kritik", "Orta", "Düşük" gelse de hepsini yakalar
   const getBadgeClass = (healthLevel) => {
@@ -78,6 +81,36 @@ function RisksPage({ projectId }) {
     return 'badge-default';
   };
 
+  const sortedRisks = useMemo(() => {
+    const list = Array.isArray(risks) ? [...risks] : [];
+
+    return list.sort((a, b) => {
+      const scoreA = Number(a.riskScore ?? a.RiskScore ?? 0) || 0;
+      const scoreB = Number(b.riskScore ?? b.RiskScore ?? 0) || 0;
+      if (scoreA !== scoreB) return scoreB - scoreA;
+
+      const dueA = a.riskDueDate || a.RiskDueDate || '';
+      const dueB = b.riskDueDate || b.RiskDueDate || '';
+      if (dueA && dueB) {
+        const dateA = new Date(dueA).getTime();
+        const dateB = new Date(dueB).getTime();
+        if (!Number.isNaN(dateA) && !Number.isNaN(dateB) && dateA !== dateB) {
+          return dateA - dateB;
+        }
+      }
+
+      const titleA = (a.riskTitle || a.RiskTitle || '').toString();
+      const titleB = (b.riskTitle || b.RiskTitle || '').toString();
+      return titleA.localeCompare(titleB, 'tr');
+    });
+  }, [risks]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRisks.length / pageSize));
+  const paginatedRisks = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return sortedRisks.slice(startIndex, startIndex + pageSize);
+  }, [sortedRisks, currentPage]);
+
   return (
     <div className="dashboard-card full-width">
 
@@ -87,9 +120,6 @@ function RisksPage({ projectId }) {
         <div className="status-message error">{error}</div>
       ) : (
         <>
-          <div className="table-description">
-            Bu tabloda projelere ait risklerin başlığı, puanı, olasılığı, etkisi, seviyesi, azaltım/müdahale bilgisi ve sorumlusu görüntülenir.
-          </div>
           <div className="table-responsive">
             <table className="risk-table">
             <thead>
@@ -106,7 +136,7 @@ function RisksPage({ projectId }) {
               </tr>
             </thead>
             <tbody>
-              {risks.map((risk) => (
+              {paginatedRisks.map((risk) => (
                 <tr
                   key={risk.riskId}
                   onClick={() => navigate(`/projects/${risk.projectId || risk.ProjectId}`)}
@@ -133,7 +163,7 @@ function RisksPage({ projectId }) {
                 </tr>
               ))}
 
-              {risks.length === 0 && (
+              {sortedRisks.length === 0 && (
                 <tr>
                   <td colSpan={!projectId ? 9 : 8} className="text-center status-message">
                     Veritabanında kayıtlı risk bulunmamaktadır.
@@ -142,6 +172,40 @@ function RisksPage({ projectId }) {
               )}
             </tbody>
             </table>
+
+            <div className="pagination-bar">
+              <span className="pagination-summary">
+                Toplam {sortedRisks.length} risk • Sayfa {currentPage} / {totalPages}
+              </span>
+              <div className="pagination-controls">
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Önceki
+                </button>
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    className={`pagination-page-btn ${currentPage === pageNumber ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pageNumber)}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Sonraki
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}

@@ -32,6 +32,7 @@ function ProjectActionsPage() {
     const { addAlert } = useAlert();
 
     const [actions, setActions] = useState([]);
+    const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [form, setForm] = useState(emptyForm);
@@ -79,6 +80,16 @@ function ProjectActionsPage() {
         }
     };
 
+    const fetchUsers = async () => {
+        try {
+            const userData = await projectService.getUsers();
+            setUsers(Array.isArray(userData) ? userData : []);
+        } catch (err) {
+            console.error('Kullanıcı listesi alınamadı:', err);
+            setUsers([]);
+        }
+    };
+
     useEffect(() => {
         const userString = localStorage.getItem('user');
         try {
@@ -92,6 +103,7 @@ function ProjectActionsPage() {
 
         if (projectId) {
             fetchActions();
+            fetchUsers();
         }
     }, [projectId]);
 
@@ -283,8 +295,19 @@ function ProjectActionsPage() {
                                         <input type="date" name="actionDueDate" value={form.actionDueDate} onChange={handleInputChange} />
                                     </label>
                                     <label>
-                                        <span>Sorumlu Kullanıcı ID</span>
-                                        <input name="actionOwnerUserId" value={form.actionOwnerUserId} onChange={handleInputChange} />
+                                        <span>Sorumlu Kullanıcı</span>
+                                        <select name="actionOwnerUserId" value={form.actionOwnerUserId} onChange={handleInputChange} required>
+                                            <option value="">-- Proje Yöneticisi Seçiniz --</option>
+                                            {users.map((user) => {
+                                                const userId = user.userId || user.UserId || user.id;
+                                                const userName = user.fullName || user.FullName || user.userName || user.UserName || user.name || userId;
+                                                return (
+                                                    <option key={userId} value={userId}>
+                                                        {userName}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
                                     </label>
                                 </div>
 

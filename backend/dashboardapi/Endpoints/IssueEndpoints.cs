@@ -62,7 +62,7 @@ public static class IssueEndpoints
 
             var newIssue = new Issue
             {
-                IssueId = "ISS-" + Guid.NewGuid().ToString()[..8].ToUpper(), // Standart ID formatı
+                IssueId = await IdentifierGenerator.GenerateAsync(db.Set<Issue>(), i => i.IssueId, "ISS-"),
                 ProjectId = request.ProjectId,
                 IssueTitle = request.IssueTitle,
                 IssuePriority = request.IssuePriority,

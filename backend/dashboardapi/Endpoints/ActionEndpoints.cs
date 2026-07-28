@@ -24,6 +24,7 @@ public static class ActionEndpoints
 
             var actions = await db.Set<dashboardapi.Models.Action>()
                 .Include(a => a.ActionOwnerUser)
+                .Include(a => a.Project)
                 .Where(a => a.ProjectId == id)
                 .ToListAsync();
 
@@ -39,7 +40,8 @@ public static class ActionEndpoints
                 a.ActionStatus,
                 a.ActionProgress,
                 a.ActionPriority,
-                a.CompletedDate
+                a.CompletedDate,
+                a.Project?.ProjectName
             )).ToList();
 
             return Results.Ok(result);
@@ -61,7 +63,7 @@ public static class ActionEndpoints
 
             var newAction = new dashboardapi.Models.Action
             {
-                ActionId = "ACT-" + Guid.NewGuid().ToString()[..8].ToUpper(), // Standart ID Formatı
+                ActionId = await IdentifierGenerator.GenerateAsync(db.Set<dashboardapi.Models.Action>(), a => a.ActionId, "ACT-"),
                 ProjectId = request.ProjectId,
                 ActionDescription = request.ActionDescription,
                 SourceType = request.SourceType,
@@ -144,6 +146,7 @@ public static class ActionEndpoints
 
             var query = db.Set<dashboardapi.Models.Action>()
                 .Include(a => a.ActionOwnerUser)
+                .Include(a => a.Project)
                 .Where(a => activeProjectIds.Contains(a.ProjectId))
                 .AsQueryable();
 
@@ -171,7 +174,8 @@ public static class ActionEndpoints
                 a.ActionStatus,
                 a.ActionProgress,
                 a.ActionPriority,
-                a.CompletedDate
+                a.CompletedDate,
+                a.Project?.ProjectName
             )).ToList();
 
             return Results.Ok(result);
