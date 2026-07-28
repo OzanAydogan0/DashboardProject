@@ -22,6 +22,7 @@ function ProjectDetailPage() {
   
   // 2. STATE (DURUM) YÖNETİMİ
   const [project, setProject] = useState(null)
+  const [users, setUsers] = useState([])
   const [subData, setSubData] = useState({
     milestones: [],
     risks: [],
@@ -44,17 +45,19 @@ function ProjectDetailPage() {
       
       const projectDetailData = await projectService.getProjectById(id)
 
-      const [milestonesRes, risksRes, issuesRes, actionsRes, reportsRes, evmRes, customersRes] = await Promise.allSettled([
+      const [milestonesRes, risksRes, issuesRes, actionsRes, reportsRes, evmRes, customersRes, usersRes] = await Promise.allSettled([
         projectService.getProjectMilestones(id),
         projectService.getProjectRisks(id),
         projectService.getProjectIssues(id),
         projectService.getProjectActions(id),
         projectService.getProjectReports(id),
         projectService.getEvmRecords(id),
-        projectService.getCustomers()
+        projectService.getCustomers(),
+        projectService.getUsers()
       ])
 
       setProject(projectDetailData)
+      setUsers(usersRes.status === 'fulfilled' && Array.isArray(usersRes.value) ? usersRes.value : [])
       setSubData({
         milestones: milestonesRes.status === 'fulfilled' && Array.isArray(milestonesRes.value) ? milestonesRes.value : [],
         risks: risksRes.status === 'fulfilled' && Array.isArray(risksRes.value) ? risksRes.value : [],
@@ -111,8 +114,16 @@ function ProjectDetailPage() {
   const customerObj = subData.customers.find(c => c.customerId === project.customerId || c.CustomerId === project.customerId)
   const displayCustomer = customerObj ? `${customerObj.customerName || customerObj.CustomerName} (${project.customerId})` : project.customerId || '-'
 
-  const tempManagerDictionary = { "USR-PM1": "Ahmet Yılmaz", "USR-PM2": "Ayşe Demir" }
-  const displayManager = project.projectManagerName || tempManagerDictionary[project.projectManagerUserId] || project.projectManagerUserId || '-'
+  const managerName = project.projectManagerFullName || project.ProjectManagerFullName || project.projectManagerName || project.ProjectManagerName || ''
+  const managerUser = users.find((user) => {
+    const candidateId = user.userId || user.UserId || user.id || user.Id
+    return candidateId && candidateId === (project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId)
+  })
+  const displayManager = managerName
+    ? `${managerName} (${project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId || '-'})`
+    : managerUser
+      ? `${managerUser.fullName || managerUser.FullName || managerUser.userName || managerUser.UserName || '-'} (${project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId || managerUser.userId || managerUser.UserId || '-'})`
+      : `${project.projectManagerName || project.projectManagerFullName || project.projectManager || '-'} (${project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId || '-'})`
 
   // EVM Metrikleri
   const latestEvm = subData.evmRecords[0] || {}

@@ -17,7 +17,9 @@ function HomePage() {
     status: ''
   })
   const [currentPage, setCurrentPage] = useState(1)
+  const [chartPage, setChartPage] = useState(1)
   const pageSize = 10
+  const chartPageSize = 6
 
   // 🔄 1. İlk Sayfa Yüklenmesi (useEffect için senkron setState barındırmayan yapı)
   useEffect(() => {
@@ -67,13 +69,22 @@ function HomePage() {
     }
   }
 
+  const getProjectIsActiveFlag = (project) => {
+    const rawValue = project.isActive ?? project.IsActive
+    if (rawValue === undefined || rawValue === null || rawValue === '') return 1
+    if (typeof rawValue === 'boolean') return rawValue ? 1 : 0
+    const parsed = Number(rawValue)
+    if (!Number.isNaN(parsed)) return parsed
+    const normalized = String(rawValue).trim().toLowerCase()
+    if (['0', 'false', 'pasif', 'iptal', 'inactive'].includes(normalized)) return 0
+    return 1
+  }
+
+  const getActiveLabel = (project) => getProjectIsActiveFlag(project) === 0 ? 'İptal Edildi' : 'Devam Ediyor'
+
   // 🔍 Client-Side veya Reaktif Filtreleme
   const activeProjects = useMemo(() => {
-    return rawProjects.filter((p) => {
-      const isActiveByFlag = Number(p.isActive ?? 1) === 1
-      const isActiveByStatus = (p.projectStatus || '').toLowerCase().includes('aktif')
-      return isActiveByFlag && isActiveByStatus
-    })
+    return rawProjects.filter((p) => getProjectIsActiveFlag(p) === 1)
   }, [rawProjects])
 
   const filteredProjects = useMemo(() => {
@@ -88,6 +99,12 @@ function HomePage() {
     })
   }, [activeProjects, filters])
 
+  const chartTotalPages = Math.max(1, Math.ceil(activeProjects.length / chartPageSize))
+  const visibleChartProjects = useMemo(() => {
+    const startIndex = (chartPage - 1) * chartPageSize
+    return activeProjects.slice(startIndex, startIndex + chartPageSize)
+  }, [activeProjects, chartPage])
+
   const totalPages = Math.max(1, Math.ceil(filteredProjects.length / pageSize))
   const paginatedProjects = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize
@@ -96,6 +113,7 @@ function HomePage() {
 
   useEffect(() => {
     setCurrentPage(1)
+    setChartPage(1)
   }, [filters, rawProjects])
 
   // 🧮 Gelen DTO Verisinden Dinamik KPI Hesaplamaları
@@ -362,7 +380,29 @@ function HomePage() {
 
         {/* Sağ Grafik: Projeler İlerleme Karşılaştırması */}
         <div className="dashboard-card chart-card">
-          <h3 className="card-title">Planlanan vs Gerçekleşen (Proje Bazlı)</h3>
+          <div className="chart-card-header">
+            <h3 className="card-title">Planlanan vs Gerçekleşen (Aktif Projeler)</h3>
+            <div className="chart-nav-controls">
+              <button
+                type="button"
+                className="chart-nav-btn"
+                onClick={() => setChartPage((page) => Math.max(1, page - 1))}
+                disabled={chartPage === 1}
+              >
+                ‹
+              </button>
+              <span className="chart-page-info">{chartPage}/{chartTotalPages}</span>
+              <button
+                type="button"
+                className="chart-nav-btn"
+                onClick={() => setChartPage((page) => Math.min(chartTotalPages, page + 1))}
+                disabled={chartPage === chartTotalPages}
+              >
+                ›
+              </button>
+            </div>
+          </div>
+
           <div className="bar-chart-container">
             <div className="y-axis">
               <span>100</span>
@@ -376,23 +416,27 @@ function HomePage() {
                 <div></div><div></div><div></div><div></div><div></div>
               </div>
               <div className="bars-wrapper">
-                {filteredProjects.slice(0, 5).map((p) => (
-                  <div className="bar-group" key={p.projectId || p.projectCode}>
-                    <div className="bars">
-                      <div
-                        className="bar planned"
-                        style={{ height: `${p.plannedProgress || 0}%` }}
-                        title={`Planlanan: %${p.plannedProgress}`}
-                      ></div>
-                      <div
-                        className="bar actual"
-                        style={{ height: `${p.actualProgress || 0}%` }}
-                        title={`Gerçekleşen: %${p.actualProgress}`}
-                      ></div>
+                {visibleChartProjects.length > 0 ? (
+                  visibleChartProjects.map((p) => (
+                    <div className="bar-group" key={p.projectId || p.projectCode}>
+                      <div className="bars">
+                        <div
+                          className="bar planned"
+                          style={{ height: `${p.plannedProgress || 0}%` }}
+                          title={`Planlanan: %${p.plannedProgress}`}
+                        ></div>
+                        <div
+                          className="bar actual"
+                          style={{ height: `${p.actualProgress || 0}%` }}
+                          title={`Gerçekleşen: %${p.actualProgress}`}
+                        ></div>
+                      </div>
+                      <span className="x-label">{p.projectCode}</span>
                     </div>
-                    <span className="x-label">{p.projectCode}</span>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <div className="chart-empty-state">Aktif proje bulunamadı.</div>
+                )}
               </div>
             </div>
           </div>
@@ -417,6 +461,7 @@ function HomePage() {
                 <th>Kod</th>
                 <th>Proje Adı</th>
                 <th>Durum</th>
+                <th>Aktiflik</th>
                 <th>Plan %</th>
                 <th>Gerçek %</th>
                 <th>Açık Risk</th>
@@ -441,6 +486,17 @@ function HomePage() {
                       <td className="fw-bold">{prj.projectCode}</td>
                       <td className="fw-medium">{prj.projectName}</td>
                       <td>{prj.projectStatus}</td>
+                      <td>
+                        <span style={{
+                          backgroundColor: getProjectIsActiveFlag(prj) === 0 ? '#fee2e2' : '#dcfce7',
+                          color: getProjectIsActiveFlag(prj) === 0 ? '#991b1b' : '#166534',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontWeight: 'bold'
+                        }}>
+                          {getActiveLabel(prj)}
+                        </span>
+                      </td>
                       <td>%{prj.plannedProgress || 0}</td>
                       <td>%{prj.actualProgress || 0}</td>
                       <td className={prj.openRiskCount > 0 ? 'text-red fw-bold' : ''}>{prj.openRiskCount || 0}</td>

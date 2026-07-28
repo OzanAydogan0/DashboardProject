@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { projectService } from '../services/projectService'
 import { useAlert } from '../components/AlertProvider'
+import { canWriteProject } from '../utils/permissionHelper'
 import './MileStonePage.css'
 
 /**
@@ -18,6 +19,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
   
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const canWrite = canWriteProject()
 
   const [formData, setFormData] = useState({
     milestoneName: '',
@@ -152,11 +154,13 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
         
         <div className="timeline-header-actions">
           <div style={{ flex: 1 }}></div>
-          <button 
-            className="btn-add-milestone" 
-            onClick={handleOpenAddModal}>
-            + Yeni Milestone
-          </button>
+          {canWrite && (
+            <button 
+              className="btn-add-milestone" 
+              onClick={handleOpenAddModal}>
+              + Yeni Milestone
+            </button>
+          )}
         </div>
 
         <div className="table-responsive">
@@ -189,20 +193,24 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
                       </span>
                     </td>
                     <td style={{ textAlign: 'right', paddingRight: '16px' }}>
-                      <button 
-                        className="btn-action-edit"
-                        onClick={() => handleOpenEditModal(m)}
-                        title="Düzenle"
-                      >
-                        Düzenle
-                      </button>
+                      {canWrite ? (
+                      <>
+                        <button 
+                          className="btn-action-edit"
+                          onClick={() => handleOpenEditModal(m)}
+                          title="Düzenle"
+                        >
+                          Düzenle
+                        </button>
 
-                     <button 
-                      className="btn-delete-milestone" 
-                      onClick={() => handleDelete(m.milestoneId || m.id)}
-                    >
-                      Sil
-                    </button>
+                        <button 
+                          className="btn-delete-milestone" 
+                          onClick={() => handleDelete(m.milestoneId || m.id)}
+                        >
+                          Sil
+                        </button>
+                      </>
+                    ) : null}
 
                     </td>
                   </tr>
