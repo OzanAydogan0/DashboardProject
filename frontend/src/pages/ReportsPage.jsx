@@ -7,13 +7,14 @@ function ReportsPage() {
   const { addAlert } = useAlert();
   const [reportType, setReportType] = useState('pir');
   const [projectId, setProjectId] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [selectedReportId, setSelectedReportId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const [projects, setProjects] = useState([]);
+  const [reportPeriods, setReportPeriods] = useState([]);
   const [isProjectsLoading, setIsProjectsLoading] = useState(true);
+  const [isPeriodsLoading, setIsPeriodsLoading] = useState(false);
 
   const [contentSelection, setContentSelection] = useState({
     executiveSummary: true,
@@ -47,8 +48,50 @@ function ReportsPage() {
     return () => { isMounted = false; };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!projectId) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const fetchReportPeriods = async () => {
+      setIsPeriodsLoading(true);
+      try {
+        const data = await projectService.getProjectReports(projectId);
+        if (!isMounted) return;
+
+        const periods = Array.isArray(data) ? data : [];
+        setReportPeriods(periods);
+
+        const firstAvailableReport = periods[0];
+        const defaultReportId = firstAvailableReport?.pirReportId || firstAvailableReport?.id || '';
+        setSelectedReportId(defaultReportId);
+      } catch (err) {
+        console.error('Rapor dönemleri çekilirken hata:', err);
+        if (isMounted) {
+          setReportPeriods([]);
+          setSelectedReportId('');
+        }
+      } finally {
+        if (isMounted) setIsPeriodsLoading(false);
+      }
+    };
+
+    fetchReportPeriods();
+    return () => { isMounted = false; };
+  }, [projectId]);
+
   const handleContentChange = (key) => {
     setContentSelection((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleProjectChange = (value) => {
+    setProjectId(value);
+    setReportPeriods([]);
+    setSelectedReportId('');
   };
 
   const handleFormatChange = (key) => {
@@ -64,12 +107,19 @@ function ReportsPage() {
       return;
     }
 
+    if (!selectedReportId) {
+      const message = "Seçili proje için kullanılabilir bir rapor dönemi bulunamadı.";
+      setError(message);
+      addAlert(message, 'error');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
       const format = outputFormats.excel ? 'excel' : 'pdf';
-      const blob = await projectService.generateReport(projectId, format, startDate, endDate);
+      const blob = await projectService.generateReport(projectId, format, selectedReportId);
 
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -118,7 +168,7 @@ function ReportsPage() {
             <select 
               className="form-control" 
               value={projectId} 
-              onChange={(e) => setProjectId(e.target.value)} 
+              onChange={(e) => handleProjectChange(e.target.value)} 
               disabled={isProjectsLoading}
             >
               <option value="">{isProjectsLoading ? 'Projeler yükleniyor...' : 'Proje Seçiniz...'}</option>
@@ -135,19 +185,33 @@ function ReportsPage() {
 
           <div className="form-group">
             <label>Rapor Dönemi</label>
-            <div className="rg-date-range">
-              <input 
-                type="date" 
-                value={startDate} 
-                onChange={(e) => setStartDate(e.target.value)} 
-              />
-              <span className="rg-date-separator">-</span>
-              <input 
-                type="date" 
-                value={endDate} 
-                onChange={(e) => setEndDate(e.target.value)} 
-              />
-            </div>
+            <select
+              className="form-control"
+              value={selectedReportId}
+              onChange={(e) => setSelectedReportId(e.target.value)}
+              disabled={isPeriodsLoading || !projectId}
+            >
+              <option value="">
+                {isPeriodsLoading
+                  ? 'Rapor dönemleri yükleniyor...'
+                  : projectId
+                    ? 'Rapor dönemi seçiniz...'
+                    : 'Önce bir proje seçiniz...'}
+              </option>
+              {reportPeriods.map((report) => {
+                const reportId = report.pirReportId || report.id;
+                const periodLabel = report.period || 'Dönem belirtilmemiş';
+                const reportDate = report.reportDate
+                  ? new Date(report.reportDate).toLocaleDateString('tr-TR', { dateStyle: 'short' })
+                  : '';
+
+                return (
+                  <option key={reportId} value={reportId}>
+                    {reportDate ? `${periodLabel} (${reportDate})` : periodLabel}
+                  </option>
+                );
+              })}
+            </select>
           </div>
 
           <div className="form-group">

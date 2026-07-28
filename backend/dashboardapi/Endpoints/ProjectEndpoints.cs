@@ -21,7 +21,7 @@ public static class ProjectEndpoints
 
             if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-            IQueryable<Project> query = db.Projects.Where(p => p.IsActive == 1);
+            IQueryable<Project> query = db.Projects;
 
             if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
@@ -29,6 +29,7 @@ public static class ProjectEndpoints
             }
 
             var projects = await query
+                .Include(p => p.ProjectManagerUser)
                 .Select(p => new ProjectSummaryDto(
                     p.ProjectId,
                     p.ProjectCode,
@@ -40,7 +41,10 @@ public static class ProjectEndpoints
                     p.Bac,
                     p.Currency,
                     p.StartDate,
-                    p.BaselineFinishDate
+                    p.BaselineFinishDate,
+                    p.ProjectManagerUserId,
+                    p.ProjectManagerUser != null ? p.ProjectManagerUser.FullName : null,
+                    p.IsActive
                 ))
                 .ToListAsync();
 
@@ -91,10 +95,12 @@ public static class ProjectEndpoints
                 project.ProgramId,
                 project.CustomerId,
                 project.ProjectManagerUserId,
+                project.ProjectManagerUser?.FullName,
                 project.ReportingFrequency ?? "Aylık", // MVP Kuralı
                 project.Confidentiality ?? "Şirket İçi",
                 sv,
-                spi
+                spi,
+                project.IsActive
             );
 
             return Results.Ok(detailDto);
@@ -157,7 +163,7 @@ public static class ProjectEndpoints
             var userRole = PermissionHelper.GetUserRole(userClaims);
             var userId = PermissionHelper.GetUserId(userClaims);
 
-            var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == id && p.IsActive == 1);
+            var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == id);
             if (project == null) return Results.NotFound(new { message = "Proje bulunamadı." });
 
             if (PermissionHelper.IsExecutive(userRole))
@@ -180,6 +186,7 @@ public static class ProjectEndpoints
             if (!string.IsNullOrEmpty(dto.Confidentiality)) project.Confidentiality = dto.Confidentiality;
             if (!string.IsNullOrEmpty(dto.ProjectManagerUserId) && userRole == "Sistem Yöneticisi") 
                 project.ProjectManagerUserId = dto.ProjectManagerUserId;
+            if (dto.IsActive.HasValue) project.IsActive = dto.IsActive.Value;
 
             // 🚨 GÜNCELLEME DENETİM (AUDIT) ALANLARI:
             if (!string.IsNullOrEmpty(userId))

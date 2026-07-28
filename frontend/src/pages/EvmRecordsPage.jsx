@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAlert } from '../components/AlertProvider';
+import { canWriteProject } from '../utils/permissionHelper';
 import './EvmRecordsPage.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5074';
@@ -26,16 +27,6 @@ const getMetricStatusStyle = (metricType, value) => {
     }
 };
 
-const getUserRoleFromToken = (token) => {
-    if (!token) return '';
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.role || payload.Role || '';
-    } catch {
-        return '';
-    }
-};
-
 function EvmRecordsPage() {
     const { id: projectId } = useParams();
     const { addAlert } = useAlert();
@@ -43,10 +34,10 @@ function EvmRecordsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState('');
-    const [canManage, setCanManage] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingRecordId, setEditingRecordId] = useState(null);
     const [formValues, setFormValues] = useState({ period: '', bac: '', pv: '', ev: '', ac: '' });
+    const canManage = canWriteProject();
 
     const formatCurrency = (val, currencyCode = 'TRY') => {
         if (val === null || val === undefined) return '-';
@@ -55,12 +46,12 @@ function EvmRecordsPage() {
                 style: 'currency',
                 currency: currencyCode
             }).format(val);
-        } catch (err) {
+        } catch {
             return `${val} ${currencyCode}`;
         }
     };
 
-    const fetchEvmRecords = async () => {
+    const fetchEvmRecords = useCallback(async () => {
         try {
             setError(null);
             const token = localStorage.getItem('token');
@@ -71,21 +62,18 @@ function EvmRecordsPage() {
 
             const data = await response.json();
             setRecords(data);
-        } catch (err) {
-            setError(err.message);
+        } catch {
+            setError('EVM verileri alınamadı.');
         } finally {
             setLoading(false);
         }
-    };
+    }, [projectId]);
 
     useEffect(() => {
         if (!projectId) return;
 
-        const role = getUserRoleFromToken(localStorage.getItem('token'));
-        const isExecutive = role === 'Üst Yönetim İzleyicisi' || role === 'Üst Yönetim';
-        setCanManage(!isExecutive);
         fetchEvmRecords();
-    }, [projectId]);
+    }, [projectId, fetchEvmRecords]);
 
     const resetForm = () => {
         setShowForm(false);

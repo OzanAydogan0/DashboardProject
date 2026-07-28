@@ -98,42 +98,23 @@ importProjectsExcel: (formData) => {
   },
 
   // 📑 RAPOR OLUŞTURMA VE DIŞA AKTARMA (GÜNCELLENDİ VE GÜVENLİ HALE GETİRİLDİ)
-  generateReport: async (projectId, format = 'pdf', startDate, endDate) => {
+  generateReport: async (projectId, format = 'pdf', selectedReportId = null) => {
     const pirsResponse = await api.get(`/projects/${projectId}/pirs`);
-    let pirs = pirsResponse.data;
+    const pirs = Array.isArray(pirsResponse.data) ? pirsResponse.data : [];
 
-    if (!pirs || pirs.length === 0) {
+    if (!pirs.length) {
       throw new Error("Bu projeye ait henüz oluşturulmuş bir PIR raporu bulunamadı.");
     }
 
-    // 💡 İYİLEŞTİRME 1: Raporları en yeni tarihten en eskiye doğru sıralıyoruz
-    pirs.sort((a, b) => {
-      const dateA = new Date(a.reportDate || a.createdAt || 0);
-      const dateB = new Date(b.reportDate || b.createdAt || 0);
-      return dateB - dateA; // Büyük tarihten küçüğe sırala
-    });
+    const selectedPir = selectedReportId
+      ? pirs.find((pir) => pir.pirReportId === selectedReportId || pir.id === selectedReportId || pir.period === selectedReportId)
+      : null;
 
-    // 💡 İYİLEŞTİRME 2: Başlangıç Tarihi Filtresi
-    if (startDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      pirs = pirs.filter(p => p.reportDate && new Date(p.reportDate) >= start);
-    }
-    
-    // 💡 İYİLEŞTİRME 3: Bitiş Tarihi Filtresi
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      pirs = pirs.filter(p => p.reportDate && new Date(p.reportDate) <= end);
+    if (!selectedPir) {
+      throw new Error("Seçilen rapor dönemi bulunamadı.");
     }
 
-    if (pirs.length === 0) {
-      throw new Error("Seçilen tarih aralığında bu projeye ait bir rapor bulunamadı. Lütfen farklı tarihler seçin.");
-    }
-
-    // Artık pirs[0] elemanının EN YENİ rapor olduğundan %100 eminiz.
-    const latestPir = pirs[0]; 
-    const pirId = latestPir.pirReportId || latestPir.id;
+    const pirId = selectedPir.pirReportId || selectedPir.id;
 
     const endpoint = format === 'excel' 
       ? `/pirs/${pirId}/export/excel` 

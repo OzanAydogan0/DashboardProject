@@ -1,13 +1,14 @@
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { projectService } from '../services/projectService'
 import { useAlert } from '../components/AlertProvider'
-import * as XLSX from 'xlsx'
+import { canCreateProject, canEditProject, isSystemAdmin } from '../utils/permissionHelper'
 import './ProjectsPage.css'
 
 // Filtre Seçenekleri
 const progressOptions = ['Hepsi', 'Taslak', 'Aktif', 'Beklemede', 'Tamamlandı', 'Pasif']
 const healthOptions = ['Hepsi', 'Yeşil', 'Sarı', 'Kırmızı', 'Gri']
+const activeOptions = ['Hepsi', 'Devam Ediyor', 'İptal Edildi']
 const budgetSortOptions = ['Yok', 'Artan', 'Azalan']
 const finishSortOptions = ['Yok', 'Artan', 'Azalan']
 
@@ -15,13 +16,6 @@ const finishSortOptions = ['Yok', 'Artan', 'Azalan']
 const statusFormOptions = ['Taslak', 'Aktif', 'Beklemede', 'Tamamlandı', 'Pasif']
 const healthFormOptions = ['Yeşil', 'Sarı', 'Kırmızı', 'Gri']
 const currencyOptions = ['TRY', 'USD', 'EUR']
-
-const budgetOrder = {
-  'Yetersiz': 1,
-  'Dengeli': 2,
-  'Yeterli': 3,
-  'Aşılmış': 4,
-}
 
 // 🎨 Rozet Stilleri
 const getHealthBadgeStyle = (health) => {
@@ -50,6 +44,21 @@ const getProjectFinishDate = (project) => {
   const rawDate = project.forecastFinishDate || project.baselineFinishDate
   if (!rawDate) return ''
   return rawDate.split('T')[0]
+}
+
+const getProjectIsActiveFlag = (project) => {
+  const rawValue = project.isActive ?? project.IsActive
+  if (rawValue === undefined || rawValue === null || rawValue === '') return 1
+  if (typeof rawValue === 'boolean') return rawValue ? 1 : 0
+  const parsedNumber = Number(rawValue)
+  if (!Number.isNaN(parsedNumber)) return parsedNumber
+  const normalized = String(rawValue).trim().toLowerCase()
+  if (['0', 'false', 'pasif', 'iptal', 'inactive'].includes(normalized)) return 0
+  return 1
+}
+
+const getActiveLabel = (project) => {
+  return getProjectIsActiveFlag(project) === 0 ? 'İptal Edildi' : 'Devam Ediyor'
 }
 
 // Boş Form Başlangıç Durumu
@@ -87,6 +96,8 @@ function ProjectsPage() {
   
   // 📊 Excel Import State
   const [isImporting, setIsImporting] = useState(false)
+  const canCreate = canCreateProject()
+  const canImport = isSystemAdmin()
 
   // --- MODAL & FORM STATE'LERİ ---
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -101,6 +112,8 @@ function ProjectsPage() {
     code: '',
     progress: 'Hepsi',
     health: 'Hepsi',
+    isActive: 'Hepsi',
+    manager: '',
     budgetSort: 'Yok',
     finish: '',
     finishSort: 'Yok',
@@ -127,20 +140,15 @@ function ProjectsPage() {
       const data = await projectService.getProjects()
       setRawProjects(Array.isArray(data) ? data : [])
       setError(null)
-    } catch (err) {
-      console.error('Projeler çekilirken hata oluştu:', err)
+    } catch (error) {
+      console.error('Projeler çekilirken hata oluştu:', error)
       setError('Projeler yüklenemedi. Lütfen bağlantınızı kontrol edin.')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchProjects()
-    fetchAuxData()
-  }, [])
-
-  const fetchAuxData = async () => {
+  async function fetchAuxData() {
     try {
       const [programData, customerData, userData] = await Promise.all([
         projectService.getPrograms(),
@@ -160,6 +168,35 @@ function ProjectsPage() {
     }
   }
 
+  useEffect(() => {
+    void fetchProjects()
+    void fetchAuxData()
+  }, [])
+
+  const getProjectManagerInfo = useCallback((project) => {
+    const managerId = project.projectManagerUserId || project.projectManagerId || project.ProjectManagerUserId || ''
+    const directName = project.projectManagerFullName || project.ProjectManagerFullName || project.projectManagerName || project.ProjectManagerName || ''
+
+    if (directName) {
+      return { name: directName, id: managerId || '-' }
+    }
+
+    const managerUser = users.find((user) => {
+      const candidateId = user.userId || user.UserId || user.id || user.Id
+      return candidateId && candidateId === managerId
+    })
+
+    if (managerUser) {
+      const fullName = managerUser.fullName || managerUser.FullName || managerUser.userName || managerUser.UserName || '-'
+      return { name: fullName, id: managerId || managerUser.userId || managerUser.UserId || '-' }
+    }
+
+    return {
+      name: '-',
+      id: managerId || '-'
+    }
+  }, [users])
+
   // 🔍 Filtreleme ve Sıralama
   const filteredProjects = useMemo(() => {
     return rawProjects
@@ -169,11 +206,18 @@ function ProjectsPage() {
         const pProgress = project.projectStatus || ''
         const pHealth = project.manualHealth || ''
         const pFinish = getProjectFinishDate(project)
+        const managerInfo = getProjectManagerInfo(project)
 
         if (filters.name && !pName.toLowerCase().includes(filters.name.toLowerCase())) return false
         if (filters.code && !pCode.toLowerCase().includes(filters.code.toLowerCase())) return false
         if (filters.progress !== 'Hepsi' && pProgress !== filters.progress) return false
         if (filters.health !== 'Hepsi' && pHealth !== filters.health) return false
+        if (filters.isActive !== 'Hepsi') {
+          const isActiveFlag = Number(project.isActive ?? project.IsActive ?? 1)
+          if (filters.isActive === 'Devam Ediyor' && isActiveFlag !== 1) return false
+          if (filters.isActive === 'İptal Edildi' && isActiveFlag !== 0) return false
+        }
+        if (filters.manager && managerInfo.id !== filters.manager) return false
         if (filters.finish && pFinish !== filters.finish) return false
 
         return true
@@ -198,7 +242,7 @@ function ProjectsPage() {
 
         return 0
       })
-  }, [rawProjects, filters])
+  }, [rawProjects, filters, getProjectManagerInfo])
 
   const totalPages = Math.max(1, Math.ceil(filteredProjects.length / pageSize))
   const paginatedProjects = useMemo(() => {
@@ -206,17 +250,13 @@ function ProjectsPage() {
     return filteredProjects.slice(startIndex, startIndex + pageSize)
   }, [filteredProjects, currentPage])
 
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [filters, rawProjects])
-
   // --- MODAL İŞLEMLERİ ---
   const handleOpenCreateModal = () => {
     setEditingProjectId(null)
-    setFormData(prev => ({
+    setFormData({
       ...initialFormState,
       programId: programs[0]?.programId || ''
-    }))
+    })
     setModalError('')
     setIsModalOpen(true)
   }
@@ -252,7 +292,8 @@ function ProjectsPage() {
         isActive: detail.isActive !== undefined ? Number(detail.isActive) : 1
       })
       setIsModalOpen(true)
-    } catch (err) {
+    } catch (error) {
+      console.error('Proje detayları alınırken bir hata oluştu:', error)
       addAlert('Proje detayları alınırken bir hata oluştu.', 'error')
     }
   }
@@ -311,8 +352,8 @@ function ProjectsPage() {
       handleModalClose()
       fetchProjects()
       addAlert(editingProjectId ? 'Proje başarıyla güncellendi.' : 'Yeni proje başarıyla eklendi.', 'success')
-    } catch (err) {
-      const apiErrorMessage = err.response?.data?.message || err.message || 'İşlem sırasında bir hata oluştu.'
+    } catch (error) {
+      const apiErrorMessage = error?.response?.data?.message || error?.message || 'İşlem sırasında bir hata oluştu.'
       setModalError(apiErrorMessage)
     } finally {
       setFormSubmitting(false)
@@ -371,7 +412,7 @@ function ProjectsPage() {
     setCurrentPage(1)
   }
   const resetFilters = () => {
-    const empty = { name: '', code: '', progress: 'Hepsi', health: 'Hepsi', budgetSort: 'Yok', finish: '', finishSort: 'Yok' }
+    const empty = { name: '', code: '', progress: 'Hepsi', health: 'Hepsi', isActive: 'Hepsi', manager: '', budgetSort: 'Yok', finish: '', finishSort: 'Yok' }
     setDraftFilters(empty)
     setFilters(empty)
     setCurrentPage(1)
@@ -401,18 +442,21 @@ function ProjectsPage() {
             style={{ display: 'none' }} 
             onChange={handleExcelImport} 
           />
-          <button 
-            className="import-project-btn" 
-            onClick={() => fileInputRef.current?.click()} 
-            disabled={isImporting}
-            style={{ backgroundColor: '#10b981', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-          >
-            {isImporting ? '⏳ Aktarılıyor...' : '📂 Excel İçe Aktar'}
-          </button>
-          
-          <button className="add-project-btn" onClick={handleOpenCreateModal}>
-            + Yeni Proje Oluştur
-          </button>
+          {canImport && (
+            <button 
+              className="import-project-btn" 
+              onClick={() => fileInputRef.current?.click()} 
+              disabled={isImporting}
+              style={{ backgroundColor: '#10b981', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              {isImporting ? '⏳ Aktarılıyor...' : '📂 Excel İçe Aktar'}
+            </button>
+          )}
+          {canCreate && (
+            <button className="add-project-btn" onClick={handleOpenCreateModal}>
+              + Yeni Proje Oluştur
+            </button>
+          )}
         </div>
       </div>
 
@@ -446,6 +490,23 @@ function ProjectsPage() {
           <label>Sağlık</label>
           <select value={draftFilters.health} onChange={(e) => handleFilterChange('health', e.target.value)}>
             {healthOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div className="filter-item">
+          <label>Aktiflik</label>
+          <select value={draftFilters.isActive} onChange={(e) => handleFilterChange('isActive', e.target.value)}>
+            {activeOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div className="filter-item">
+          <label>Yönetici</label>
+          <select value={draftFilters.manager} onChange={(e) => handleFilterChange('manager', e.target.value)}>
+            <option value="">Hepsi</option>
+            {users.map((user) => {
+              const userId = user.userId || user.UserId || user.id || user.Id
+              const userName = user.fullName || user.FullName || user.userName || user.UserName || userId
+              return <option key={userId} value={userId}>{userName}</option>
+            })}
           </select>
         </div>
         <div className="filter-item">
@@ -484,7 +545,9 @@ function ProjectsPage() {
             <th>Proje Adı</th>
             <th>Proje Kodu</th>
             <th>Durum</th>
+            <th>Aktiflik</th>
             <th>Sağlık</th>
+            <th>Yönetici</th>
             <th>Bütçe</th>
             <th>Bitiş Tarihi</th>
             <th style={{ textAlign: 'center' }}>İşlemler</th>
@@ -492,11 +555,12 @@ function ProjectsPage() {
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>Yükleniyor...</td></tr>
+            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>Yükleniyor...</td></tr>
           ) : filteredProjects.length > 0 ? (
             paginatedProjects.map((project) => {
               const healthStyle = getHealthBadgeStyle(project.manualHealth)
               const progressStyle = getProgressBadgeStyle(project.projectStatus)
+              const managerInfo = getProjectManagerInfo(project)
 
               return (
                 <tr
@@ -512,27 +576,38 @@ function ProjectsPage() {
                     </span>
                   </td>
                   <td>
+                    <span style={{ backgroundColor: getProjectIsActiveFlag(project) === 0 ? '#fee2e2' : '#dcfce7', color: getProjectIsActiveFlag(project) === 0 ? '#991b1b' : '#166534', padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold' }}>
+                      {getActiveLabel(project)}
+                    </span>
+                  </td>
+                  <td>
                     <span style={{ backgroundColor: healthStyle.bg, color: healthStyle.text, padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold' }}>
                       {project.manualHealth || '-'}
                     </span>
+                  </td>
+                  <td className="manager-cell">
+                    <div className="manager-name">{managerInfo.name}</div>
+                    <div className="manager-id">{managerInfo.id}</div>
                   </td>
                   <td>{formatCurrency(project.bac ?? project.Bac, project.currency ?? project.Currency)}</td>
                   <td>{formatDate(project.forecastFinishDate || project.baselineFinishDate)}</td>
                   
                   {/* DÜZENLEME BUTONU */}
                   <td style={{ textAlign: 'center' }}>
-                    <button
-                      className="edit-action-btn"
-                      onClick={(e) => handleOpenEditModal(e, project)}
-                    >
-                      ✏️ Düzenle
-                    </button>
+                    {canEditProject(project) ? (
+                      <button
+                        className="edit-action-btn"
+                        onClick={(e) => handleOpenEditModal(e, project)}
+                      >
+                        ✏️ Düzenle
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               )
             })
           ) : (
-            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>Uygun proje bulunamadı.</td></tr>
+            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>Uygun proje bulunamadı.</td></tr>
           )}
         </tbody>
       </table>
@@ -645,8 +720,8 @@ function ProjectsPage() {
                   value={formData.isActive} 
                   onChange={(e) => handleFormChange('isActive', Number(e.target.value))}
                 >
-                  <option value={1}>Aktif (1)</option>
-                  <option value={0}>Pasif (0)</option>
+                  <option value={1}>Aktif, Devam Ediyor (1)</option>
+                  <option value={0}>İptal Edildi (0)</option>
                 </select>
               </div>
 
