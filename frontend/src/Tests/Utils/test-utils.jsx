@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-
+import { AlertProvider } from '../../components/AlertProvider'
 function renderWithRouter(
   ui,
   {
@@ -14,7 +14,9 @@ function renderWithRouter(
 
   const result = render(
     <MemoryRouter initialEntries={initialEntries}>
-      {ui}
+      <AlertProvider>
+        {ui}
+      </AlertProvider>
     </MemoryRouter>,
     renderOptions,
   )

@@ -4,16 +4,8 @@ import { Route, Routes, useParams } from 'react-router-dom'
 import {
   renderWithRouter,
   screen,
-  within,
-} from '../utils/test-utils'
-import {
-  renderWithRouter,
-  screen,
-} from '../utils/test-utils'
-import {
-  renderWithRouter,
-  screen,
   userEvent,
+  within,
 } from '../utils/test-utils'
 import { projects } from '../fixtures/projects'
 import { server } from '../mocks/server'
@@ -135,7 +127,9 @@ it('Portföy dashboardunda yönergede istenen filtre kontrollerini göstermelidi
 
   const { container } = renderWithRouter(<HomePage />)
 
-  await screen.findByText(projects[0].projectCode)
+  await screen.findByRole('cell', {
+  name: projects[0].projectCode,
+  })
 
   const projectSelect = container.querySelector(
     'select[name="projectCode"]',

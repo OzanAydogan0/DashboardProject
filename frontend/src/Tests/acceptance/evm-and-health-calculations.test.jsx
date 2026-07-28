@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { expect, it } from 'vitest'
 import { HttpResponse, http } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import {

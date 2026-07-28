@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { expect, it } from 'vitest'
 import { HttpResponse, http } from 'msw'
 import { Route, Routes, useParams } from 'react-router-dom'
 import {
@@ -10,6 +9,7 @@ import {
 import { projects } from '../fixtures/projects'
 import { server } from '../mocks/server'
 import ProjectsPage from '../../pages/ProjectsPage'
+import ProjectDetailPage from '../../pages/ProjectDetailPage'
 
 const PROJECTS_URL = 'http://localhost:5074/projects'
 
@@ -24,7 +24,6 @@ function ProjectDetailRoute() {
   )
 }
 
-const PROJECTS_URL = 'http://localhost:5074/projects'
 
 const PROJECT_ID = 'project-1'
 

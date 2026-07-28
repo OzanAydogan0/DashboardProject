@@ -1,6 +1,0 @@
-describe('ProjectDetailTabs')
-describe('RiskTable')
-describe('EvmSummary')
-describe('MilestoneTable')
-describe('MilestoneTimeline')
-describe('PirReportForm')

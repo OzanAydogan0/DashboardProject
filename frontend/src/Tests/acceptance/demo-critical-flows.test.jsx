@@ -1,5 +1,5 @@
-import { expect, it } from 'vitest'
 import { HttpResponse, http } from 'msw'
+import { expect, it } from 'vitest'
 import {
   renderWithRouter,
   screen,

@@ -1,2 +1,0 @@
-describe('ProjectsFilterForm')
-describe('ProjectsTable')
