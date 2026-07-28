@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+// ✅ Doğru kullanım:
 import { useParams } from 'react-router-dom';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
@@ -30,6 +31,7 @@ const ProjectRisksPage = () => {
     const { addAlert } = useAlert();
 
     const [risks, setRisks] = useState([]);
+    const [users, setUsers] = useState([]); // 📌 EKLENDİ: Kullanıcı listesini tutacak state
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [form, setForm] = useState(emptyForm);
@@ -39,6 +41,7 @@ const ProjectRisksPage = () => {
     const [canWrite, setCanWrite] = useState(false);
     const [showRiskModal, setShowRiskModal] = useState(false);
 
+    // Risk verilerini getiren fonksiyon
     const fetchRisks = async () => {
         try {
             setLoading(true);
@@ -50,6 +53,17 @@ const ProjectRisksPage = () => {
             setError(backendMessage);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // 📌 EKLENDİ: Veritabanından kullanıcı listesini çeken fonksiyon
+    const fetchUsers = async () => {
+        try {
+            // Servisinizde kullanıcıları getiren metodu çağırıyoruz
+            const userData = await projectService.getUsers(); 
+            setUsers(Array.isArray(userData) ? userData : []);
+        } catch (err) {
+            console.error('Kullanıcı listesi alınamadı:', err);
         }
     };
 
@@ -66,6 +80,7 @@ const ProjectRisksPage = () => {
 
         if (projectId) {
             fetchRisks();
+            fetchUsers(); // 📌 Sayfa yüklendiğinde kullanıcı listesini çekiyoruz
         }
     }, [projectId]);
 
@@ -186,10 +201,6 @@ const ProjectRisksPage = () => {
                     <div className="permission-note">Bu projede risk ekleme/düzenleme yetkiniz bulunmuyor.</div>
                 )}
 
-                <div className="table-description">
-                    Bu tabloda proje risklerinin başlığı, kategorisi, olasılığı, etkisi, skoru, azaltım/müdahale bilgisi ve sorumlusu görüntülenir.
-                </div>
-
                 {showRiskModal && canWrite && (
                     <div className="risk-modal-overlay" onClick={closeRiskModal}>
                         <div className="risk-modal" onClick={(e) => e.stopPropagation()}>
@@ -240,10 +251,29 @@ const ProjectRisksPage = () => {
                                         <span>Bitiş Tarihi</span>
                                         <input type="date" name="riskDueDate" value={form.riskDueDate} onChange={handleInputChange} />
                                     </label>
+                                    
+                                    {/* 📌 GÜNCELLENEN ALAN: Sorumlu Kullanıcı Dropdown Menüsü */}
                                     <label className="full-width">
-                                        <span>Sorumlu Kullanıcı ID</span>
-                                        <input name="riskOwnerUserId" value={form.riskOwnerUserId} onChange={handleInputChange} />
+                                        <span>Sorumlu Kullanıcı</span>
+                                        <select 
+                                            name="riskOwnerUserId" 
+                                            value={form.riskOwnerUserId} 
+                                            onChange={handleInputChange}
+                                            required
+                                        >
+                                            <option value="">-- Sorumlu Seçiniz --</option>
+                                            {users.map((u) => {
+                                                const userId = u.userId || u.UserId || u.id;
+                                                const userName = u.fullName || u.FullName || u.userName || u.name || userId;
+                                                return (
+                                                    <option key={userId} value={userId}>
+                                                        {userName}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
                                     </label>
+
                                     <label className="full-width">
                                         <span>Azaltım / Müdahale</span>
                                         <textarea name="riskMitigation" value={form.riskMitigation} onChange={handleInputChange} rows="3" />
