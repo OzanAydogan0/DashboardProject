@@ -51,7 +51,7 @@ public static class DashboardEndpoints
                 v.ProjectCode,
                 v.ProjectName,
                 v.ProjectStatus,
-                v.ManualHealth,
+                HealthStatusHelper.Normalize(v.ManualHealth),
                 v.PlannedProgress,
                 v.ActualProgress,
                 v.BaselineFinishDate,

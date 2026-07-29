@@ -97,7 +97,8 @@ public static class GovernanceEndpoints
             var result = pirs.Select(p => new PirReportDto(
                 p.PirReportId, p.ProjectId, p.ProjectCode, p.ProjectName, p.Period,
                 p.ReportDate, p.ExecutiveSummary, p.CompletedWork, p.Delays,
-                p.NextPeriodPlan, p.ManagementExpectations, p.ManualHealth, p.ReportStatus, p.PublishedAt
+                p.NextPeriodPlan, p.ManagementExpectations, HealthStatusHelper.Normalize(p.ManualHealth),
+                p.ReportStatus, p.PublishedAt
             )).ToList();
 
             return Results.Ok(result);
@@ -126,7 +127,7 @@ public static class GovernanceEndpoints
                 Delays = request.Delays,
                 NextPeriodPlan = request.NextPeriodPlan,
                 ManagementExpectations = request.ManagementExpectations,
-                ManualHealth = request.ManualHealth,
+                ManualHealth = HealthStatusHelper.ToStorageValue(request.ManualHealth),
                 ReportStatus = request.ReportStatus,
                 PublishedByUserId = request.ReportStatus == "Yayımlandı" ? userId : null,
                 PublishedAt = request.ReportStatus == "Yayımlandı" ? DateTime.UtcNow : null,
@@ -165,7 +166,8 @@ public static class GovernanceEndpoints
             if (request.Delays is not null) existingPir.Delays = request.Delays;
             if (request.NextPeriodPlan is not null) existingPir.NextPeriodPlan = request.NextPeriodPlan;
             if (request.ManagementExpectations is not null) existingPir.ManagementExpectations = request.ManagementExpectations;
-            if (request.ManualHealth is not null) existingPir.ManualHealth = request.ManualHealth;
+            if (request.ManualHealth is not null)
+                existingPir.ManualHealth = HealthStatusHelper.ToStorageValue(request.ManualHealth);
             if (request.ReportStatus is not null) existingPir.ReportStatus = request.ReportStatus;
 
             if (request.ReportStatus == "Yayımlandı")
@@ -215,6 +217,8 @@ public static class GovernanceEndpoints
     if (reportData == null) 
         return Results.NotFound(new { message = "Rapor bulunamadı." });
 
+    reportData.ManualHealth = HealthStatusHelper.Normalize(reportData.ManualHealth);
+
     // 2. İlişkili Proje verilerini (Bütçe ve İlerleme) çek
     var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == reportData.ProjectId);
 
@@ -251,6 +255,8 @@ public static class GovernanceEndpoints
     var reportData = await db.Set<VwPir>().FirstOrDefaultAsync(p => p.PirReportId == id);
     if (reportData == null) 
         return Results.NotFound(new { message = "Rapor bulunamadı." });
+
+    reportData.ManualHealth = HealthStatusHelper.Normalize(reportData.ManualHealth);
 
     var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == reportData.ProjectId);
 

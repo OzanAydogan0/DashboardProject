@@ -203,9 +203,9 @@ public static class RiskEndpoints
     {
         var riskHealth = risk.RiskScore switch
         {
-            <= 4 => "Yeşil",
-            <= 15 => "Sarı",
-            _ => "Kırmızı"
+            <= 4 => HealthStatusHelper.Good,
+            <= 15 => HealthStatusHelper.Medium,
+            _ => HealthStatusHelper.Critical
         };
 
         return new RiskDto(

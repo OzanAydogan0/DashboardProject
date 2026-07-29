@@ -159,6 +159,14 @@ importProjectsExcel: (formData) => {
     return response.data;
   },
 
+  importProjectRisksExcel: (projectId, formData) => {
+    return api.post(`/projects/${projectId}/risks/import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
   // --- Sorunlar (Issues) ---
   getProjectIssues: async (projectId) => {
     const response = await api.get(`/projects/${projectId}/issues`);

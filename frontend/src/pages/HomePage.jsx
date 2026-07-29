@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { projectService } from '../services/projectService'
 import { useAlert } from '../components/AlertProvider'
+import { HEALTH_STATUS, HEALTH_STATUS_OPTIONS, normalizeHealthStatus } from '../utils/healthStatus'
 import './HomePage.css'
 
 function HomePage() {
@@ -92,7 +93,7 @@ function HomePage() {
       const matchCode = !filters.projectCode || p.projectCode === filters.projectCode
       const matchHealth =
         !filters.health ||
-        (p.manualHealth || '').toLowerCase().includes(filters.health.toLowerCase())
+        normalizeHealthStatus(p.manualHealth) === filters.health
       const matchStatus = !filters.status || p.projectStatus === filters.status
 
       return matchCode && matchHealth && matchStatus
@@ -125,6 +126,7 @@ function HomePage() {
         redProjects: 0,
         greenProjects: 0,
         yellowProjects: 0,
+        uncertainProjects: 0,
         delayedProjects: 0,
         avgPlannedProgress: 0,
         avgActualProgress: 0,
@@ -133,15 +135,16 @@ function HomePage() {
       }
     }
 
-    let red = 0, green = 0, yellow = 0
+    let red = 0, green = 0, yellow = 0, uncertain = 0
     let sumPlanned = 0, sumActual = 0
     let totalRisks = 0, totalActions = 0, delayedCount = 0
 
     filteredProjects.forEach((p) => {
-      const h = (p.manualHealth || '').toLowerCase()
-      if (h.includes('kırmızı') || h.includes('kirmizi') || h.includes('red')) red++
-      else if (h.includes('sarı') || h.includes('sari') || h.includes('yellow')) yellow++
-      else if (h.includes('yeşil') || h.includes('yesil') || h.includes('green')) green++
+      const health = normalizeHealthStatus(p.manualHealth)
+      if (health === HEALTH_STATUS.CRITICAL) red++
+      else if (health === HEALTH_STATUS.MEDIUM) yellow++
+      else if (health === HEALTH_STATUS.GOOD) green++
+      else uncertain++
 
       const planned = p.plannedProgress || 0
       const actual = p.actualProgress || 0
@@ -160,6 +163,7 @@ function HomePage() {
       redProjects: red,
       greenProjects: green,
       yellowProjects: yellow,
+      uncertainProjects: uncertain,
       delayedProjects: delayedCount,
       avgPlannedProgress: Math.round(sumPlanned / total),
       avgActualProgress: Math.round(sumActual / total),
@@ -169,14 +173,16 @@ function HomePage() {
   }, [filteredProjects])
 
   // 🍩 DONUT GRAFİK SVG MATEMATİĞİ
-  const totalHealth = kpis.greenProjects + kpis.yellowProjects + kpis.redProjects || 1
+  const totalHealth = kpis.greenProjects + kpis.yellowProjects + kpis.redProjects + kpis.uncertainProjects || 1
   const greenPct = (kpis.greenProjects / totalHealth) * 100
   const yellowPct = (kpis.yellowProjects / totalHealth) * 100
   const redPct = (kpis.redProjects / totalHealth) * 100
+  const uncertainPct = (kpis.uncertainProjects / totalHealth) * 100
 
   const greenOffset = 25
   const yellowOffset = 25 - greenPct
   const redOffset = 25 - greenPct - yellowPct
+  const uncertainOffset = 25 - greenPct - yellowPct - redPct
 
   // 📅 Tarih Sapma Hesaplama (Baseline Finish vs Forecast Finish)
   const calculateDeviation = (baselineStr, forecastStr) => {
@@ -244,9 +250,9 @@ function HomePage() {
         <div className="filter-item">
           <select name="health" value={filters.health} onChange={handleFilterChange}>
             <option value="">Tüm Sağlık Durumları</option>
-            <option value="Yeşil">Yeşil</option>
-            <option value="Sarı">Sarı</option>
-            <option value="Kırmızı">Kırmızı</option>
+            {HEALTH_STATUS_OPTIONS.map(health => (
+              <option key={health} value={health}>{health}</option>
+            ))}
           </select>
         </div>
 
@@ -342,26 +348,33 @@ function HomePage() {
           <div className="donut-chart-wrapper">
             <div className="donut-relative">
               <svg viewBox="0 0 42 42" className="donut-svg">
-                {/* Yeşil Dilim */}
+                {/* İyi */}
                 <circle
                   cx="21" cy="21" r="15.915" fill="transparent"
                   stroke="#10B981" strokeWidth="4.5"
                   strokeDasharray={`${greenPct} ${100 - greenPct}`}
                   strokeDashoffset={greenOffset}
                 />
-                {/* Sarı Dilim */}
+                {/* Orta */}
                 <circle
                   cx="21" cy="21" r="15.915" fill="transparent"
                   stroke="#F59E0B" strokeWidth="4.5"
                   strokeDasharray={`${yellowPct} ${100 - yellowPct}`}
                   strokeDashoffset={yellowOffset}
                 />
-                {/* Kırmızı Dilim */}
+                {/* Kritik */}
                 <circle
                   cx="21" cy="21" r="15.915" fill="transparent"
                   stroke="#EF4444" strokeWidth="4.5"
                   strokeDasharray={`${redPct} ${100 - redPct}`}
                   strokeDashoffset={redOffset}
+                />
+                {/* Belirsiz */}
+                <circle
+                  cx="21" cy="21" r="15.915" fill="transparent"
+                  stroke="#94A3B8" strokeWidth="4.5"
+                  strokeDasharray={`${uncertainPct} ${100 - uncertainPct}`}
+                  strokeDashoffset={uncertainOffset}
                 />
               </svg>
               <div className="donut-center-text">
@@ -371,9 +384,10 @@ function HomePage() {
             </div>
 
             <div className="chart-legend">
-              <div className="legend-item"><span className="dot green"></span> Yeşil ({kpis.greenProjects})</div>
-              <div className="legend-item"><span className="dot yellow"></span> Sarı ({kpis.yellowProjects})</div>
-              <div className="legend-item"><span className="dot red"></span> Kırmızı ({kpis.redProjects})</div>
+              <div className="legend-item"><span className="dot green"></span> İyi ({kpis.greenProjects})</div>
+              <div className="legend-item"><span className="dot yellow"></span> Orta ({kpis.yellowProjects})</div>
+              <div className="legend-item"><span className="dot red"></span> Kritik ({kpis.redProjects})</div>
+              <div className="legend-item"><span className="dot gray"></span> Belirsiz ({kpis.uncertainProjects})</div>
             </div>
           </div>
         </div>
@@ -479,7 +493,7 @@ function HomePage() {
               ) : filteredProjects.length > 0 ? (
                 paginatedProjects.map((prj) => {
                   const deviation = calculateDeviation(prj.baselineFinishDate, prj.forecastFinishDate)
-                  const healthStr = prj.manualHealth || 'Yeşil'
+                  const healthStr = normalizeHealthStatus(prj.manualHealth)
 
                   return (
                     <tr key={prj.projectId || prj.projectCode}>
@@ -503,7 +517,7 @@ function HomePage() {
                       <td className={prj.openIssueCount > 0 ? 'text-orange fw-bold' : ''}>{prj.openIssueCount || 0}</td>
                       <td>{deviation}</td>
                       <td>
-                        <span className={`badge-health badge-${healthStr.toLowerCase()}`}>
+                        <span className={`badge-health badge-${healthStr.toLocaleLowerCase('tr-TR')}`}>
                           ● {healthStr}
                         </span>
                       </td>

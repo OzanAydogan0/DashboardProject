@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { projectService } from '../services/projectService'
 import { useAlert } from '../components/AlertProvider'
+import { normalizeHealthStatus } from '../utils/healthStatus'
 import './ProjectDetailPage.css'
 import MileStone from './MileStonePage'
 import ProjectRisksPage from './ProjectRisksPage'
@@ -138,6 +139,7 @@ function ProjectDetailPage() {
   const finishVarianceDays = project.forecastFinishDate && project.baselineFinishDate 
     ? Math.floor((new Date(project.forecastFinishDate) - new Date(project.baselineFinishDate)) / (1000 * 60 * 60 * 24))
     : '-'
+  const healthStatus = normalizeHealthStatus(project.manualHealth)
 
   const latestReport = subData.reports.find(r => r.status === 'Yayımlandı') || subData.reports[0]
   const executiveSummaryText = latestReport?.executiveSummary || 'Bu proje için henüz yayımlanmış bir PİR dönemi özeti bulunmamaktadır.'
@@ -251,7 +253,7 @@ function ProjectDetailPage() {
             <div className="kpi-card hover-lift"><div className="kpi-details"><h3>SPI (Zaman Performansı)</h3><p className={`kpi-value ${getSpiCpiClass(spi)}`}>{spi}</p></div></div>
             <div className="kpi-card hover-lift"><div className="kpi-details"><h3>CPI (Maliyet Performansı)</h3><p className={`kpi-value ${getSpiCpiClass(cpi)}`}>{cpi}</p></div></div>
             <div className="kpi-card hover-lift"><div className="kpi-details"><h3>Bitiş Sapması</h3><p className={`kpi-value ${getFinishVarianceClass(finishVarianceDays)}`}>{finishVarianceDays !== '-' ? `${finishVarianceDays} Gün` : '-'}</p></div></div>
-            <div className="kpi-card hover-lift"><div className="kpi-details"><h3>Sağlık Durumu</h3><div className="kpi-value"><span className={`badge-health badge-${(project.manualHealth || 'yesil').toLowerCase()}`}>{project.manualHealth || 'Yeşil'}</span></div></div></div>
+            <div className="kpi-card hover-lift"><div className="kpi-details"><h3>Sağlık Durumu</h3><div className="kpi-value"><span className={`badge-health badge-${healthStatus.toLocaleLowerCase('tr-TR')}`}>{healthStatus}</span></div></div></div>
           </div>
 
           {/* DÜZEN: YÖNETİCİ ÖZETİ VE EVM KARTLARI */}

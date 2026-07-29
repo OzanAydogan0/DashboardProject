@@ -1,20 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
+import {
+    canWriteProject,
+    getAssignableProjectUsers,
+    getDefaultProjectAssigneeId,
+    getUserRecordId,
+    getValidProjectAssigneeId,
+} from '../utils/permissionHelper';
 import { usePagination } from '../utils/usePagination';
 import './ProjectRisksPage.css';
-
-const getCurrentUserId = () => {
-    try {
-        const userString = localStorage.getItem('user');
-        const user = userString ? JSON.parse(userString) : null;
-        return user?.userId || user?.UserId || user?.id || '';
-    } catch {
-        return '';
-    }
-};
 
 const emptyForm = {
     riskTitle: '',
@@ -24,12 +21,13 @@ const emptyForm = {
     riskStatus: 'Açık',
     riskDueDate: '',
     riskMitigation: '',
-    riskOwnerUserId: getCurrentUserId()
+    riskOwnerUserId: ''
 };
 
 const ProjectRisksPage = () => {
     const { id: projectId } = useParams();
     const { addAlert } = useAlert();
+    const fileInputRef = useRef(null);
 
     const [risks, setRisks] = useState([]);
     const [users, setUsers] = useState([]); // 📌 EKLENDİ: Kullanıcı listesini tutacak state
@@ -39,8 +37,9 @@ const ProjectRisksPage = () => {
     const [editingRiskId, setEditingRiskId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDeletingId, setIsDeletingId] = useState(null);
-    const [canWrite, setCanWrite] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [showRiskModal, setShowRiskModal] = useState(false);
+    const canWrite = canWriteProject();
     const riskPagination = usePagination(risks);
 
     // Risk verilerini getiren fonksiyon
@@ -63,27 +62,22 @@ const ProjectRisksPage = () => {
         try {
             // Servisinizde kullanıcıları getiren metodu çağırıyoruz
             const userData = await projectService.getUsers(); 
-            setUsers(Array.isArray(userData) ? userData : []);
+            setUsers(getAssignableProjectUsers(userData));
         } catch (err) {
             console.error('Kullanıcı listesi alınamadı:', err);
         }
     };
 
-    useEffect(() => {
-        const userString = localStorage.getItem('user');
-        try {
-            const user = userString ? JSON.parse(userString) : null;
-            const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || '';
-            const isExecutive = ['Üst Yönetim İzleyicisi', 'Üst Yönetim'].includes(userRole);
-            setCanWrite(!isExecutive);
-        } catch {
-            setCanWrite(false);
-        }
+    const loadProjectData = useEffectEvent(() => {
+        void fetchRisks();
+        void fetchUsers();
+    });
 
-        if (projectId) {
-            fetchRisks();
-            fetchUsers(); // 📌 Sayfa yüklendiğinde kullanıcı listesini çekiyoruz
-        }
+    useEffect(() => {
+        if (!projectId) return undefined;
+
+        const timeoutId = window.setTimeout(loadProjectData, 0);
+        return () => window.clearTimeout(timeoutId);
     }, [projectId]);
 
     const getScoreColor = (score) => {
@@ -101,7 +95,7 @@ const ProjectRisksPage = () => {
         setEditingRiskId(null);
         setForm({
             ...emptyForm,
-            riskOwnerUserId: getCurrentUserId()
+            riskOwnerUserId: getDefaultProjectAssigneeId(users)
         });
     };
 
@@ -129,7 +123,7 @@ const ProjectRisksPage = () => {
                 riskProbability: Number(form.riskProbability),
                 riskImpact: Number(form.riskImpact),
                 riskDueDate: form.riskDueDate ? new Date(form.riskDueDate).toISOString() : null,
-                riskOwnerUserId: form.riskOwnerUserId || getCurrentUserId(),
+                riskOwnerUserId: form.riskOwnerUserId,
             };
 
             if (editingRiskId) {
@@ -161,7 +155,7 @@ const ProjectRisksPage = () => {
             riskStatus: risk.riskStatus || 'Açık',
             riskDueDate: risk.riskDueDate ? new Date(risk.riskDueDate).toISOString().slice(0, 10) : '',
             riskMitigation: risk.riskMitigation || '',
-            riskOwnerUserId: risk.riskOwnerUserId || getCurrentUserId()
+            riskOwnerUserId: getValidProjectAssigneeId(users, risk.riskOwnerUserId)
         });
         setShowRiskModal(true);
     };
@@ -185,6 +179,46 @@ const ProjectRisksPage = () => {
         }
     };
 
+    const handleExcelImport = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file || !projectId) return;
+
+        setIsImporting(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await projectService.importProjectRisksExcel(projectId, formData);
+            const result = response.data || response;
+            const isSuccess = result.success ?? result.Success;
+            const importedCount = result.totalImported ?? result.TotalImported ?? 0;
+            const failedCount = result.totalFailed ?? result.TotalFailed ?? 0;
+            const errors = result.errors ?? result.Errors ?? [];
+
+            if (isSuccess && failedCount === 0) {
+                addAlert(`Excel içe aktarma tamamlandı. Eklenen risk sayısı: ${importedCount}`, 'success');
+            } else {
+                const errorDetails = errors.length > 0 ? ` Hata detayları: ${errors.join(' • ')}` : '';
+                addAlert(
+                    `İşlem tamamlandı. Başarılı: ${importedCount}, Hatalı/Atlanan: ${failedCount}.${errorDetails}`,
+                    'info'
+                );
+            }
+
+            await fetchRisks();
+        } catch (err) {
+            const message = err.response?.data?.message || 'Excel dosyası yüklenirken sunucuda bir hata oluştu.';
+            addAlert(message, 'error');
+        } finally {
+            setIsImporting(false);
+            event.target.value = '';
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
     if (loading) return <div className="tab-content-wrapper fade-in"><p className="status-text">Risk verileri yükleniyor...</p></div>;
     if (error) return <div className="tab-content-wrapper fade-in"><p className="status-text error-text">Hata: {error}</p></div>;
 
@@ -194,9 +228,36 @@ const ProjectRisksPage = () => {
                 <div className="card-header project-risks-header">
                     <h2>Proje Risk Kayıtları</h2>
                     {canWrite && (
-                        <button type="button" className="btn-primary" onClick={openCreateModal}>
-                            Yeni Risk
-                        </button>
+                        <div className="project-risks-header-actions">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".xlsx"
+                                onChange={handleExcelImport}
+                                hidden
+                            />
+                            <button
+                                type="button"
+                                className="import-project-btn"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isImporting}
+                                title="Skor sütunu eklemeyin; skor Olasılık × Etki ile otomatik hesaplanır"
+                                style={{
+                                    backgroundColor: '#10b981',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '8px 16px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                {isImporting ? '⏳ Aktarılıyor...' : '📂 Excel İçe Aktar'}
+                            </button>
+                            <button type="button" className="btn-primary" onClick={openCreateModal}>
+                                Yeni Risk
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -266,7 +327,7 @@ const ProjectRisksPage = () => {
                                         >
                                             <option value="">-- Sorumlu Seçiniz --</option>
                                             {users.map((u) => {
-                                                const userId = u.userId || u.UserId || u.id;
+                                                const userId = getUserRecordId(u);
                                                 const userName = u.fullName || u.FullName || u.userName || u.name || userId;
                                                 return (
                                                     <option key={userId} value={userId}>

@@ -1,28 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
+import {
+    canWriteProject,
+    getAssignableProjectUsers,
+    getDefaultProjectAssigneeId,
+    getUserRecordId,
+    getValidProjectAssigneeId,
+} from '../utils/permissionHelper';
 import { usePagination } from '../utils/usePagination';
 import './ProjectActionsPage.css';
 
 const SOURCE_TYPES = ['Risk', 'Sorun', 'Kilometre Taşı', 'PIR', 'Yönetim Kararı', 'Diğer'];
 
-const getCurrentUserId = () => {
-    try {
-        const userString = localStorage.getItem('user');
-        const user = userString ? JSON.parse(userString) : null;
-        return user?.userId || user?.UserId || user?.id || '';
-    } catch {
-        return '';
-    }
-};
-
 const emptyForm = {
     actionDescription: '',
     sourceType: 'Risk',
     sourceReference: '',
-    actionOwnerUserId: getCurrentUserId(),
+    actionOwnerUserId: '',
     actionDueDate: '',
     actionStatus: 'Açık',
     actionProgress: 0,
@@ -42,8 +39,8 @@ function ProjectActionsPage() {
     const [showActionModal, setShowActionModal] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDeletingId, setIsDeletingId] = useState(null);
-    const [canWrite, setCanWrite] = useState(false);
     const actionPagination = usePagination(actions);
+    const canWrite = canWriteProject();
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
@@ -86,28 +83,23 @@ function ProjectActionsPage() {
     const fetchUsers = async () => {
         try {
             const userData = await projectService.getUsers();
-            setUsers(Array.isArray(userData) ? userData : []);
+            setUsers(getAssignableProjectUsers(userData));
         } catch (err) {
             console.error('Kullanıcı listesi alınamadı:', err);
             setUsers([]);
         }
     };
 
-    useEffect(() => {
-        const userString = localStorage.getItem('user');
-        try {
-            const user = userString ? JSON.parse(userString) : null;
-            const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || '';
-            const isExecutive = ['Üst Yönetim İzleyicisi', 'Üst Yönetim'].includes(userRole);
-            setCanWrite(!isExecutive);
-        } catch {
-            setCanWrite(false);
-        }
+    const loadProjectData = useEffectEvent(() => {
+        void fetchActions();
+        void fetchUsers();
+    });
 
-        if (projectId) {
-            fetchActions();
-            fetchUsers();
-        }
+    useEffect(() => {
+        if (!projectId) return undefined;
+
+        const timeoutId = window.setTimeout(loadProjectData, 0);
+        return () => window.clearTimeout(timeoutId);
     }, [projectId]);
 
     const handleInputChange = (e) => {
@@ -119,7 +111,7 @@ function ProjectActionsPage() {
         setEditingActionId(null);
         setForm({
             ...emptyForm,
-            actionOwnerUserId: getCurrentUserId()
+            actionOwnerUserId: getDefaultProjectAssigneeId(users)
         });
     };
 
@@ -158,7 +150,7 @@ function ProjectActionsPage() {
                 actionDescription: form.actionDescription,
                 sourceType: form.sourceType,
                 sourceReference: form.sourceReference || '',
-                actionOwnerUserId: form.actionOwnerUserId || getCurrentUserId(),
+                actionOwnerUserId: form.actionOwnerUserId,
                 actionDueDate: new Date(form.actionDueDate).toISOString(),
                 actionStatus: form.actionStatus || 'Açık',
                 actionProgress: Number(form.actionProgress || 0),
@@ -189,7 +181,7 @@ function ProjectActionsPage() {
             actionDescription: action.actionDescription || '',
             sourceType: action.sourceType || '',
             sourceReference: action.sourceReference || '',
-            actionOwnerUserId: action.actionOwnerUserId || getCurrentUserId(),
+            actionOwnerUserId: getValidProjectAssigneeId(users, action.actionOwnerUserId),
             actionDueDate: action.actionDueDate ? new Date(action.actionDueDate).toISOString().slice(0, 10) : '',
             actionStatus: action.actionStatus || 'Açık',
             actionProgress: action.actionProgress ?? 0,
@@ -302,7 +294,7 @@ function ProjectActionsPage() {
                                         <select name="actionOwnerUserId" value={form.actionOwnerUserId} onChange={handleInputChange} required>
                                             <option value="">-- Proje Yöneticisi Seçiniz --</option>
                                             {users.map((user) => {
-                                                const userId = user.userId || user.UserId || user.id;
+                                                const userId = getUserRecordId(user);
                                                 const userName = user.fullName || user.FullName || user.userName || user.UserName || user.name || userId;
                                                 return (
                                                     <option key={userId} value={userId}>

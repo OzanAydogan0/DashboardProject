@@ -471,13 +471,13 @@ public sealed class RiskTests
             risk => risk.RiskId == "TEST-RSK-RED");
 
         Assert.Equal(4, greenRisk.RiskScore);
-        Assert.Equal("Yeşil", greenRisk.RiskHealth);
+        Assert.Equal("İyi", greenRisk.RiskHealth);
 
         Assert.Equal(9, yellowRisk.RiskScore);
-        Assert.Equal("Sarı", yellowRisk.RiskHealth);
+        Assert.Equal("Orta", yellowRisk.RiskHealth);
 
         Assert.Equal(20, redRisk.RiskScore);
-        Assert.Equal("Kırmızı", redRisk.RiskHealth);
+        Assert.Equal("Kritik", redRisk.RiskHealth);
     }
 
     private static async Task<TestUserCredentials> CreateActiveUserAsync(

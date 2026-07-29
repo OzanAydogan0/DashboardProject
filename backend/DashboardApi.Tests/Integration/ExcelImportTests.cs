@@ -184,8 +184,7 @@ public sealed class ExcelImportTests
     private static byte[] CreateInvalidExcelFile(
         string projectName)
     {
-        ExcelPackage.License.SetNonCommercialPersonal(
-    "DashboardApi Tests");
+        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
         using var package = new ExcelPackage();
 
@@ -227,6 +226,53 @@ public sealed class ExcelImportTests
         worksheet.Cells[2, 11].Value = "Aktif";
         worksheet.Cells[2, 12].Value = "Test proje açıklaması";
         worksheet.Cells[2, 13].Value = "Sarı";
+        worksheet.Cells[2, 14].Value = 40;
+        worksheet.Cells[2, 15].Value = 30;
+        worksheet.Cells[2, 16].Value = 1;
+
+        return package.GetAsByteArray();
+    }
+
+    private static byte[] CreateValidExcelFile(
+        string projectCode,
+        string projectName,
+        string manualHealth)
+    {
+        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+        using var package = new ExcelPackage();
+        var worksheet = package.Workbook.Worksheets.Add("Projeler");
+
+        worksheet.Cells[1, 1].Value = "Proje Kodu";
+        worksheet.Cells[1, 2].Value = "Proje Adı";
+        worksheet.Cells[1, 3].Value = "Müşteri Adı";
+        worksheet.Cells[1, 4].Value = "PM E-posta";
+        worksheet.Cells[1, 5].Value = "Başlangıç Tarihi";
+        worksheet.Cells[1, 6].Value = "Bitiş Tarihi";
+        worksheet.Cells[1, 7].Value = "BAC";
+        worksheet.Cells[1, 8].Value = "Para Birimi";
+        worksheet.Cells[1, 9].Value = "Gizlilik";
+        worksheet.Cells[1, 10].Value = "Raporlama Sıklığı";
+        worksheet.Cells[1, 11].Value = "Durum";
+        worksheet.Cells[1, 12].Value = "Açıklama";
+        worksheet.Cells[1, 13].Value = "Sağlık";
+        worksheet.Cells[1, 14].Value = "Planlanan İlerleme";
+        worksheet.Cells[1, 15].Value = "Gerçekleşen İlerleme";
+        worksheet.Cells[1, 16].Value = "Aktiflik";
+
+        worksheet.Cells[2, 1].Value = projectCode;
+        worksheet.Cells[2, 2].Value = projectName;
+        worksheet.Cells[2, 3].Value = "Savunma Sanayii Başkanlığı";
+        worksheet.Cells[2, 4].Value = "pm1@pir.local";
+        worksheet.Cells[2, 5].Value = "2026-08-01";
+        worksheet.Cells[2, 6].Value = "2027-08-01";
+        worksheet.Cells[2, 7].Value = 500000;
+        worksheet.Cells[2, 8].Value = "TRY";
+        worksheet.Cells[2, 9].Value = "Şirket İçi";
+        worksheet.Cells[2, 10].Value = "Aylık";
+        worksheet.Cells[2, 11].Value = "Aktif";
+        worksheet.Cells[2, 12].Value = "Excel sağlık dönüşümü test projesi";
+        worksheet.Cells[2, 13].Value = manualHealth;
         worksheet.Cells[2, 14].Value = 40;
         worksheet.Cells[2, 15].Value = 30;
         worksheet.Cells[2, 16].Value = 1;

@@ -20,6 +20,19 @@
   font-size: 18px;
 }
 
+.project-risks-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.import-project-btn:disabled {
+  opacity: 0.65;
+  cursor: wait !important;
+}
+
 .risk-modal-overlay {
   position: fixed;
   inset: 0;
@@ -220,5 +233,10 @@
   .project-risks-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .project-risks-header-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }

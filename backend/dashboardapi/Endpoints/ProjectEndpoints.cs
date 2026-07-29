@@ -48,7 +48,14 @@ public static class ProjectEndpoints
                 ))
                 .ToListAsync();
 
-            return Results.Ok(projects);
+            var result = projects
+                .Select(project => project with
+                {
+                    ManualHealth = HealthStatusHelper.Normalize(project.ManualHealth)
+                })
+                .ToList();
+
+            return Results.Ok(result);
         });
 
         // 2. GET /projects/{id} -> Detaylı Proje Verisi + Otomatik Hesaplama Motoru
@@ -64,10 +71,10 @@ public static class ProjectEndpoints
                 return Results.Json(new { message = "Bu projenin detaylarını görmeye yetkiniz yok!" }, statusCode: 403);
 
             // 🧮 RAPOR KURALI: Otomatik Sağlık Önerisi Algoritması (Planlanan vs Gerçekleşen İlerleme kıyası)
-            string autoHealthRecommendation = "Yeşil";
+            string autoHealthRecommendation = HealthStatusHelper.Good;
             decimal progressGap = project.PlannedProgress - project.ActualProgress;
-            if (progressGap > 15) autoHealthRecommendation = "Kırmızı";
-            else if (progressGap > 5) autoHealthRecommendation = "Sarı";
+            if (progressGap > 15) autoHealthRecommendation = HealthStatusHelper.Critical;
+            else if (progressGap > 5) autoHealthRecommendation = HealthStatusHelper.Medium;
 
             // 🧮 RAPOR KURALI: EVM (Kazanılmış Değer) Temel Hesaplamaları
             decimal bac = project.Bac;
@@ -82,7 +89,7 @@ public static class ProjectEndpoints
                 project.ProjectName,
                 project.ProjectDescription,
                 project.ProjectStatus,
-                project.ManualHealth,
+                HealthStatusHelper.Normalize(project.ManualHealth),
                 autoHealthRecommendation, // Hesaplanan otomatik sağlık durumu
                 project.PlannedProgress,
                 project.ActualProgress,
@@ -129,7 +136,7 @@ public static class ProjectEndpoints
                 ProjectName = dto.ProjectName,
                 ProjectDescription = dto.ProjectDescription,
                 ProjectStatus = dto.ProjectStatus ?? "Taslak",
-                ManualHealth = dto.ManualHealth ?? "Yeşil",
+                ManualHealth = HealthStatusHelper.ToStorageValue(dto.ManualHealth, HealthStatusHelper.Good),
                 PlannedProgress = dto.PlannedProgress,
                 ActualProgress = dto.ActualProgress,
                 Bac = dto.Bac,
@@ -176,7 +183,8 @@ public static class ProjectEndpoints
             if (!string.IsNullOrEmpty(dto.ProjectName)) project.ProjectName = dto.ProjectName;
             if (!string.IsNullOrEmpty(dto.ProjectDescription)) project.ProjectDescription = dto.ProjectDescription;
             if (!string.IsNullOrEmpty(dto.ProjectStatus)) project.ProjectStatus = dto.ProjectStatus;
-            if (!string.IsNullOrEmpty(dto.ManualHealth)) project.ManualHealth = dto.ManualHealth;
+            if (!string.IsNullOrEmpty(dto.ManualHealth))
+                project.ManualHealth = HealthStatusHelper.ToStorageValue(dto.ManualHealth);
             if (dto.PlannedProgress.HasValue) project.PlannedProgress = dto.PlannedProgress.Value;
             if (dto.ActualProgress.HasValue) project.ActualProgress = dto.ActualProgress.Value;
             if (dto.Bac.HasValue) project.Bac = dto.Bac.Value;

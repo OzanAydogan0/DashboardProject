@@ -1,25 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
+import {
+    canWriteProject,
+    getAssignableProjectUsers,
+    getDefaultProjectAssigneeId,
+    getUserRecordId,
+    getValidProjectAssigneeId,
+} from '../utils/permissionHelper';
 import { usePagination } from '../utils/usePagination';
 import './ProblemsPage.css';
-
-const getCurrentUserId = () => {
-    try {
-        const userString = localStorage.getItem('user');
-        const user = userString ? JSON.parse(userString) : null;
-        return user?.userId || user?.UserId || user?.id || '';
-    } catch {
-        return '';
-    }
-};
 
 const emptyForm = {
     issueTitle: '',
     issuePriority: 'Orta',
-    issueOwnerUserId: getCurrentUserId(),
+    issueOwnerUserId: '',
     issueDueDate: '',
     issueStatus: 'Açık',
     issueImpact: 'Orta',
@@ -41,7 +38,7 @@ function ProblemsPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDeletingId, setIsDeletingId] = useState(null);
     const [priorityFilter, setPriorityFilter] = useState('Hepsi');
-    const [canWrite, setCanWrite] = useState(false);
+    const canWrite = canWriteProject();
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
@@ -84,28 +81,23 @@ function ProblemsPage() {
     const fetchUsers = async () => {
         try {
             const userData = await projectService.getUsers();
-            setUsers(Array.isArray(userData) ? userData : []);
+            setUsers(getAssignableProjectUsers(userData));
         } catch (err) {
             console.error('Kullanıcı listesi alınamadı:', err);
             setUsers([]);
         }
     };
 
-    useEffect(() => {
-        const userString = localStorage.getItem('user');
-        try {
-            const user = userString ? JSON.parse(userString) : null;
-            const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || '';
-            const isExecutive = ['Üst Yönetim İzleyicisi', 'Üst Yönetim'].includes(userRole);
-            setCanWrite(!isExecutive);
-        } catch {
-            setCanWrite(false);
-        }
+    const loadProjectData = useEffectEvent(() => {
+        void fetchIssues();
+        void fetchUsers();
+    });
 
-        if (projectId) {
-            fetchIssues();
-            fetchUsers();
-        }
+    useEffect(() => {
+        if (!projectId) return undefined;
+
+        const timeoutId = window.setTimeout(loadProjectData, 0);
+        return () => window.clearTimeout(timeoutId);
     }, [projectId]);
 
     const handleInputChange = (e) => {
@@ -122,7 +114,7 @@ function ProblemsPage() {
         setEditingIssueId(null);
         setForm({
             ...emptyForm,
-            issueOwnerUserId: getCurrentUserId()
+            issueOwnerUserId: getDefaultProjectAssigneeId(users)
         });
     };
 
@@ -148,7 +140,7 @@ function ProblemsPage() {
                 projectId,
                 issueTitle: form.issueTitle,
                 issuePriority: form.issuePriority,
-                issueOwnerUserId: form.issueOwnerUserId || getCurrentUserId(),
+                issueOwnerUserId: form.issueOwnerUserId,
                 issueDueDate: form.issueDueDate ? new Date(form.issueDueDate).toISOString() : null,
                 issueStatus: form.issueStatus,
                 issueImpact: form.issueImpact,
@@ -179,7 +171,7 @@ function ProblemsPage() {
         setForm({
             issueTitle: issue.issueTitle || '',
             issuePriority: issue.issuePriority || 'Orta',
-            issueOwnerUserId: issue.issueOwnerUserId || getCurrentUserId(),
+            issueOwnerUserId: getValidProjectAssigneeId(users, issue.issueOwnerUserId),
             issueDueDate: issue.issueDueDate ? new Date(issue.issueDueDate).toISOString().slice(0, 10) : '',
             issueStatus: issue.issueStatus || 'Açık',
             issueImpact: issue.issueImpact || 'Orta',
@@ -302,7 +294,7 @@ function ProblemsPage() {
                                         <select name="issueOwnerUserId" value={form.issueOwnerUserId} onChange={handleInputChange} required>
                                             <option value="">-- Proje Yöneticisi Seçiniz --</option>
                                             {users.map((user) => {
-                                                const userId = user.userId || user.UserId || user.id;
+                                                const userId = getUserRecordId(user);
                                                 const userName = user.fullName || user.FullName || user.userName || user.UserName || user.name || userId;
                                                 return (
                                                     <option key={userId} value={userId}>

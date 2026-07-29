@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
+import { HEALTH_STATUS, normalizeHealthStatus } from '../utils/healthStatus';
 import './RisksPage.css';
 
 function RisksPage({ projectId }) {
@@ -55,29 +56,11 @@ function RisksPage({ projectId }) {
     fetchRisks();
   }, [projectId, addAlert]);
 
-  // Veritabanından "Kırmızı", "Sarı", "Yeşil" veya "Kritik", "Orta", "Düşük" gelse de hepsini yakalar
   const getBadgeClass = (healthLevel) => {
-    if (!healthLevel) return 'badge-default';
-    
-    const val = healthLevel.toString().trim().toLowerCase();
-
-    // Kırmızı / Kritik
-    if (val.includes('kırmızı') || val.includes('kirmizi') || val.includes('kritik') || val.includes('red')) {
-      return 'badge-critical';
-    }
-    // Turuncu / Yüksek
-    if (val.includes('turuncu') || val.includes('yüksek') || val.includes('yuksek') || val.includes('orange')) {
-      return 'badge-high';
-    }
-    // Sarı / Orta
-    if (val.includes('sarı') || val.includes('sari') || val.includes('orta') || val.includes('yellow')) {
-      return 'badge-medium';
-    }
-    // Yeşil / Düşük
-    if (val.includes('yeşil') || val.includes('yesil') || val.includes('düşük') || val.includes('dusuk') || val.includes('green')) {
-      return 'badge-low';
-    }
-
+    const normalizedHealth = normalizeHealthStatus(healthLevel);
+    if (normalizedHealth === HEALTH_STATUS.CRITICAL) return 'badge-critical';
+    if (normalizedHealth === HEALTH_STATUS.MEDIUM) return 'badge-medium';
+    if (normalizedHealth === HEALTH_STATUS.GOOD) return 'badge-low';
     return 'badge-default';
   };
 
@@ -154,7 +137,7 @@ function RisksPage({ projectId }) {
                   <td className="text-center">{risk.riskImpact ?? 0}</td>
                   <td className="text-center">
                     <span className={`risk-badge ${getBadgeClass(risk.riskHealth)}`}>
-                      {risk.riskHealth || 'Belirsiz'}
+                      {normalizeHealthStatus(risk.riskHealth)}
                     </span>
                   </td>
                   <td className="mitigation-cell">{risk.riskMitigation || '-'}</td>

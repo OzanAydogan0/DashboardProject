@@ -71,7 +71,7 @@ public sealed class PirReportTests
         Assert.Equal("2026-06", report.Period);
 
         Assert.Equal(
-            "Kırmızı",
+            "Kritik",
             report.ManualHealth);
 
         Assert.Equal(
@@ -133,7 +133,7 @@ public sealed class PirReportTests
             Delays: null,
             NextPeriodPlan: "Kabul testleri gerçekleştirilecek.",
             ManagementExpectations: "Test ortamı desteği beklenmektedir.",
-            ManualHealth: "Sarı",
+            ManualHealth: "Orta",
             ReportStatus: "Taslak");
 
         // Act
@@ -520,7 +520,7 @@ public sealed class PirReportTests
             delays = "Kritik olmayan kısa gecikme.",
             nextPeriodPlan = "Sonraki dönem kabul faaliyetleri.",
             managementExpectations = "Yönetim onayı beklenmektedir.",
-            manualHealth = "Yeşil",
+            manualHealth = "İyi",
             reportStatus = "Yayımlandı"
         };
 
