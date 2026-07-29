@@ -73,7 +73,7 @@ public static class MilestoneEndpoints
                 MilestoneName = request.MilestoneName,
                 PlannedDate = request.PlannedDate,
                 ForecastDate = request.ForecastDate,
-                ActualDate = null, 
+                ActualDate = request.ActualDate,
                 MilestoneStatus = string.IsNullOrWhiteSpace(request.MilestoneStatus) ? "Planlandı" : request.MilestoneStatus,
                 Critical = request.Critical,
                 

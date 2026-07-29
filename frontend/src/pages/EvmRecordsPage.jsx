@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import Pagination from '../components/Pagination';
 import { useAlert } from '../components/AlertProvider';
 import { canWriteProject } from '../utils/permissionHelper';
+import { usePagination } from '../utils/usePagination';
 import './EvmRecordsPage.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5074';
@@ -38,6 +40,7 @@ function EvmRecordsPage() {
     const [editingRecordId, setEditingRecordId] = useState(null);
     const [formValues, setFormValues] = useState({ period: '', bac: '', pv: '', ev: '', ac: '' });
     const canManage = canWriteProject();
+    const recordPagination = usePagination(records);
 
     const formatCurrency = (val, currencyCode = 'TRY') => {
         if (val === null || val === undefined) return '-';
@@ -239,7 +242,7 @@ function EvmRecordsPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {records.map((r) => {
+                            {recordPagination.paginatedItems.map((r) => {
                                 const spiStyle = getMetricStatusStyle('spi', r.spi);
                                 const cpiStyle = getMetricStatusStyle('cpi', r.cpi);
                                 const currentCurrency = r.currency || 'TRY';
@@ -281,6 +284,13 @@ function EvmRecordsPage() {
                             })}
                         </tbody>
                     </table>
+                    <Pagination
+                        currentPage={recordPagination.currentPage}
+                        itemLabel="EVM kaydı"
+                        onPageChange={recordPagination.setCurrentPage}
+                        totalItems={recordPagination.totalItems}
+                        totalPages={recordPagination.totalPages}
+                    />
                 </div>
 
                 <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>

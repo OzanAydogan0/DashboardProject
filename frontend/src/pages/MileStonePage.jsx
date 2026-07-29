@@ -1,7 +1,9 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
+import Pagination from '../components/Pagination'
 import { projectService } from '../services/projectService'
 import { useAlert } from '../components/AlertProvider'
 import { canWriteProject } from '../utils/permissionHelper'
+import { usePagination } from '../utils/usePagination'
 import './MileStonePage.css'
 
 /**
@@ -27,6 +29,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
     actualDate: '',
     status: 'Planlandı'
   })
+  const milestonePagination = usePagination(milestones)
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -98,6 +101,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
           milestoneName: formData.milestoneName,
           plannedDate: formData.plannedDate,
           forecastDate: formData.plannedDate, // Varsayılan olarak planlanan tarih atanır
+          actualDate: formData.actualDate || null,
           milestoneStatus: formData.status,
           critical: 0,
           milestoneOwnerUserId: null,
@@ -176,7 +180,7 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
               </tr>
             </thead>
             <tbody>
-              {milestones.length > 0 ? milestones.map((m, idx) => {
+              {milestones.length > 0 ? milestonePagination.paginatedItems.map((m, idx) => {
                 const statusClass = getMilestoneStatusStyle(m.milestoneStatus || m.status)
                 return (
                   <tr key={m.id || m.milestoneId || idx}>
@@ -224,6 +228,13 @@ function MileStone({ milestones = [], projectId, onMilestoneUpdated, onMilestone
               )}
             </tbody>
           </table>
+          <Pagination
+            currentPage={milestonePagination.currentPage}
+            itemLabel="kilometre taşı"
+            onPageChange={milestonePagination.setCurrentPage}
+            totalItems={milestonePagination.totalItems}
+            totalPages={milestonePagination.totalPages}
+          />
         </div>
       </div>
 

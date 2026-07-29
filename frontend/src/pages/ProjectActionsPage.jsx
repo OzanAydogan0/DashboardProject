@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
+import { usePagination } from '../utils/usePagination';
 import './ProjectActionsPage.css';
 
 const SOURCE_TYPES = ['Risk', 'Sorun', 'Kilometre Taşı', 'PIR', 'Yönetim Kararı', 'Diğer'];
@@ -41,6 +43,7 @@ function ProjectActionsPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDeletingId, setIsDeletingId] = useState(null);
     const [canWrite, setCanWrite] = useState(false);
+    const actionPagination = usePagination(actions);
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
@@ -342,7 +345,7 @@ function ProjectActionsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {actions.map((a) => {
+                                {actionPagination.paginatedItems.map((a) => {
                                     const priorityBadge = getPriorityStyle(a.actionPriority);
 
                                     return (
@@ -401,6 +404,13 @@ function ProjectActionsPage() {
                             </tbody>
                         </table>
                     )}
+                    <Pagination
+                        currentPage={actionPagination.currentPage}
+                        itemLabel="aksiyon"
+                        onPageChange={actionPagination.setCurrentPage}
+                        totalItems={actionPagination.totalItems}
+                        totalPages={actionPagination.totalPages}
+                    />
                 </div>
             </div>
         </div>

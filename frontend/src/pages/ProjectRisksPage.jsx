@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-// ✅ Doğru kullanım:
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
+import { usePagination } from '../utils/usePagination';
 import './ProjectRisksPage.css';
 
 const getCurrentUserId = () => {
@@ -40,6 +41,7 @@ const ProjectRisksPage = () => {
     const [isDeletingId, setIsDeletingId] = useState(null);
     const [canWrite, setCanWrite] = useState(false);
     const [showRiskModal, setShowRiskModal] = useState(false);
+    const riskPagination = usePagination(risks);
 
     // Risk verilerini getiren fonksiyon
     const fetchRisks = async () => {
@@ -171,7 +173,7 @@ const ProjectRisksPage = () => {
 
         setIsDeletingId(riskId);
         try {
-            await projectService.updateRisk(riskId, { riskStatus: 'Kapandı' });
+            await projectService.updateRisk(riskId, { riskStatus: 'Kapalı' });
             await fetchRisks();
             addAlert('Risk kaydı başarıyla kapatıldı.', 'success');
         } catch (err) {
@@ -245,7 +247,7 @@ const ProjectRisksPage = () => {
                                         <select name="riskStatus" value={form.riskStatus} onChange={handleInputChange}>
                                             <option value="Açık">Açık</option>
                                             <option value="İzleniyor">İzleniyor</option>
-                                            <option value="Kapandı">Kapandı</option>
+                                            <option value="Kapalı">Kapalı</option>
                                         </select>
                                     </label>
                                     <label>
@@ -315,7 +317,7 @@ const ProjectRisksPage = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {risks.map((risk) => (
+                                {riskPagination.paginatedItems.map((risk) => (
                                     <tr key={risk.riskId}>
                                         <td>{risk.riskId}</td>
                                         <td className="font-medium">{risk.riskTitle}</td>
@@ -345,9 +347,9 @@ const ProjectRisksPage = () => {
                                                         type="button"
                                                         className="btn-danger"
                                                         onClick={() => handleCloseRisk(risk.riskId)}
-                                                        disabled={isDeletingId === risk.riskId || risk.riskStatus === 'Kapandı'}
+                                                        disabled={isDeletingId === risk.riskId || risk.riskStatus === 'Kapalı'}
                                                     >
-                                                        {isDeletingId === risk.riskId ? 'Kapatılıyor...' : risk.riskStatus === 'Kapandı' ? 'Kapalı' : 'Kapat'}
+                                                        {isDeletingId === risk.riskId ? 'Kapatılıyor...' : risk.riskStatus === 'Kapalı' ? 'Kapalı' : 'Kapat'}
                                                     </button>
                                                 </div>
                                             </td>
@@ -357,6 +359,13 @@ const ProjectRisksPage = () => {
                             </tbody>
                         </table>
                     )}
+                    <Pagination
+                        currentPage={riskPagination.currentPage}
+                        itemLabel="risk"
+                        onPageChange={riskPagination.setCurrentPage}
+                        totalItems={riskPagination.totalItems}
+                        totalPages={riskPagination.totalPages}
+                    />
                 </div>
             </div>
         </div>

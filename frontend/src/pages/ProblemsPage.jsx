@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
+import { usePagination } from '../utils/usePagination';
 import './ProblemsPage.css';
 
 const getCurrentUserId = () => {
@@ -114,6 +116,7 @@ function ProblemsPage() {
     const filteredIssues = priorityFilter === 'Hepsi'
         ? issues
         : issues.filter((issue) => (issue.issuePriority || '').toLowerCase() === priorityFilter.toLowerCase());
+    const issuePagination = usePagination(filteredIssues);
 
     const resetForm = () => {
         setEditingIssueId(null);
@@ -235,7 +238,13 @@ function ProblemsPage() {
                 <div className="problems-filter-bar">
                     <label className="problems-filter-item">
                         <span>Öncelik Filtre</span>
-                        <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+                        <select
+                            value={priorityFilter}
+                            onChange={(e) => {
+                                setPriorityFilter(e.target.value);
+                                issuePagination.setCurrentPage(1);
+                            }}
+                        >
                             <option value="Hepsi">Hepsi</option>
                             <option value="Düşük">Düşük</option>
                             <option value="Orta">Orta</option>
@@ -345,7 +354,7 @@ function ProblemsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredIssues.map((i) => {
+                                {issuePagination.paginatedItems.map((i) => {
                                     const priorityBadge = getPriorityStyle(i.issuePriority);
 
                                     return (
@@ -399,6 +408,13 @@ function ProblemsPage() {
                             </tbody>
                         </table>
                     )}
+                    <Pagination
+                        currentPage={issuePagination.currentPage}
+                        itemLabel="sorun"
+                        onPageChange={issuePagination.setCurrentPage}
+                        totalItems={issuePagination.totalItems}
+                        totalPages={issuePagination.totalPages}
+                    />
                 </div>
             </div>
         </div>

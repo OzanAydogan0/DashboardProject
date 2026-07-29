@@ -9,7 +9,8 @@ public record MilestoneDto(
 // GÜNCELLEME: ProjectId parametresi JSON'dan çıkarıldı. URL'den alınacak.
 public record CreateMilestoneRequest(
     string MilestoneName, DateTime PlannedDate, DateTime ForecastDate, 
-    string MilestoneStatus, int Critical, string MilestoneOwnerUserId, string AcceptanceCriteria, string? MilestoneDescription
+    string MilestoneStatus, int Critical, string MilestoneOwnerUserId, string AcceptanceCriteria,
+    string? MilestoneDescription, DateTime? ActualDate = null
 );
 
 public record UpdateMilestoneRequest(

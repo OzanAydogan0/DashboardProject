@@ -1,4 +1,9 @@
 const STORAGE_KEY = 'password-change-requests'
+const CHANGE_EVENT = 'password-change-request'
+
+const dispatchChange = () => {
+  window.dispatchEvent(new CustomEvent(CHANGE_EVENT))
+}
 
 export const getPasswordChangeRequests = () => {
   if (typeof window === 'undefined') return []
@@ -23,7 +28,24 @@ export const notifyPasswordChangeRequest = ({ fullName, email }) => {
 
   const nextRequests = [request, ...getPasswordChangeRequests()].slice(0, 20)
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextRequests))
-  window.dispatchEvent(new CustomEvent('password-change-request', { detail: request }))
+  window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: request }))
 
   return request
+}
+
+export const removePasswordChangeRequest = (requestId) => {
+  if (typeof window === 'undefined') return
+
+  const nextRequests = getPasswordChangeRequests()
+    .filter(request => request.id !== requestId)
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextRequests))
+  dispatchChange()
+}
+
+export const clearPasswordChangeRequests = () => {
+  if (typeof window === 'undefined') return
+
+  window.localStorage.removeItem(STORAGE_KEY)
+  dispatchChange()
 }

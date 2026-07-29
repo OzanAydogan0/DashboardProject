@@ -192,9 +192,9 @@ public static class SystemEndpoints
                 return Results.Json(new { message = "Sistem loglarını görüntüleme yetkiniz yok!" }, statusCode: 403);
 
             var logs = await db.Set<AuditLog>()
+                .AsNoTracking()
                 .Include(a => a.User)
                 .OrderByDescending(a => a.ChangedAt)
-                .Take(100) // Performans için son 100 logu getiriyoruz
                 .ToListAsync();
 
             var result = logs.Select(a => new AuditLogDto(
@@ -211,6 +211,6 @@ public static class SystemEndpoints
             )).ToList();
 
             return Results.Ok(result);
-        });
+        }).RequireAuthorization();
     }
 }

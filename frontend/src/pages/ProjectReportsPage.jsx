@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
+import Pagination from '../components/Pagination'
 import { projectService } from '../services/projectService'
 import { useAlert } from '../components/AlertProvider'
+import { usePagination } from '../utils/usePagination'
 import './ProjectReportsPage.css'
 
 const getCanWrite = () => {
@@ -35,6 +37,7 @@ function ReportsPage({ reports = [], onRefresh }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [canWrite] = useState(getCanWrite)
+  const reportPagination = usePagination(reports)
 
   const formatDate = (dateString) => {
     if (!dateString) return '-'
@@ -186,7 +189,7 @@ function ReportsPage({ reports = [], onRefresh }) {
               </tr>
             </thead>
             <tbody>
-              {reports.length > 0 ? reports.map((r, idx) => (
+              {reports.length > 0 ? reportPagination.paginatedItems.map((r, idx) => (
                 <tr key={r.pirReportId || r.id || idx}>
                   <td className="font-medium">{r.period || '-'}</td>
                   <td>{formatDate(r.reportDate || r.createdAt)}</td>
@@ -247,6 +250,13 @@ function ReportsPage({ reports = [], onRefresh }) {
               )}
             </tbody>
           </table>
+          <Pagination
+            currentPage={reportPagination.currentPage}
+            itemLabel="rapor dönemi"
+            onPageChange={reportPagination.setCurrentPage}
+            totalItems={reportPagination.totalItems}
+            totalPages={reportPagination.totalPages}
+          />
         </div>
       </div>
 

@@ -109,7 +109,7 @@ public static class RiskEndpoints
             if (!string.IsNullOrEmpty(request.RiskStatus))
             {
                 risk.RiskStatus = request.RiskStatus;
-                if (string.Equals(request.RiskStatus, "Kapandı", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(request.RiskStatus, "Kapalı", StringComparison.OrdinalIgnoreCase))
                     risk.ClosedDate ??= DateTime.UtcNow;
                 else
                     risk.ClosedDate = null;

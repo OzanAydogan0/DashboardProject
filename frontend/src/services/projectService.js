@@ -226,6 +226,11 @@ importProjectsExcel: (formData) => {
     return response.data;
   },
 
+  getAuditLogs: async () => {
+    const response = await api.get('/audit-logs');
+    return response.data;
+  },
+
   updateMilestone: async (milestoneId, milestoneData) => {
     const response = await api.patch(`/milestones/${milestoneId}`, milestoneData);
     return response.data;

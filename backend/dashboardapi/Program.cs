@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using dashboardapi.Data;
 using dashboardapi.Endpoints; // Artık bu klasörü kullanıyoruz!
+using dashboardapi.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using QuestPDF.Infrastructure;
@@ -27,8 +28,12 @@ builder.Services.AddCors(options =>
 });
 
 // 3. Veritabanı (SQLite) Bağlantı Servisi
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<AuditSaveChangesInterceptor>();
+builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+    options
+        .UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"))
+        .AddInterceptors(serviceProvider.GetRequiredService<AuditSaveChangesInterceptor>()));
 
 // 4. JWT Kimlik Doğrulama Servislerinin Eklenmesi
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
