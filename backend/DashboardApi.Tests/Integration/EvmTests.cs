@@ -371,9 +371,9 @@ public sealed class EvmTests
 
         var updatedRecord = Assert.Single(records!, record => record.EvmRecordId == evmRecordId);
         Assert.Equal(2000m, updatedRecord.Bac);
-        Assert.Equal(0.83m, updatedRecord.Cpi);
-        Assert.Equal(2400m, updatedRecord.Eac);
-        Assert.Equal(-400m, updatedRecord.Vac);
+        Assert.Equal(1.17m, updatedRecord.Cpi);
+        Assert.Equal(1709.40m, updatedRecord.Eac);
+        Assert.Equal(290.60m, updatedRecord.Vac);
     }
 
     [Fact]

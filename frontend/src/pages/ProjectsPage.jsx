@@ -1,29 +1,42 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useState, useEffect, useEffectEvent, useRef, useCallback } from 'react'
+import { useNavigate } from '../router'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
-import { canCreateProject, canEditProject, isSystemAdmin } from '../utils/permissionHelper'
+import { useAlert } from '../components/alertContext'
+import {
+  canCreateProject,
+  canEditProject,
+  getAssignableProjectUsers,
+  getDefaultProjectAssigneeId,
+  getUserRecordId,
+  getValidProjectAssigneeId,
+  isSystemAdmin,
+} from '../utils/permissionHelper'
+import {
+  HEALTH_STATUS,
+  HEALTH_STATUS_OPTIONS,
+  normalizeHealthStatus,
+} from '../utils/healthStatus'
 import './ProjectsPage.css'
 
 // Filtre Seçenekleri
 const progressOptions = ['Hepsi', 'Taslak', 'Aktif', 'Beklemede', 'Tamamlandı', 'Pasif']
-const healthOptions = ['Hepsi', 'Yeşil', 'Sarı', 'Kırmızı', 'Gri']
+const healthOptions = ['Hepsi', ...HEALTH_STATUS_OPTIONS]
 const activeOptions = ['Hepsi', 'Devam Ediyor', 'İptal Edildi']
 const budgetSortOptions = ['Yok', 'Artan', 'Azalan']
 const finishSortOptions = ['Yok', 'Artan', 'Azalan']
 
 // Form Seçenekleri (Modal İçi)
 const statusFormOptions = ['Taslak', 'Aktif', 'Beklemede', 'Tamamlandı', 'Pasif']
-const healthFormOptions = ['Yeşil', 'Sarı', 'Kırmızı', 'Gri']
+const healthFormOptions = HEALTH_STATUS_OPTIONS
 const currencyOptions = ['TRY', 'USD', 'EUR']
 
 // 🎨 Rozet Stilleri
 const getHealthBadgeStyle = (health) => {
-  switch (health) {
-    case 'Yeşil': return { bg: '#d1fae5', text: '#065f46' }
-    case 'Sarı': return { bg: '#fef3c7', text: '#92400e' }
-    case 'Kırmızı': return { bg: '#fee2e2', text: '#991b1b' }
-    case 'Gri': return { bg: '#f3f4f6', text: '#4b5563' }
+  switch (normalizeHealthStatus(health)) {
+    case HEALTH_STATUS.GOOD: return { bg: '#d1fae5', text: '#065f46' }
+    case HEALTH_STATUS.MEDIUM: return { bg: '#fef3c7', text: '#92400e' }
+    case HEALTH_STATUS.CRITICAL: return { bg: '#fee2e2', text: '#991b1b' }
+    case HEALTH_STATUS.UNCERTAIN: return { bg: '#f3f4f6', text: '#4b5563' }
     default: return { bg: '#f3f4f6', text: '#374151' }
   }
 }
@@ -67,7 +80,7 @@ const initialFormState = {
   projectName: '',
   projectDescription: '',
   projectStatus: 'Taslak',
-  manualHealth: 'Yeşil',
+  manualHealth: HEALTH_STATUS.GOOD,
   plannedProgress: 0,
   actualProgress: 0,
   bac: 0,
@@ -104,6 +117,7 @@ function ProjectsPage() {
   const [editingProjectId, setEditingProjectId] = useState(null)
   const [formData, setFormData] = useState(initialFormState)
   const [formSubmitting, setFormSubmitting] = useState(false)
+  const assignableProjectManagers = getAssignableProjectUsers(users)
   const [modalError, setModalError] = useState('')
 
   // Filtre State'leri
@@ -168,9 +182,14 @@ function ProjectsPage() {
     }
   }
 
-  useEffect(() => {
+  const loadInitialData = useEffectEvent(() => {
     void fetchProjects()
     void fetchAuxData()
+  })
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(loadInitialData, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [])
 
   const getProjectManagerInfo = useCallback((project) => {
@@ -204,7 +223,7 @@ function ProjectsPage() {
         const pName = project.projectName || ''
         const pCode = project.projectCode || ''
         const pProgress = project.projectStatus || ''
-        const pHealth = project.manualHealth || ''
+        const pHealth = normalizeHealthStatus(project.manualHealth)
         const pFinish = getProjectFinishDate(project)
         const managerInfo = getProjectManagerInfo(project)
 
@@ -255,7 +274,8 @@ function ProjectsPage() {
     setEditingProjectId(null)
     setFormData({
       ...initialFormState,
-      programId: programs[0]?.programId || ''
+      programId: programs[0]?.programId || '',
+      projectManagerUserId: getDefaultProjectAssigneeId(users)
     })
     setModalError('')
     setIsModalOpen(true)
@@ -277,7 +297,7 @@ function ProjectsPage() {
         projectName: detail.projectName || '',
         projectDescription: detail.projectDescription || '',
         projectStatus: detail.projectStatus || 'Taslak',
-        manualHealth: detail.manualHealth || 'Yeşil',
+        manualHealth: normalizeHealthStatus(detail.manualHealth),
         plannedProgress: detail.plannedProgress || 0,
         actualProgress: detail.actualProgress || 0,
         bac: detail.bac || 0,
@@ -287,7 +307,7 @@ function ProjectsPage() {
         forecastFinishDate: detail.forecastFinishDate ? detail.forecastFinishDate.split('T')[0] : '',
         programId: detail.programId || 'PRG-001',
         customerId: detail.customerId || 'CST-001',
-        projectManagerUserId: detail.projectManagerUserId || '',
+        projectManagerUserId: getValidProjectAssigneeId(users, detail.projectManagerUserId),
         confidentiality: detail.confidentiality || 'Şirket İçi',
         isActive: detail.isActive !== undefined ? Number(detail.isActive) : 1
       })
@@ -558,7 +578,8 @@ function ProjectsPage() {
             <tr><td colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>Yükleniyor...</td></tr>
           ) : filteredProjects.length > 0 ? (
             paginatedProjects.map((project) => {
-              const healthStyle = getHealthBadgeStyle(project.manualHealth)
+              const healthLabel = normalizeHealthStatus(project.manualHealth)
+              const healthStyle = getHealthBadgeStyle(healthLabel)
               const progressStyle = getProgressBadgeStyle(project.projectStatus)
               const managerInfo = getProjectManagerInfo(project)
 
@@ -582,7 +603,7 @@ function ProjectsPage() {
                   </td>
                   <td>
                     <span style={{ backgroundColor: healthStyle.bg, color: healthStyle.text, padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold' }}>
-                      {project.manualHealth || '-'}
+                      {healthLabel}
                     </span>
                   </td>
                   <td className="manager-cell">
@@ -828,11 +849,17 @@ function ProjectsPage() {
                   onChange={(e) => handleFormChange('projectManagerUserId', e.target.value)}
                 >
                   <option value="">Proje yöneticisi seçin</option>
-                  {users.map((user) => (
-                    <option key={user.userId} value={user.userId}>
-                      {user.fullName} {user.userRole ? `(${user.userRole})` : ''}
-                    </option>
-                  ))}
+                  {assignableProjectManagers.map((user) => {
+                    const userId = getUserRecordId(user)
+                    const userName = user.fullName || user.FullName || user.userName || user.UserName || userId
+                    const userRole = user.userRole || user.UserRole || user.role || user.Role
+
+                    return (
+                      <option key={userId} value={userId}>
+                        {userName} {userRole ? `(${userRole})` : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
               <input type="hidden" value={formData.programId} />

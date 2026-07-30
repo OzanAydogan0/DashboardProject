@@ -1,19 +1,17 @@
-import React, { useState, useEffect } from 'react';
-// ✅ Doğru kullanım:
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
+import { useNavigate, useParams } from '../router';
+import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
-import { useAlert } from '../components/AlertProvider';
+import { useAlert } from '../components/alertContext';
+import {
+    canWriteProject,
+    getAssignableProjectUsers,
+    getDefaultProjectAssigneeId,
+    getUserRecordId,
+    getValidProjectAssigneeId,
+} from '../utils/permissionHelper';
+import { usePagination } from '../utils/usePagination';
 import './ProjectRisksPage.css';
-
-const getCurrentUserId = () => {
-    try {
-        const userString = localStorage.getItem('user');
-        const user = userString ? JSON.parse(userString) : null;
-        return user?.userId || user?.UserId || user?.id || '';
-    } catch {
-        return '';
-    }
-};
 
 const emptyForm = {
     riskTitle: '',
@@ -23,12 +21,14 @@ const emptyForm = {
     riskStatus: 'Açık',
     riskDueDate: '',
     riskMitigation: '',
-    riskOwnerUserId: getCurrentUserId()
+    riskOwnerUserId: ''
 };
 
 const ProjectRisksPage = () => {
     const { id: projectId } = useParams();
+    const navigate = useNavigate();
     const { addAlert } = useAlert();
+    const fileInputRef = useRef(null);
 
     const [risks, setRisks] = useState([]);
     const [users, setUsers] = useState([]); // 📌 EKLENDİ: Kullanıcı listesini tutacak state
@@ -38,8 +38,10 @@ const ProjectRisksPage = () => {
     const [editingRiskId, setEditingRiskId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDeletingId, setIsDeletingId] = useState(null);
-    const [canWrite, setCanWrite] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [showRiskModal, setShowRiskModal] = useState(false);
+    const canWrite = canWriteProject();
+    const riskPagination = usePagination(risks);
 
     // Risk verilerini getiren fonksiyon
     const fetchRisks = async () => {
@@ -61,27 +63,22 @@ const ProjectRisksPage = () => {
         try {
             // Servisinizde kullanıcıları getiren metodu çağırıyoruz
             const userData = await projectService.getUsers(); 
-            setUsers(Array.isArray(userData) ? userData : []);
+            setUsers(getAssignableProjectUsers(userData));
         } catch (err) {
             console.error('Kullanıcı listesi alınamadı:', err);
         }
     };
 
-    useEffect(() => {
-        const userString = localStorage.getItem('user');
-        try {
-            const user = userString ? JSON.parse(userString) : null;
-            const userRole = user?.userRole || user?.UserRole || user?.role || user?.Role || '';
-            const isExecutive = ['Üst Yönetim İzleyicisi', 'Üst Yönetim'].includes(userRole);
-            setCanWrite(!isExecutive);
-        } catch {
-            setCanWrite(false);
-        }
+    const loadProjectData = useEffectEvent(() => {
+        void fetchRisks();
+        void fetchUsers();
+    });
 
-        if (projectId) {
-            fetchRisks();
-            fetchUsers(); // 📌 Sayfa yüklendiğinde kullanıcı listesini çekiyoruz
-        }
+    useEffect(() => {
+        if (!projectId) return undefined;
+
+        const timeoutId = window.setTimeout(loadProjectData, 0);
+        return () => window.clearTimeout(timeoutId);
     }, [projectId]);
 
     const getScoreColor = (score) => {
@@ -99,13 +96,28 @@ const ProjectRisksPage = () => {
         setEditingRiskId(null);
         setForm({
             ...emptyForm,
-            riskOwnerUserId: getCurrentUserId()
+            riskOwnerUserId: getDefaultProjectAssigneeId(users)
         });
     };
 
     const openCreateModal = () => {
         resetForm();
         setShowRiskModal(true);
+    };
+
+    const openRelatedCreateModal = (risk, relatedType) => {
+        if (!projectId || !risk?.riskId) return;
+
+        const targetTab = relatedType === 'issue' ? 'issues' : 'actions';
+        const query = new URLSearchParams({
+            tab: targetTab,
+            createForRisk: risk.riskId,
+            riskTitle: risk.riskTitle || risk.riskId,
+            riskOwnerUserId: risk.riskOwnerUserId || '',
+            riskOwnerFullName: risk.riskOwnerFullName || risk.RiskOwnerFullName || ''
+        });
+
+        navigate(`/projects/${projectId}?${query.toString()}`);
     };
 
     const closeRiskModal = () => {
@@ -127,6 +139,7 @@ const ProjectRisksPage = () => {
                 riskProbability: Number(form.riskProbability),
                 riskImpact: Number(form.riskImpact),
                 riskDueDate: form.riskDueDate ? new Date(form.riskDueDate).toISOString() : null,
+                riskOwnerUserId: form.riskOwnerUserId,
             };
 
             if (editingRiskId) {
@@ -158,27 +171,67 @@ const ProjectRisksPage = () => {
             riskStatus: risk.riskStatus || 'Açık',
             riskDueDate: risk.riskDueDate ? new Date(risk.riskDueDate).toISOString().slice(0, 10) : '',
             riskMitigation: risk.riskMitigation || '',
-            riskOwnerUserId: risk.riskOwnerUserId || getCurrentUserId()
+            riskOwnerUserId: getValidProjectAssigneeId(users, risk.riskOwnerUserId)
         });
         setShowRiskModal(true);
     };
 
-    const handleDelete = async (riskId) => {
-        if (!window.confirm('Bu risk kaydını silmek istediğinize emin misiniz?')) {
+    const handleCloseRisk = async (riskId) => {
+        if (!window.confirm('Bu risk kaydını kapatmak istediğinize emin misiniz?')) {
             return;
         }
 
         setIsDeletingId(riskId);
         try {
-            await projectService.deleteRisk(riskId);
+            await projectService.updateRisk(riskId, { riskStatus: 'Kapalı' });
             await fetchRisks();
-            addAlert('Risk kaydı başarıyla silindi.', 'success');
+            addAlert('Risk kaydı başarıyla kapatıldı.', 'success');
         } catch (err) {
-            const backendMessage = err.response?.data?.message || err.message || 'Risk silinemedi.';
+            const backendMessage = err.response?.data?.message || err.message || 'Risk kapatılamadı.';
             setError(backendMessage);
             addAlert(backendMessage, 'error');
         } finally {
             setIsDeletingId(null);
+        }
+    };
+
+    const handleExcelImport = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file || !projectId) return;
+
+        setIsImporting(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await projectService.importProjectRisksExcel(projectId, formData);
+            const result = response.data || response;
+            const isSuccess = result.success ?? result.Success;
+            const importedCount = result.totalImported ?? result.TotalImported ?? 0;
+            const failedCount = result.totalFailed ?? result.TotalFailed ?? 0;
+            const errors = result.errors ?? result.Errors ?? [];
+
+            if (isSuccess && failedCount === 0) {
+                addAlert(`Excel içe aktarma tamamlandı. Eklenen risk sayısı: ${importedCount}`, 'success');
+            } else {
+                const errorDetails = errors.length > 0 ? ` Hata detayları: ${errors.join(' • ')}` : '';
+                addAlert(
+                    `İşlem tamamlandı. Başarılı: ${importedCount}, Hatalı/Atlanan: ${failedCount}.${errorDetails}`,
+                    'info'
+                );
+            }
+
+            await fetchRisks();
+        } catch (err) {
+            const message = err.response?.data?.message || 'Excel dosyası yüklenirken sunucuda bir hata oluştu.';
+            addAlert(message, 'error');
+        } finally {
+            setIsImporting(false);
+            event.target.value = '';
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
         }
     };
 
@@ -191,9 +244,36 @@ const ProjectRisksPage = () => {
                 <div className="card-header project-risks-header">
                     <h2>Proje Risk Kayıtları</h2>
                     {canWrite && (
-                        <button type="button" className="btn-primary" onClick={openCreateModal}>
-                            Yeni Risk
-                        </button>
+                        <div className="project-risks-header-actions">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".xlsx"
+                                onChange={handleExcelImport}
+                                hidden
+                            />
+                            <button
+                                type="button"
+                                className="import-project-btn"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isImporting}
+                                title="Skor sütunu eklemeyin; skor Olasılık × Etki ile otomatik hesaplanır"
+                                style={{
+                                    backgroundColor: '#10b981',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '8px 16px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                {isImporting ? '⏳ Aktarılıyor...' : '📂 Excel İçe Aktar'}
+                            </button>
+                            <button type="button" className="btn-primary" onClick={openCreateModal}>
+                                Yeni Risk
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -244,7 +324,7 @@ const ProjectRisksPage = () => {
                                         <select name="riskStatus" value={form.riskStatus} onChange={handleInputChange}>
                                             <option value="Açık">Açık</option>
                                             <option value="İzleniyor">İzleniyor</option>
-                                            <option value="Kapandı">Kapandı</option>
+                                            <option value="Kapalı">Kapalı</option>
                                         </select>
                                     </label>
                                     <label>
@@ -263,7 +343,7 @@ const ProjectRisksPage = () => {
                                         >
                                             <option value="">-- Sorumlu Seçiniz --</option>
                                             {users.map((u) => {
-                                                const userId = u.userId || u.UserId || u.id;
+                                                const userId = getUserRecordId(u);
                                                 const userName = u.fullName || u.FullName || u.userName || u.name || userId;
                                                 return (
                                                     <option key={userId} value={userId}>
@@ -314,7 +394,7 @@ const ProjectRisksPage = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {risks.map((risk) => (
+                                {riskPagination.paginatedItems.map((risk) => (
                                     <tr key={risk.riskId}>
                                         <td>{risk.riskId}</td>
                                         <td className="font-medium">{risk.riskTitle}</td>
@@ -336,17 +416,31 @@ const ProjectRisksPage = () => {
                                         </td>
                                         {canWrite && (
                                             <td>
-                                                <div className="row-actions">
+                                                <div className="row-actions risk-row-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="btn-related btn-related-issue"
+                                                        onClick={() => openRelatedCreateModal(risk, 'issue')}
+                                                    >
+                                                        Sorun Ekle
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-related btn-related-action"
+                                                        onClick={() => openRelatedCreateModal(risk, 'action')}
+                                                    >
+                                                        Aksiyon Ekle
+                                                    </button>
                                                     <button type="button" className="btn-secondary" onClick={() => handleEdit(risk)}>
                                                         Düzenle
                                                     </button>
                                                     <button
                                                         type="button"
                                                         className="btn-danger"
-                                                        onClick={() => handleDelete(risk.riskId)}
-                                                        disabled={isDeletingId === risk.riskId}
+                                                        onClick={() => handleCloseRisk(risk.riskId)}
+                                                        disabled={isDeletingId === risk.riskId || risk.riskStatus === 'Kapalı'}
                                                     >
-                                                        {isDeletingId === risk.riskId ? 'Siliniyor...' : 'Sil'}
+                                                        {isDeletingId === risk.riskId ? 'Kapatılıyor...' : risk.riskStatus === 'Kapalı' ? 'Kapalı' : 'Kapat'}
                                                     </button>
                                                 </div>
                                             </td>
@@ -356,6 +450,13 @@ const ProjectRisksPage = () => {
                             </tbody>
                         </table>
                     )}
+                    <Pagination
+                        currentPage={riskPagination.currentPage}
+                        itemLabel="risk"
+                        onPageChange={riskPagination.setCurrentPage}
+                        totalItems={riskPagination.totalItems}
+                        totalPages={riskPagination.totalPages}
+                    />
                 </div>
             </div>
         </div>

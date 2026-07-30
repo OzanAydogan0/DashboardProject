@@ -51,7 +51,6 @@ public sealed class MilestoneTests
         var forecastDate = new DateTime(2026, 11, 20);
 
         var request = new CreateMilestoneRequest(
-            ProjectId: "PRJ-003",
             MilestoneName: "Entegrasyon kabulünün tamamlanması",
             PlannedDate: plannedDate,
             ForecastDate: forecastDate,
@@ -63,7 +62,7 @@ public sealed class MilestoneTests
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            "/milestones",
+            "/projects/PRJ-003/milestones",
             request);
 
         // Assert
@@ -174,7 +173,6 @@ public sealed class MilestoneTests
             "Geçersiz tarih sıralı kilometre taşı";
 
         var request = new CreateMilestoneRequest(
-            ProjectId: "PRJ-003",
             MilestoneName: milestoneName,
             PlannedDate: new DateTime(2026, 12, 20),
 
@@ -189,7 +187,7 @@ public sealed class MilestoneTests
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            "/milestones",
+            "/projects/PRJ-003/milestones",
             request);
 
         // Assert

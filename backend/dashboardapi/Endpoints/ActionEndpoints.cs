@@ -24,6 +24,9 @@ public static class ActionEndpoints
 
             var actions = await db.Set<dashboardapi.Models.Action>()
                 .Include(a => a.ActionOwnerUser)
+                .Include(a => a.Project)
+                .Include(a => a.Risk)
+                .Include(a => a.Issue)
                 .Where(a => a.ProjectId == id)
                 .ToListAsync();
 
@@ -39,7 +42,12 @@ public static class ActionEndpoints
                 a.ActionStatus,
                 a.ActionProgress,
                 a.ActionPriority,
-                a.CompletedDate
+                a.CompletedDate,
+                a.Project?.ProjectName,
+                a.RiskId,
+                a.Risk?.RiskTitle,
+                a.IssueId,
+                a.Issue?.IssueTitle
             )).ToList();
 
             return Results.Ok(result);
@@ -59,13 +67,56 @@ public static class ActionEndpoints
             if (!await PermissionHelper.CanWriteProjectAsync(db, request.ProjectId, userId, userRole))
                 return Results.Json(new { message = "Bu projeye aksiyon ekleme yetkiniz yok!" }, statusCode: 403);
 
+            var riskId = string.IsNullOrWhiteSpace(request.RiskId)
+                ? null
+                : request.RiskId.Trim();
+
+            var issueId = string.IsNullOrWhiteSpace(request.IssueId)
+                ? null
+                : request.IssueId.Trim();
+
+            if (riskId is not null && issueId is not null)
+                return Results.BadRequest(new { message = "Bir aksiyon aynı anda hem riske hem soruna bağlanamaz." });
+
+            if (riskId is not null)
+            {
+                var linkedRisk = await db.Risks
+                    .AsNoTracking()
+                    .Where(r => r.RiskId == riskId)
+                    .Select(r => new { r.ProjectId })
+                    .SingleOrDefaultAsync();
+
+                if (linkedRisk is null)
+                    return Results.BadRequest(new { message = "Bağlanmak istenen risk bulunamadı." });
+
+                if (linkedRisk.ProjectId != request.ProjectId)
+                    return Results.BadRequest(new { message = "Aksiyon yalnızca aynı projedeki bir riske bağlanabilir." });
+            }
+
+            if (issueId is not null)
+            {
+                var linkedIssue = await db.Issues
+                    .AsNoTracking()
+                    .Where(i => i.IssueId == issueId)
+                    .Select(i => new { i.ProjectId })
+                    .SingleOrDefaultAsync();
+
+                if (linkedIssue is null)
+                    return Results.BadRequest(new { message = "Bağlanmak istenen sorun bulunamadı." });
+
+                if (linkedIssue.ProjectId != request.ProjectId)
+                    return Results.BadRequest(new { message = "Aksiyon yalnızca aynı projedeki bir soruna bağlanabilir." });
+            }
+
             var newAction = new dashboardapi.Models.Action
             {
-                ActionId = "ACT-" + Guid.NewGuid().ToString()[..8].ToUpper(), // Standart ID Formatı
+                ActionId = await IdentifierGenerator.GenerateAsync(db.Set<dashboardapi.Models.Action>(), a => a.ActionId, "ACT-"),
                 ProjectId = request.ProjectId,
+                RiskId = riskId,
+                IssueId = issueId,
                 ActionDescription = request.ActionDescription,
-                SourceType = request.SourceType,
-                SourceReference = request.SourceReference,
+                SourceType = issueId is not null ? "Sorun" : riskId is not null ? "Risk" : request.SourceType,
+                SourceReference = issueId ?? riskId ?? request.SourceReference,
                 ActionOwnerUserId = request.ActionOwnerUserId,
                 ActionDueDate = request.ActionDueDate,
                 ActionStatus = request.ActionStatus ?? "Açık",
@@ -144,13 +195,21 @@ public static class ActionEndpoints
 
             var query = db.Set<dashboardapi.Models.Action>()
                 .Include(a => a.ActionOwnerUser)
+                .Include(a => a.Project)
+                .Include(a => a.Risk)
+                .Include(a => a.Issue)
                 .Where(a => activeProjectIds.Contains(a.ProjectId))
                 .AsQueryable();
 
             if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
                 var accessibleProjectIds = await db.Projects
-                    .Where(p => p.IsActive == 1 && (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)))
+                    .Where(p =>
+                        p.IsActive == 1 &&
+                        (p.ProjectManagerUserId == userId ||
+                         p.ProjectUsers.Any(pu =>
+                             pu.UserId == userId &&
+                             pu.AssignmentStatus == "Aktif")))
                     .Select(p => p.ProjectId)
                     .ToListAsync();
 
@@ -171,7 +230,12 @@ public static class ActionEndpoints
                 a.ActionStatus,
                 a.ActionProgress,
                 a.ActionPriority,
-                a.CompletedDate
+                a.CompletedDate,
+                a.Project?.ProjectName,
+                a.RiskId,
+                a.Risk?.RiskTitle,
+                a.IssueId,
+                a.Issue?.IssueTitle
             )).ToList();
 
             return Results.Ok(result);

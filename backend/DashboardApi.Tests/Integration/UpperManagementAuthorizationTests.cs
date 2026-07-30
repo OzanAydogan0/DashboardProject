@@ -163,9 +163,8 @@ public sealed class UpperManagementAuthorizationTests
                     RootCause: "Yetki testi")),
 
             "milestones" => (
-                "/milestones",
+                "/projects/PRJ-003/milestones",
                 new CreateMilestoneRequest(
-                    ProjectId: "PRJ-003",
                     MilestoneName: marker,
                     PlannedDate: DateTime.UtcNow.Date.AddDays(20),
                     ForecastDate: DateTime.UtcNow.Date.AddDays(25),

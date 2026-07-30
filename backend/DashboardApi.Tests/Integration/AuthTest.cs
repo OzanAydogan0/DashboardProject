@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
@@ -55,6 +56,51 @@ public sealed class AuthTests
         Assert.Equal(
             credentials.User.UserRole,
             loginResponse.Role);
+    }
+
+    [Fact]
+    public async Task Login_EmailWithDifferentCaseAndWhitespace_ReturnsLoginResponse()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+        var credentials = await CreateUserAsync(
+            factory,
+            status: "Aktif");
+
+        var request = new LoginRequest(
+            $"  {credentials.User.Email.ToUpperInvariant()}  ",
+            credentials.PlainTextPassword);
+
+        using var response = await client.PostAsJsonAsync(
+            "/auth/login",
+            request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"email":null,"password":null}""")]
+    [InlineData("""{"email":"","password":""}""")]
+    [InlineData("null")]
+    [InlineData("{")]
+    public async Task Login_InvalidPayload_ReturnsBadRequest(
+        string json)
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+        using var content = new StringContent(
+            json,
+            Encoding.UTF8,
+            "application/json");
+
+        using var response = await client.PostAsync(
+            "/auth/login",
+            content);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
     }
 
     [Fact]
@@ -170,10 +216,10 @@ public sealed class AuthTests
                 loginResult.Token);
 
         var createUserRequest = new UserCreateDto(
-            Email: $"blocked-{Guid.NewGuid():N}@pir.local",
+            Email: $"blocked-{Guid.NewGuid():N}@example.invalid",
             FullName: "Yetkisiz Oluşturma Testi",
             Role: "Proje Yöneticisi",
-            Password: "Test123!");
+            Password: $"NeverUsed-{Guid.NewGuid():N}-Aa1!");
 
         // Act
         using var response = await client.PostAsJsonAsync(

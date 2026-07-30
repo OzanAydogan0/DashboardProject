@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '../router'
 import { authService } from '../services/authService'
-import { useAlert } from '../components/AlertProvider'
+import { useAlert } from '../components/alertContext'
 import './LoginPage.css'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
   const { addAlert } = useAlert()
@@ -43,7 +44,7 @@ function LoginPage() {
           </div>
         </div>
         <div className="login-sidebar-footer">
-          <p>© 2026 yakisikliadnanbey bey, bilge hanım ve ozi. All rights reserved.</p>
+          <p>© 2026 PİR Dashboard. Tüm hakları saklıdır.</p>
         </div>
       </aside>
 
@@ -90,6 +91,28 @@ function LoginPage() {
             <button type="submit" className="login-button" disabled={isLoading}>
               {isLoading ? "Giriş Yapılıyor..." : "Giriş Yap"}
             </button>
+
+            <div className="forgot-password-wrapper">
+              <button
+                type="button"
+                className="forgot-password-link"
+                onClick={() => setShowForgotPassword((prev) => !prev)}
+                disabled={isLoading}
+              >
+                {showForgotPassword ? 'Şifremi unuttum alanını kapat' : 'Şifremi unuttum'}
+              </button>
+
+              {showForgotPassword && (
+                <div className="forgot-password-panel" role="status">
+                  <strong>Parola sıfırlama</strong>
+                  <p>
+                    Güvenlik nedeniyle parolanızı yalnızca sistem yöneticiniz
+                    sıfırlayabilir. Kurumunuzun yetkili destek kanalıyla
+                    iletişime geçin.
+                  </p>
+                </div>
+              )}
+            </div>
           </form>
         </div>
       </main>

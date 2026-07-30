@@ -17,58 +17,26 @@ public static class DashboardEndpoints
         // 1. GET /dashboard -> Akıllı Performans Paneli (vw_dashboard verisi)
         group.MapGet("", async (ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
-
-            // Önce görünüm sorgusunu hazırlıyoruz
-            var activeProjectIds = await db.Projects
-                .Where(p => p.IsActive == 1)
-                .Select(p => p.ProjectId)
-                .ToListAsync();
-
-            var query = db.Set<VwDashboard>()
-                .Where(v => v.ProjectId != null && activeProjectIds.Contains(v.ProjectId))
-                .AsQueryable();
-
-            if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
-            {
-                var allowedProjectIds = await db.Projects
-                    .Where(p => p.IsActive == 1 && (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)))
-                    .Select(p => p.ProjectId)
-                    .ToListAsync();
-
-                query = query.Where(v => v.ProjectId != null && allowedProjectIds.Contains(v.ProjectId));
-            }
-
-            // SQLite'ın byte[] verilerini hafızada işlemek için listeyi çekiyoruz
-            var rawData = await query.ToListAsync();
-
-            // Ham veriyi DTO'ya dönüştürürken byte dizilerini sayıya/metne çeviriyoruz
-            var result = rawData.Select(v => new DashboardSummaryDto(
-                v.ProjectId,
-                v.ProjectCode,
-                v.ProjectName,
-                v.ProjectStatus,
-                v.ManualHealth,
-                v.PlannedProgress,
-                v.ActualProgress,
-                v.BaselineFinishDate,
-                v.ForecastFinishDate,
-                v.Bac,
-                v.Currency,
-                ParseInt(v.OpenRiskCount),
-                ParseInt(v.OpenIssueCount),
-                ParseInt(v.OpenActionCount),
-                ParseInt(v.OpenMilestoneCount),
-                ParseString(v.LatestEvmPeriod)
-            )).ToList();
-
-            return Results.Ok(result);
+            return await GetDashboardAsync(userClaims, db);
         });
 
-        // 2. GET /dashboard/projects/{id}/evm -> Projeye Ait Dönemsel EVM Grafikleri (vw_evm verisi)
+        // 2. GET /dashboard/portfolio?projectIds=... -> Seçili projelerin portföy özeti
+        group.MapGet("portfolio", async (
+            HttpRequest request,
+            ClaimsPrincipal userClaims,
+            AppDbContext db) =>
+        {
+            var projectIds = request.Query["projectIds"]
+                .SelectMany(value => (value ?? string.Empty).Split(
+                    ',',
+                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return await GetDashboardAsync(userClaims, db, projectIds);
+        });
+
+        // 3. GET /dashboard/projects/{id}/evm -> Projeye Ait Dönemsel EVM Grafikleri (vw_evm verisi)
         group.MapGet("projects/{id}/evm", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
             var userRole = PermissionHelper.GetUserRole(userClaims);
@@ -103,6 +71,69 @@ public static class DashboardEndpoints
 
             return Results.Ok(result);
         });
+    }
+
+    private static async Task<IResult> GetDashboardAsync(
+        ClaimsPrincipal userClaims,
+        AppDbContext db,
+        IReadOnlyCollection<string>? requestedProjectIds = null)
+    {
+        var userRole = PermissionHelper.GetUserRole(userClaims);
+        var userId = PermissionHelper.GetUserId(userClaims);
+
+        if (string.IsNullOrEmpty(userId))
+            return Results.Unauthorized();
+
+        var activeProjects = db.Projects
+            .Where(project => project.IsActive == 1);
+
+        if (requestedProjectIds is { Count: > 0 })
+        {
+            activeProjects = activeProjects.Where(project =>
+                requestedProjectIds.Contains(project.ProjectId));
+        }
+
+        if (!PermissionHelper.IsSystemAdmin(userRole) &&
+            !PermissionHelper.IsExecutive(userRole))
+        {
+            activeProjects = activeProjects.Where(project =>
+                project.ProjectManagerUserId == userId ||
+                project.ProjectUsers.Any(assignment =>
+                    assignment.UserId == userId &&
+                    assignment.AssignmentStatus == "Aktif"));
+        }
+
+        var allowedProjectIds = await activeProjects
+            .Select(project => project.ProjectId)
+            .ToListAsync();
+
+        var rawData = await db.Set<VwDashboard>()
+            .Where(summary =>
+                summary.ProjectId != null &&
+                allowedProjectIds.Contains(summary.ProjectId))
+            .OrderBy(summary => summary.ProjectId)
+            .ToListAsync();
+
+        var result = rawData.Select(summary => new DashboardSummaryDto(
+            summary.ProjectId,
+            summary.ProjectCode,
+            summary.ProjectName,
+            summary.ProjectStatus,
+            HealthStatusHelper.Normalize(summary.ManualHealth),
+            summary.PlannedProgress,
+            summary.ActualProgress,
+            summary.BaselineFinishDate,
+            summary.ForecastFinishDate,
+            summary.Bac,
+            summary.Currency,
+            ParseInt(summary.OpenRiskCount),
+            ParseInt(summary.OpenIssueCount),
+            ParseInt(summary.OpenActionCount),
+            ParseInt(summary.OpenMilestoneCount),
+            ParseString(summary.LatestEvmPeriod)
+        )).ToList();
+
+        return Results.Ok(result);
     }
 
     // --- SQLite Byte[] Dönüştürücü Yardımcı Metotlar ---

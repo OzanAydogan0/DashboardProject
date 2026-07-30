@@ -10,6 +10,8 @@ namespace dashboardapi.Endpoints;
 
 public static class PortfolioEndpoints
 {
+    private static readonly HashSet<string> AllowedStatuses = ["Aktif", "Pasif"];
+
     public static void MapPortfolioEndpoints(this IEndpointRouteBuilder app)
     {
         // ==========================================
@@ -28,18 +30,32 @@ public static class PortfolioEndpoints
 
         app.MapPost("customers", async (CreateCustomerRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (!PermissionHelper.IsSystemAdmin(userRole))
                 return Results.Json(new { message = "Müşteri ekleme yetkiniz yok!" }, statusCode: 403);
+
+            var customerName = request.CustomerName?.Trim();
+            var customerType = request.CustomerType?.Trim();
+            var customerStatus = request.CustomerStatus?.Trim();
+            if (string.IsNullOrWhiteSpace(customerName) ||
+                string.IsNullOrWhiteSpace(customerType) ||
+                customerStatus is null ||
+                !AllowedStatuses.Contains(customerStatus))
+            {
+                return Results.BadRequest(new
+                {
+                    message = "Müşteri adı/türü zorunludur ve durum Aktif veya Pasif olmalıdır."
+                });
+            }
 
             var customerId = await CustomerIdGenerator.GenerateAsync(db);
 
             var newCustomer = new Customer
             {
                 CustomerId = customerId,
-                CustomerName = request.CustomerName,
-                CustomerType = request.CustomerType,
-                CustomerStatus = request.CustomerStatus,
+                CustomerName = customerName,
+                CustomerType = customerType,
+                CustomerStatus = customerStatus,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -52,8 +68,8 @@ public static class PortfolioEndpoints
 
         app.MapDelete("customers/{id}", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (!PermissionHelper.IsSystemAdmin(userRole))
                 return Results.Json(new { message = "Müşteri silme yetkiniz yok!" }, statusCode: 403);
 
             var customer = await db.Set<Customer>().FindAsync(id);
@@ -72,17 +88,31 @@ public static class PortfolioEndpoints
 
         app.MapPatch("customers/{id}", async (string id, CreateCustomerRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (!PermissionHelper.IsSystemAdmin(userRole))
                 return Results.Json(new { message = "Müşteri güncelleme yetkiniz yok!" }, statusCode: 403);
+
+            var customerName = request.CustomerName?.Trim();
+            var customerType = request.CustomerType?.Trim();
+            var customerStatus = request.CustomerStatus?.Trim();
+            if (string.IsNullOrWhiteSpace(customerName) ||
+                string.IsNullOrWhiteSpace(customerType) ||
+                customerStatus is null ||
+                !AllowedStatuses.Contains(customerStatus))
+            {
+                return Results.BadRequest(new
+                {
+                    message = "Müşteri adı/türü zorunludur ve durum Aktif veya Pasif olmalıdır."
+                });
+            }
 
             var customer = await db.Set<Customer>().FindAsync(id);
             if (customer == null)
                 return Results.NotFound(new { message = "Müşteri bulunamadı." });
 
-            customer.CustomerName = request.CustomerName;
-            customer.CustomerType = request.CustomerType;
-            customer.CustomerStatus = request.CustomerStatus;
+            customer.CustomerName = customerName;
+            customer.CustomerType = customerType;
+            customer.CustomerStatus = customerStatus;
             customer.UpdatedAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
@@ -107,16 +137,42 @@ public static class PortfolioEndpoints
 
         app.MapPost("programs", async (CreateProgramRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
-            if (userRole != "Sistem Yöneticisi" && userRole != "Üst Yönetim")
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (!PermissionHelper.IsSystemAdmin(userRole))
                 return Results.Json(new { message = "Program/Portföy ekleme yetkiniz yok!" }, statusCode: 403);
+
+            var programName = request.ProgramName?.Trim();
+            var programDescription = request.ProgramDescription?.Trim();
+            var programStatus = request.ProgramStatus?.Trim();
+            if (string.IsNullOrWhiteSpace(programName) ||
+                programStatus is null ||
+                !AllowedStatuses.Contains(programStatus))
+            {
+                return Results.BadRequest(new
+                {
+                    message = "Program adı zorunludur ve durum Aktif veya Pasif olmalıdır."
+                });
+            }
+
+            var duplicateName = await db.Set<dashboardapi.Models.Program>()
+                .AnyAsync(program =>
+                    program.ProgramName.ToLower() == programName.ToLower());
+            if (duplicateName)
+            {
+                return Results.Conflict(new
+                {
+                    message = "Bu program adı zaten kullanımda."
+                });
+            }
 
             var newProgram = new dashboardapi.Models.Program
             {
-                ProgramId = Guid.NewGuid().ToString(),
-                ProgramName = request.ProgramName,
-                ProgramDescription = request.ProgramDescription,
-                ProgramStatus = request.ProgramStatus,
+                ProgramId = await IdentifierGenerator.GenerateAsync(db.Set<dashboardapi.Models.Program>(), p => p.ProgramId, "PRG-"),
+                ProgramName = programName,
+                ProgramDescription = string.IsNullOrWhiteSpace(programDescription)
+                    ? null
+                    : programDescription,
+                ProgramStatus = programStatus,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -125,6 +181,86 @@ public static class PortfolioEndpoints
             await db.SaveChangesAsync();
 
             return Results.Json(new { message = "Program başarıyla oluşturuldu.", programId = newProgram.ProgramId }, statusCode: 201);
+        });
+
+        app.MapPatch("programs/{id}", async (
+            string id,
+            CreateProgramRequest request,
+            ClaimsPrincipal userClaims,
+            AppDbContext db) =>
+        {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (!PermissionHelper.IsSystemAdmin(userRole))
+                return Results.Json(new { message = "Program güncelleme yetkiniz yok!" }, statusCode: 403);
+
+            var programName = request.ProgramName?.Trim();
+            var programDescription = request.ProgramDescription?.Trim();
+            var programStatus = request.ProgramStatus?.Trim();
+            if (string.IsNullOrWhiteSpace(programName) ||
+                programStatus is null ||
+                !AllowedStatuses.Contains(programStatus))
+            {
+                return Results.BadRequest(new
+                {
+                    message = "Program adı zorunludur ve durum Aktif veya Pasif olmalıdır."
+                });
+            }
+
+            var program = await db.Set<dashboardapi.Models.Program>()
+                .FindAsync(id);
+            if (program is null)
+                return Results.NotFound(new { message = "Program bulunamadı." });
+
+            var duplicateName = await db.Set<dashboardapi.Models.Program>()
+                .AnyAsync(candidate =>
+                    candidate.ProgramId != id &&
+                    candidate.ProgramName.ToLower() == programName.ToLower());
+            if (duplicateName)
+            {
+                return Results.Conflict(new
+                {
+                    message = "Bu program adı zaten kullanımda."
+                });
+            }
+
+            program.ProgramName = programName;
+            program.ProgramDescription = string.IsNullOrWhiteSpace(programDescription)
+                ? null
+                : programDescription;
+            program.ProgramStatus = programStatus;
+            program.UpdatedAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "Program başarıyla güncellendi." });
+        });
+
+        app.MapDelete("programs/{id}", async (
+            string id,
+            ClaimsPrincipal userClaims,
+            AppDbContext db) =>
+        {
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (!PermissionHelper.IsSystemAdmin(userRole))
+                return Results.Json(new { message = "Program silme yetkiniz yok!" }, statusCode: 403);
+
+            var program = await db.Set<dashboardapi.Models.Program>()
+                .FindAsync(id);
+            if (program is null)
+                return Results.NotFound(new { message = "Program bulunamadı." });
+
+            var hasProjects = await db.Projects
+                .AnyAsync(project => project.ProgramId == id);
+            if (hasProjects)
+            {
+                return Results.Conflict(new
+                {
+                    message = "Bu programa bağlı projeler var. Programı silmek yerine pasife alın."
+                });
+            }
+
+            db.Remove(program);
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "Program başarıyla silindi." });
         });
     }
 }

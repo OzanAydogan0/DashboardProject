@@ -60,6 +60,14 @@ public static class MilestoneEndpoints
             if (!await PermissionHelper.CanWriteProjectAsync(db, projectId, userId, userRole))
                 return Results.Json(new { message = "Bu projeye kilometre taşı ekleme yetkiniz yok!" }, statusCode: 403);
 
+            if (request.ForecastDate < request.PlannedDate)
+            {
+                return Results.BadRequest(new
+                {
+                    message = "Tahmini tarih planlanan tarihten önce olamaz."
+                });
+            }
+
             // GÜVENLİK AĞI: Eğer frontend'den Sahip ID gelmediyse veya boşsa, işlemi yapan kişiyi(userId) ata.
             // Bu sayede veritabanındaki 'NOT NULL' (Boş Olamaz) hatasını önlüyoruz.
             string ownerId = string.IsNullOrWhiteSpace(request.MilestoneOwnerUserId) 
@@ -68,12 +76,12 @@ public static class MilestoneEndpoints
 
             var newMilestone = new Milestone
             {
-                MilestoneId = "MS-" + Guid.NewGuid().ToString()[..8].ToUpper(),
+                MilestoneId = await IdentifierGenerator.GenerateAsync(db.Set<Milestone>(), m => m.MilestoneId, "MS-"),
                 ProjectId = projectId, 
                 MilestoneName = request.MilestoneName,
                 PlannedDate = request.PlannedDate,
                 ForecastDate = request.ForecastDate,
-                ActualDate = null, 
+                ActualDate = request.ActualDate,
                 MilestoneStatus = string.IsNullOrWhiteSpace(request.MilestoneStatus) ? "Planlandı" : request.MilestoneStatus,
                 Critical = request.Critical,
                 
@@ -111,6 +119,16 @@ public static class MilestoneEndpoints
             if (!await PermissionHelper.CanWriteProjectAsync(db, milestone.ProjectId, userId, userRole))
                 return Results.Json(new { message = "Bu projenin kilometre taşını güncelleme yetkiniz yok!" }, statusCode: 403);
 
+            var plannedDate = request.PlannedDate ?? milestone.PlannedDate;
+            var forecastDate = request.ForecastDate ?? milestone.ForecastDate;
+            if (forecastDate < plannedDate)
+            {
+                return Results.BadRequest(new
+                {
+                    message = "Tahmini tarih planlanan tarihten önce olamaz."
+                });
+            }
+
             // Alanları güvenli şekilde güncelleme havuzu
             if (!string.IsNullOrEmpty(request.MilestoneName)) milestone.MilestoneName = request.MilestoneName;
             if (request.PlannedDate.HasValue) milestone.PlannedDate = request.PlannedDate.Value;
@@ -132,62 +150,46 @@ public static class MilestoneEndpoints
         // 4. DELETE /milestones/{id} -> Kilometre Taşı İptal Etme (Soft Delete)
         app.MapDelete("milestones/{id}", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
-            try
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            var userId = PermissionHelper.GetUserId(userClaims);
+
+            if (string.IsNullOrEmpty(userId))
+                return Results.Unauthorized();
+
+            var milestone = await db.Set<Milestone>().FindAsync(id);
+            if (milestone == null)
             {
-                // 1. KULLANICI BİLGİLERİNİ OKUMA VE OTURUM KONTROLÜ
-                var userRole = PermissionHelper.GetUserRole(userClaims);
-                var userId = PermissionHelper.GetUserId(userClaims);
-
-                // Oturum açılmamışsa veya Token geçersizse 401 dön (Veritabanı çökmesini engeller)
-                if (string.IsNullOrEmpty(userId))
+                return Results.NotFound(new
                 {
-                    return Results.Unauthorized();
-                }
-
-                // 2. KİLOMETRE TAŞI KONTROLÜ
-                var milestone = await db.Set<Milestone>().FindAsync(id);
-                if (milestone == null)
-                {
-                    // Mesaj güncellendi
-                    return Results.NotFound(new { message = "İptal edilmek istenen kilometre taşı veritabanında bulunamadı." });
-                }
-
-                // 3. YETKİ KONTROLÜ
-                if (PermissionHelper.IsExecutive(userRole))
-                {
-                    return Results.Json(new { message = "Üst Yönetim rolü iptal işlemi yapamaz!" }, statusCode: 403);
-                }
-
-                if (!await PermissionHelper.CanWriteProjectAsync(db, milestone.ProjectId, userId, userRole))
-                {
-                    return Results.Json(new { message = "Bu projenin kilometre taşını iptal etme yetkiniz yok!" }, statusCode: 403);
-                }
-
-                // 4. SOFT DELETE İŞLEMİ (Durumu İptal Olarak Güncelleme)
-                milestone.MilestoneStatus = "İptal"; // Hatanın çözüldüğü asıl nokta burası
-                milestone.UpdatedByUserId = userId; // İşlemi kimin yaptığını kaydediyoruz
-                milestone.UpdatedAt = DateTime.UtcNow; // İşlem zamanını güncelliyoruz
-
-                // 5. VERİTABANINA KAYDETME
-                await db.SaveChangesAsync();
-
-                // Başarı mesajı güncellendi
-                return Results.Ok(new { message = "Kilometre taşı başarıyla iptal edildi." });
+                    message = "İptal edilmek istenen kilometre taşı veritabanında bulunamadı."
+                });
             }
-            catch (Exception ex)
+
+            if (PermissionHelper.IsExecutive(userRole))
             {
-                // Terminal ekranına hatanın detayını yazdıralım (Log başlığı güncellendi)
-                Console.WriteLine($"[CANCEL MILESTONE ERROR]: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine($"[INNER ERROR]: {ex.InnerException.Message}");
-                }
-
-                return Results.Json(new { 
-                    message = "İptal işlemi sırasında veritabanı hatası oluştu.", 
-                    error = ex.InnerException?.Message ?? ex.Message 
-                }, statusCode: 500);
+                return Results.Json(
+                    new { message = "Üst Yönetim rolü iptal işlemi yapamaz!" },
+                    statusCode: StatusCodes.Status403Forbidden);
             }
+
+            if (!await PermissionHelper.CanWriteProjectAsync(
+                    db,
+                    milestone.ProjectId,
+                    userId,
+                    userRole))
+            {
+                return Results.Json(
+                    new { message = "Bu projenin kilometre taşını iptal etme yetkiniz yok!" },
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            milestone.MilestoneStatus = "İptal";
+            milestone.UpdatedByUserId = userId;
+            milestone.UpdatedAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { message = "Kilometre taşı başarıyla iptal edildi." });
         });
     }
 }

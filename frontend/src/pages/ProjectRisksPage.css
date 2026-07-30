@@ -20,6 +20,19 @@
   font-size: 18px;
 }
 
+.project-risks-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.import-project-btn:disabled {
+  opacity: 0.65;
+  cursor: wait !important;
+}
+
 .risk-modal-overlay {
   position: fixed;
   inset: 0;
@@ -122,7 +135,8 @@
 
 .btn-primary,
 .btn-secondary,
-.btn-danger {
+.btn-danger,
+.btn-related {
   border: none;
   border-radius: 8px;
   padding: 9px 14px;
@@ -144,6 +158,21 @@
 .btn-danger {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+.risk-row-actions {
+  min-width: 210px;
+  flex-wrap: wrap;
+}
+
+.btn-related-issue {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.btn-related-action {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .permission-note,
@@ -220,5 +249,10 @@
   .project-risks-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .project-risks-header-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }

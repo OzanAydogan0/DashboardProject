@@ -159,6 +159,30 @@ importProjectsExcel: (formData) => {
     return response.data;
   },
 
+  importProjectRisksExcel: (projectId, formData) => {
+    return api.post(`/projects/${projectId}/risks/import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  importProjectIssuesExcel: (projectId, formData) => {
+    return api.post(`/projects/${projectId}/issues/import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  importProjectActionsExcel: (projectId, formData) => {
+    return api.post(`/projects/${projectId}/actions/import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
   // --- Sorunlar (Issues) ---
   getProjectIssues: async (projectId) => {
     const response = await api.get(`/projects/${projectId}/issues`);
@@ -206,6 +230,21 @@ importProjectsExcel: (formData) => {
     return response.data;
   },
 
+  createProgram: async (programData) => {
+    const response = await api.post('/programs', programData);
+    return response.data;
+  },
+
+  updateProgram: async (programId, programData) => {
+    const response = await api.patch(`/programs/${programId}`, programData);
+    return response.data;
+  },
+
+  deleteProgram: async (programId) => {
+    const response = await api.delete(`/programs/${programId}`);
+    return response.data;
+  },
+
   getUsers: async () => {
     const response = await api.get('/users');
     return response.data;
@@ -223,6 +262,11 @@ importProjectsExcel: (formData) => {
 
   deleteUser: async (userId) => {
     const response = await api.delete(`/users/${userId}`);
+    return response.data;
+  },
+
+  getAuditLogs: async () => {
+    const response = await api.get('/audit-logs');
     return response.data;
   },
 

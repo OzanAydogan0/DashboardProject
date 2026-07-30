@@ -9,6 +9,10 @@ namespace dashboardapi.Endpoints;
 
 public static class IssueEndpoints
 {
+    private static readonly HashSet<string> AllowedPriorities = ["Düşük", "Orta", "Yüksek", "Kritik"];
+    private static readonly HashSet<string> AllowedStatuses = ["Açık", "Devam Ediyor", "Çözüldü", "Kapalı"];
+    private static readonly HashSet<string> AllowedImpacts = ["Düşük", "Orta", "Yüksek", "Kritik"];
+
     public static void MapIssueEndpoints(this IEndpointRouteBuilder app)
     {
         // 1. GET /projects/{id}/issues -> Projeye Ait Tüm Aktif/Kapalı Sorunları Listeleme
@@ -24,6 +28,7 @@ public static class IssueEndpoints
 
             var issues = await db.Set<Issue>()
                 .Include(i => i.IssueOwnerUser)
+                .Include(i => i.Risk)
                 .Where(i => i.ProjectId == id)
                 .ToListAsync();
 
@@ -40,7 +45,9 @@ public static class IssueEndpoints
                 i.RootCause,
                 i.IssueResolution,
                 i.OpenedDate,
-                i.ClosedDate
+                i.ClosedDate,
+                i.RiskId,
+                i.Risk?.RiskTitle
             )).ToList();
 
             return Results.Ok(result);
@@ -60,16 +67,63 @@ public static class IssueEndpoints
             if (!await PermissionHelper.CanWriteProjectAsync(db, request.ProjectId, userId, userRole))
                 return Results.Json(new { message = "Bu projeye sorun kaydı ekleme yetkiniz yok!" }, statusCode: 403);
 
+            var issueTitle = request.IssueTitle?.Trim();
+            var issuePriority = request.IssuePriority?.Trim();
+            var issueOwnerUserId = request.IssueOwnerUserId?.Trim();
+            var issueStatus = request.IssueStatus?.Trim();
+            var issueImpact = request.IssueImpact?.Trim();
+
+            if (string.IsNullOrWhiteSpace(issueTitle))
+                return Results.BadRequest(new { message = "Sorun tanımı zorunludur." });
+
+            if (string.IsNullOrWhiteSpace(issuePriority) || !AllowedPriorities.Contains(issuePriority))
+                return Results.BadRequest(new { message = "Geçerli bir sorun önceliği seçiniz." });
+
+            if (string.IsNullOrWhiteSpace(issueStatus) || !AllowedStatuses.Contains(issueStatus))
+                return Results.BadRequest(new { message = "Geçerli bir sorun durumu seçiniz." });
+
+            if (string.IsNullOrWhiteSpace(issueImpact) || !AllowedImpacts.Contains(issueImpact))
+                return Results.BadRequest(new { message = "Geçerli bir sorun etkisi seçiniz." });
+
+            if (request.IssueDueDate == default)
+                return Results.BadRequest(new { message = "Hedef tarihi zorunludur." });
+
+            if (string.IsNullOrWhiteSpace(issueOwnerUserId) ||
+                !await db.Users.AnyAsync(u => u.UserId == issueOwnerUserId))
+            {
+                return Results.BadRequest(new { message = "Geçerli bir sorumlu kullanıcı seçiniz." });
+            }
+
+            var riskId = string.IsNullOrWhiteSpace(request.RiskId)
+                ? null
+                : request.RiskId.Trim();
+
+            if (riskId is not null)
+            {
+                var linkedRisk = await db.Risks
+                    .AsNoTracking()
+                    .Where(r => r.RiskId == riskId)
+                    .Select(r => new { r.ProjectId })
+                    .SingleOrDefaultAsync();
+
+                if (linkedRisk is null)
+                    return Results.BadRequest(new { message = "Bağlanmak istenen risk bulunamadı." });
+
+                if (linkedRisk.ProjectId != request.ProjectId)
+                    return Results.BadRequest(new { message = "Sorun yalnızca aynı projedeki bir riske bağlanabilir." });
+            }
+
             var newIssue = new Issue
             {
-                IssueId = "ISS-" + Guid.NewGuid().ToString()[..8].ToUpper(), // Standart ID formatı
+                IssueId = await IdentifierGenerator.GenerateAsync(db.Set<Issue>(), i => i.IssueId, "ISS-"),
                 ProjectId = request.ProjectId,
-                IssueTitle = request.IssueTitle,
-                IssuePriority = request.IssuePriority,
-                IssueOwnerUserId = request.IssueOwnerUserId,
+                RiskId = riskId,
+                IssueTitle = issueTitle,
+                IssuePriority = issuePriority,
+                IssueOwnerUserId = issueOwnerUserId,
                 IssueDueDate = request.IssueDueDate,
-                IssueStatus = request.IssueStatus ?? "Açık",
-                IssueImpact = request.IssueImpact,
+                IssueStatus = issueStatus,
+                IssueImpact = issueImpact,
                 RootCause = request.RootCause,
                 IssueResolution = null, 
                 OpenedDate = DateTime.UtcNow,
@@ -103,26 +157,55 @@ public static class IssueEndpoints
             if (!await PermissionHelper.CanWriteProjectAsync(db, issue.ProjectId, userId, userRole))
                 return Results.Json(new { message = "Bu projenin sorun kaydını güncelleme yetkiniz yok!" }, statusCode: 403);
 
+            if (request.IssuePriority is not null &&
+                !AllowedPriorities.Contains(request.IssuePriority.Trim()))
+            {
+                return Results.BadRequest(new { message = "Geçerli bir sorun önceliği seçiniz." });
+            }
+
+            if (request.IssueStatus is not null &&
+                !AllowedStatuses.Contains(request.IssueStatus.Trim()))
+            {
+                return Results.BadRequest(new { message = "Geçerli bir sorun durumu seçiniz." });
+            }
+
+            if (request.IssueImpact is not null &&
+                !AllowedImpacts.Contains(request.IssueImpact.Trim()))
+            {
+                return Results.BadRequest(new { message = "Geçerli bir sorun etkisi seçiniz." });
+            }
+
+            if (request.IssueOwnerUserId is not null)
+            {
+                var requestedOwnerUserId = request.IssueOwnerUserId.Trim();
+                if (string.IsNullOrWhiteSpace(requestedOwnerUserId) ||
+                    !await db.Users.AnyAsync(u => u.UserId == requestedOwnerUserId))
+                {
+                    return Results.BadRequest(new { message = "Geçerli bir sorumlu kullanıcı seçiniz." });
+                }
+            }
+
             // Alanları güvenli şekilde güncelleme
-            if (!string.IsNullOrEmpty(request.IssueTitle)) issue.IssueTitle = request.IssueTitle;
-            if (!string.IsNullOrEmpty(request.IssuePriority)) issue.IssuePriority = request.IssuePriority;
-            if (!string.IsNullOrEmpty(request.IssueOwnerUserId)) issue.IssueOwnerUserId = request.IssueOwnerUserId;
+            if (!string.IsNullOrWhiteSpace(request.IssueTitle)) issue.IssueTitle = request.IssueTitle.Trim();
+            if (!string.IsNullOrWhiteSpace(request.IssuePriority)) issue.IssuePriority = request.IssuePriority.Trim();
+            if (!string.IsNullOrWhiteSpace(request.IssueOwnerUserId)) issue.IssueOwnerUserId = request.IssueOwnerUserId.Trim();
             if (request.IssueDueDate.HasValue) issue.IssueDueDate = request.IssueDueDate.Value;
-            if (!string.IsNullOrEmpty(request.IssueImpact)) issue.IssueImpact = request.IssueImpact;
+            if (!string.IsNullOrWhiteSpace(request.IssueImpact)) issue.IssueImpact = request.IssueImpact.Trim();
             if (request.RootCause != null) issue.RootCause = request.RootCause;
             if (request.IssueResolution != null) issue.IssueResolution = request.IssueResolution;
 
             // 🧠 AKILLI KAPATMA MOTORU: Durum kapandıya çekildiyse kapanış tarihini otomatik yönet
             if (!string.IsNullOrEmpty(request.IssueStatus))
             {
-                issue.IssueStatus = request.IssueStatus;
-                if ((request.IssueStatus.Equals("Kapalı", StringComparison.OrdinalIgnoreCase) || 
-                     request.IssueStatus.Equals("Çözüldü", StringComparison.OrdinalIgnoreCase)) && issue.ClosedDate == null)
+                var requestedStatus = request.IssueStatus.Trim();
+                issue.IssueStatus = requestedStatus;
+                if ((requestedStatus.Equals("Kapalı", StringComparison.OrdinalIgnoreCase) ||
+                     requestedStatus.Equals("Çözüldü", StringComparison.OrdinalIgnoreCase)) && issue.ClosedDate == null)
                 {
                     issue.ClosedDate = DateTime.UtcNow;
                 }
-                else if (!request.IssueStatus.Equals("Kapalı", StringComparison.OrdinalIgnoreCase) && 
-                         !request.IssueStatus.Equals("Çözüldü", StringComparison.OrdinalIgnoreCase))
+                else if (!requestedStatus.Equals("Kapalı", StringComparison.OrdinalIgnoreCase) &&
+                         !requestedStatus.Equals("Çözüldü", StringComparison.OrdinalIgnoreCase))
                 {
                     issue.ClosedDate = null; // Tekrar açılırsa tarihi temizle
                 }

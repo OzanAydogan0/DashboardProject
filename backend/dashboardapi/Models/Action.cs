@@ -9,6 +9,10 @@ public partial class Action
 
     public string ProjectId { get; set; } = null!;
 
+    public string? RiskId { get; set; }
+
+    public string? IssueId { get; set; }
+
     public string ActionDescription { get; set; } = null!;
 
     public string SourceType { get; set; } = null!;
@@ -39,7 +43,11 @@ public partial class Action
 
     public virtual User CreatedByUser { get; set; } = null!;
 
+    public virtual Issue? Issue { get; set; }
+
     public virtual Project Project { get; set; } = null!;
+
+    public virtual Risk? Risk { get; set; }
 
     public virtual User UpdatedByUser { get; set; } = null!;
 }

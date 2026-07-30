@@ -48,6 +48,14 @@
   font-weight: 500;
 }
 
+.linked-record-id {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .text-center {
   text-align: center;
 }
@@ -133,4 +141,54 @@
   background-color: #2563eb; /* Canlı Mavi İlerleme Rengi */
   border-radius: 999px;
   transition: width 0.4s ease-in-out;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.pagination-summary {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pagination-btn,
+.pagination-page-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled),
+.pagination-page-btn:hover:not(.active) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.pagination-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.pagination-page-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
 }

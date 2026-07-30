@@ -295,6 +295,7 @@
 
 .chart-legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
@@ -315,6 +316,7 @@
 .dot.green { background-color: #10b981; }
 .dot.yellow { background-color: #f59e0b; }
 .dot.red { background-color: #ef4444; }
+.dot.gray { background-color: #94a3b8; }
 
 /* Bar Chart */
 .bar-chart-container {
@@ -484,19 +486,28 @@
   display: inline-block;
 }
 
-.badge-Kötü {
+.badge-kırmızı,
+.badge-kritik {
   background-color: #fee2e2;
   color: #ef4444;
 }
 
-.badge-yeşil {
+.badge-yeşil,
+.badge-iyi {
   background-color: #d1fae5;
   color: #10b981;
 }
 
-.badge-Orta {
+.badge-sarı,
+.badge-orta {
   background-color: #fef3c7;
   color: #d97706;
+}
+
+.badge-gri,
+.badge-belirsiz {
+  background-color: #f1f5f9;
+  color: #64748b;
 }
 
 /* Table Footer */

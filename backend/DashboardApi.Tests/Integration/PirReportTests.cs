@@ -71,7 +71,7 @@ public sealed class PirReportTests
         Assert.Equal("2026-06", report.Period);
 
         Assert.Equal(
-            "Kırmızı",
+            "Kritik",
             report.ManualHealth);
 
         Assert.Equal(
@@ -133,7 +133,7 @@ public sealed class PirReportTests
             Delays: null,
             NextPeriodPlan: "Kabul testleri gerçekleştirilecek.",
             ManagementExpectations: "Test ortamı desteği beklenmektedir.",
-            ManualHealth: "Sarı",
+            ManualHealth: "Orta",
             ReportStatus: "Taslak");
 
         // Act
@@ -209,6 +209,10 @@ public sealed class PirReportTests
         using var client = factory.CreateHttpsClient();
 
         var credentials = await CreateActiveUserAsync(factory, role: "Proje Yöneticisi");
+        await AssignUserToProjectAsync(
+            factory,
+            credentials.User.UserId,
+            projectId: "PRJ-001");
 
         using var loginResponse = await client.PostAsJsonAsync(
             "/auth/login",
@@ -250,6 +254,10 @@ public sealed class PirReportTests
         using var client = factory.CreateHttpsClient();
 
         var credentials = await CreateActiveUserAsync(factory, role: "Proje Yöneticisi");
+        await AssignUserToProjectAsync(
+            factory,
+            credentials.User.UserId,
+            projectId: "PRJ-001");
 
         using var loginResponse = await client.PostAsJsonAsync(
             "/auth/login",
@@ -520,7 +528,7 @@ public sealed class PirReportTests
             delays = "Kritik olmayan kısa gecikme.",
             nextPeriodPlan = "Sonraki dönem kabul faaliyetleri.",
             managementExpectations = "Yönetim onayı beklenmektedir.",
-            manualHealth = "Yeşil",
+            manualHealth = "İyi",
             reportStatus = "Yayımlandı"
         };
 
@@ -587,5 +595,29 @@ public sealed class PirReportTests
         var builder = new TestDataBuilder(db);
 
         return await builder.CreateActiveUserAsync(role);
+    }
+
+    private static async Task AssignUserToProjectAsync(
+        TestWebApplicationFactory factory,
+        string userId,
+        string projectId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var now = DateTime.UtcNow;
+
+        db.ProjectUsers.Add(new ProjectUser
+        {
+            ProjectUserId = $"TEST-PU-{Guid.NewGuid():N}",
+            ProjectId = projectId,
+            UserId = userId,
+            AssignedByUserId = "USR-ADMIN",
+            AssignmentStatus = "Aktif",
+            AssignedAt = now,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+
+        await db.SaveChangesAsync();
     }
 }

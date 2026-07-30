@@ -32,6 +32,46 @@ export const normalizeRole = (role) => {
   return trimmed
 }
 
+export const getUserRecordId = (user) =>
+  user?.userId || user?.UserId || user?.id || user?.Id || ''
+
+export const getUserRecordRole = (user) =>
+  normalizeRole(
+    user?.userRole ||
+    user?.UserRole ||
+    user?.role ||
+    user?.Role ||
+    '',
+  )
+
+export const getUserRecordStatus = (user) =>
+  (
+    user?.userStatus ||
+    user?.UserStatus ||
+    user?.status ||
+    user?.Status ||
+    ''
+  ).toString().trim()
+
+export const isAssignableProjectUser = (user) =>
+  getUserRecordStatus(user) === 'Aktif' &&
+  getUserRecordRole(user) !== 'Üst Yönetim İzleyicisi'
+
+export const getAssignableProjectUsers = (users) =>
+  (Array.isArray(users) ? users : []).filter(isAssignableProjectUser)
+
+export const getDefaultProjectAssigneeId = (users) => {
+  const assignableUsers = getAssignableProjectUsers(users)
+  const currentUserId = getUserId()
+  const currentUser = assignableUsers.find(user => getUserRecordId(user) === currentUserId)
+  return getUserRecordId(currentUser || assignableUsers[0])
+}
+
+export const getValidProjectAssigneeId = (users, userId) =>
+  getAssignableProjectUsers(users).some(user => getUserRecordId(user) === userId)
+    ? userId
+    : ''
+
 export const isSystemAdmin = () => normalizeRole(getUserRole()) === 'Sistem Yöneticisi'
 export const isExecutive = () => ['Üst Yönetim İzleyicisi'].includes(normalizeRole(getUserRole()))
 

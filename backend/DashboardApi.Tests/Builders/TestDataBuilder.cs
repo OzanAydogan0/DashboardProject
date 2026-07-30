@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using dashboardapi.Data;
 using dashboardapi.Models;
 
@@ -31,12 +32,13 @@ public sealed class TestDataBuilder
             .ToString("N")
             .ToUpperInvariant();
 
-        const string plainTextPassword = "Test123!";
+        var plainTextPassword =
+            $"{Convert.ToBase64String(RandomNumberGenerator.GetBytes(18))}aA1!";
 
         var user = new User
         {
             UserId = $"TEST-USR-{uniqueValue[..8]}",
-            Email = $"test-{uniqueValue}@pir.local",
+            Email = $"test-{uniqueValue}@example.test",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(
                 plainTextPassword),
             FullName = "Test Kullanıcısı",

@@ -1,0 +1,201 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore backend/DashboardApi.Tests/DashboardApi.Tests.csproj
+
+      - name: Build
+        run: dotnet build backend/DashboardApi.Tests/DashboardApi.Tests.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: >-
+          dotnet test backend/DashboardApi.Tests/DashboardApi.Tests.csproj
+          --configuration Release
+          --no-build
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+          retention-days: 14
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  containers:
+    name: Containers
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - backend
+      - frontend
+    env:
+      COMPOSE_PROJECT_NAME: dashboard-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      DATA_VOLUME_NAME: dashboard-ci-data-${{ github.run_id }}-${{ github.run_attempt }}
+      ASPNETCORE_ENVIRONMENT: Staging
+      JWT_SECRET: CI-only-random-looking-secret-not-used-outside-this-workflow-2026
+      QUESTPDF_LICENSE: Evaluation
+      CORS_ALLOWED_ORIGINS: http://localhost:8080
+      BOOTSTRAP_ADMIN_EMAIL: ci-admin@example.invalid
+      BOOTSTRAP_ADMIN_FULL_NAME: CI Bootstrap Admin
+      BOOTSTRAP_ADMIN_PASSWORD: CI-only-Strong-Password-2026!
+      APP_VERSION: ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose
+        run: docker compose config --quiet
+
+      - name: Build images
+        run: docker compose build --pull
+
+      - name: Scan API image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          scan-ref: dashboard-api:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: false
+          severity: CRITICAL,HIGH
+
+      - name: Scan frontend image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          scan-ref: dashboard-frontend:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: false
+          severity: CRITICAL,HIGH
+
+      - name: Scan SQLite utility image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          scan-ref: alpine:3.22
+          format: table
+          exit-code: "1"
+          ignore-unfixed: false
+          severity: CRITICAL,HIGH
+
+      - name: Start delivery stack
+        run: docker compose up --detach --wait --wait-timeout 120
+
+      - name: Smoke test routes and security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl --fail --silent --show-error http://localhost:8080/healthz >/dev/null
+          curl --fail --silent --show-error http://localhost:8080/api/health >/dev/null
+
+          unauthenticated_status="$(
+            curl --silent --output /dev/null --write-out '%{http_code}' \
+              http://localhost:8080/api/users
+          )"
+          test "${unauthenticated_status}" = "401"
+
+          login_response="$(
+            curl --fail --silent --show-error \
+              --header 'Content-Type: application/json' \
+              --data "{\"email\":\"${BOOTSTRAP_ADMIN_EMAIL}\",\"password\":\"${BOOTSTRAP_ADMIN_PASSWORD}\"}" \
+              http://localhost:8080/api/auth/login
+          )"
+          access_token="$(
+            jq --exit-status --raw-output \
+              '.token | select(type == "string" and length > 20)' \
+              <<<"${login_response}"
+          )"
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${access_token}" \
+            http://localhost:8080/api/auth/me >/dev/null
+
+          api_redirect_status="$(
+            curl --silent --output /dev/null --write-out '%{http_code}' \
+              http://localhost:8080/api
+          )"
+          test "${api_redirect_status}" = "308"
+
+          for path in /index.html /assets/not-found.js; do
+            headers="$(curl --silent --show-error --dump-header - --output /dev/null \
+              "http://localhost:8080${path}")"
+            grep --ignore-case --quiet '^Content-Security-Policy:' <<<"${headers}"
+            grep --ignore-case --quiet '^X-Content-Type-Options: nosniff' <<<"${headers}"
+            grep --ignore-case --quiet '^X-Frame-Options: DENY' <<<"${headers}"
+            grep --ignore-case --quiet '^Referrer-Policy:' <<<"${headers}"
+          done
+
+      - name: Recreate API and verify proxy DNS refresh
+        run: |
+          docker compose up --detach --wait --wait-timeout 120 --force-recreate api
+          curl --fail --silent --show-error http://localhost:8080/api/health >/dev/null
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Remove CI stack and data
+        if: always()
+        run: docker compose down --volumes --remove-orphans

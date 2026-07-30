@@ -1,7 +1,14 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from '../router'
+import Pagination from '../components/Pagination'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
+import { useAlert } from '../components/alertContext'
+import {
+  HEALTH_STATUS,
+  HEALTH_STATUS_OPTIONS,
+  normalizeHealthStatus,
+} from '../utils/healthStatus'
+import { usePagination } from '../utils/usePagination'
 import './ProjectReportsPage.css'
 
 const getCanWrite = () => {
@@ -27,7 +34,7 @@ function ReportsPage({ reports = [], onRefresh }) {
     delays: '',
     nextPeriodPlan: '',
     managementExpectations: '',
-    manualHealth: 'Sarı',
+    manualHealth: HEALTH_STATUS.MEDIUM,
     reportStatus: 'Taslak'
   })
   const [editingId, setEditingId] = useState(null)
@@ -35,6 +42,7 @@ function ReportsPage({ reports = [], onRefresh }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [canWrite] = useState(getCanWrite)
+  const reportPagination = usePagination(reports)
 
   const formatDate = (dateString) => {
     if (!dateString) return '-'
@@ -47,11 +55,11 @@ function ReportsPage({ reports = [], onRefresh }) {
   }
 
   const getHealthClass = (health) => {
-    if (!health) return 'health-default'
-    const value = health.toLowerCase()
-    if (value.includes('kırmızı')) return 'health-danger'
-    if (value.includes('yeşil')) return 'health-success'
-    return 'health-warning'
+    const normalizedHealth = normalizeHealthStatus(health)
+    if (normalizedHealth === HEALTH_STATUS.CRITICAL) return 'health-danger'
+    if (normalizedHealth === HEALTH_STATUS.GOOD) return 'health-success'
+    if (normalizedHealth === HEALTH_STATUS.MEDIUM) return 'health-warning'
+    return 'health-default'
   }
 
   const resetForm = () => {
@@ -64,7 +72,7 @@ function ReportsPage({ reports = [], onRefresh }) {
       delays: '',
       nextPeriodPlan: '',
       managementExpectations: '',
-      manualHealth: 'Sarı',
+      manualHealth: HEALTH_STATUS.MEDIUM,
       reportStatus: 'Taslak'
     })
   }
@@ -84,7 +92,7 @@ function ReportsPage({ reports = [], onRefresh }) {
       delays: report.delays || '',
       nextPeriodPlan: report.nextPeriodPlan || '',
       managementExpectations: report.managementExpectations || '',
-      manualHealth: report.manualHealth || 'Sarı',
+      manualHealth: normalizeHealthStatus(report.manualHealth),
       reportStatus: report.reportStatus || 'Taslak'
     })
     setShowModal(true)
@@ -186,7 +194,7 @@ function ReportsPage({ reports = [], onRefresh }) {
               </tr>
             </thead>
             <tbody>
-              {reports.length > 0 ? reports.map((r, idx) => (
+              {reports.length > 0 ? reportPagination.paginatedItems.map((r, idx) => (
                 <tr key={r.pirReportId || r.id || idx}>
                   <td className="font-medium">{r.period || '-'}</td>
                   <td>{formatDate(r.reportDate || r.createdAt)}</td>
@@ -197,7 +205,7 @@ function ReportsPage({ reports = [], onRefresh }) {
                   </td>
                   <td>
                     <span className={`report-badge ${getHealthClass(r.manualHealth)}`}>
-                      {r.manualHealth || '-'}
+                      {normalizeHealthStatus(r.manualHealth)}
                     </span>
                   </td>
                   <td>
@@ -247,6 +255,13 @@ function ReportsPage({ reports = [], onRefresh }) {
               )}
             </tbody>
           </table>
+          <Pagination
+            currentPage={reportPagination.currentPage}
+            itemLabel="rapor dönemi"
+            onPageChange={reportPagination.setCurrentPage}
+            totalItems={reportPagination.totalItems}
+            totalPages={reportPagination.totalPages}
+          />
         </div>
       </div>
 
@@ -278,9 +293,9 @@ function ReportsPage({ reports = [], onRefresh }) {
                 <label>
                   <span>Sağlık Durumu</span>
                   <select name="manualHealth" value={form.manualHealth} onChange={handleInputChange}>
-                    <option value="Kırmızı">Kırmızı</option>
-                    <option value="Sarı">Sarı</option>
-                    <option value="Yeşil">Yeşil</option>
+                    {HEALTH_STATUS_OPTIONS.map(health => (
+                      <option key={health} value={health}>{health}</option>
+                    ))}
                   </select>
                 </label>
                 <label style={{ gridColumn: '1 / -1' }}>

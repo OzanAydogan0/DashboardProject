@@ -53,7 +53,7 @@ public static class GovernanceEndpoints
 
             var newDecision = new ManagementDecision
             {
-                ManagementDecisionId = Guid.NewGuid().ToString(),
+                ManagementDecisionId = await IdentifierGenerator.GenerateAsync(db.Set<ManagementDecision>(), d => d.ManagementDecisionId, "DEC-"),
                 ProjectId = request.ProjectId,
                 DecisionTitle = request.DecisionTitle,
                 Decision = request.Decision,
@@ -97,7 +97,8 @@ public static class GovernanceEndpoints
             var result = pirs.Select(p => new PirReportDto(
                 p.PirReportId, p.ProjectId, p.ProjectCode, p.ProjectName, p.Period,
                 p.ReportDate, p.ExecutiveSummary, p.CompletedWork, p.Delays,
-                p.NextPeriodPlan, p.ManagementExpectations, p.ManualHealth, p.ReportStatus, p.PublishedAt
+                p.NextPeriodPlan, p.ManagementExpectations, HealthStatusHelper.Normalize(p.ManualHealth),
+                p.ReportStatus, p.PublishedAt
             )).ToList();
 
             return Results.Ok(result);
@@ -117,7 +118,7 @@ public static class GovernanceEndpoints
 
             var newPir = new PirReport
             {
-                PirReportId = Guid.NewGuid().ToString(),
+                PirReportId = await IdentifierGenerator.GenerateAsync(db.Set<PirReport>(), p => p.PirReportId, "PIR-"),
                 ProjectId = request.ProjectId,
                 Period = request.Period,
                 ReportDate = request.ReportDate,
@@ -126,7 +127,7 @@ public static class GovernanceEndpoints
                 Delays = request.Delays,
                 NextPeriodPlan = request.NextPeriodPlan,
                 ManagementExpectations = request.ManagementExpectations,
-                ManualHealth = request.ManualHealth,
+                ManualHealth = HealthStatusHelper.ToStorageValue(request.ManualHealth),
                 ReportStatus = request.ReportStatus,
                 PublishedByUserId = request.ReportStatus == "Yayımlandı" ? userId : null,
                 PublishedAt = request.ReportStatus == "Yayımlandı" ? DateTime.UtcNow : null,
@@ -142,7 +143,8 @@ public static class GovernanceEndpoints
             return Results.Json(new { message = "PIR Raporu oluşturuldu.", pirId = newPir.PirReportId }, statusCode: 201);
         });
 
-        app.MapPatch("pirs/{id}", async (string id, UpdatePirReportRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
+        Func<string, UpdatePirReportRequest, ClaimsPrincipal, AppDbContext, Task<IResult>>
+            updatePirReport = async (id, request, userClaims, db) =>
         {
             var userRole = PermissionHelper.GetUserRole(userClaims);
             var userId = PermissionHelper.GetUserId(userClaims);
@@ -165,7 +167,8 @@ public static class GovernanceEndpoints
             if (request.Delays is not null) existingPir.Delays = request.Delays;
             if (request.NextPeriodPlan is not null) existingPir.NextPeriodPlan = request.NextPeriodPlan;
             if (request.ManagementExpectations is not null) existingPir.ManagementExpectations = request.ManagementExpectations;
-            if (request.ManualHealth is not null) existingPir.ManualHealth = request.ManualHealth;
+            if (request.ManualHealth is not null)
+                existingPir.ManualHealth = HealthStatusHelper.ToStorageValue(request.ManualHealth);
             if (request.ReportStatus is not null) existingPir.ReportStatus = request.ReportStatus;
 
             if (request.ReportStatus == "Yayımlandı")
@@ -184,7 +187,11 @@ public static class GovernanceEndpoints
 
             await db.SaveChangesAsync();
             return Results.Ok(new { message = "PIR raporu güncellendi." });
-        });
+        };
+
+        app.MapPatch("pirs/{id}", updatePirReport);
+        // API kabul sözleşmesindeki eski ad için geriye uyumlu rota.
+        app.MapPatch("reports/{id}", updatePirReport);
 
         app.MapDelete("pirs/{id}", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
@@ -207,72 +214,116 @@ public static class GovernanceEndpoints
             return Results.Ok(new { message = "PIR raporu silindi." });
         });
 
-        // 5. PIR Raporunu PDF olarak dışa aktarma
-        app.MapGet("pirs/{id}/export/pdf", async (string id, AppDbContext db) =>
-{
-    // 1. PIR Raporunu View üzerinden çek
-    var reportData = await db.Set<VwPir>().FirstOrDefaultAsync(p => p.PirReportId == id);
-    if (reportData == null) 
-        return Results.NotFound(new { message = "Rapor bulunamadı." });
+        Func<string, ClaimsPrincipal, AppDbContext, Task<IResult>>
+            exportPirPdf = async (id, userClaims, db) =>
+        {
+            var reportData = await db.Set<VwPir>()
+                .FirstOrDefaultAsync(report => report.PirReportId == id);
+            if (reportData?.ProjectId is null)
+                return Results.NotFound(new { message = "Rapor bulunamadı." });
 
-    // 2. İlişkili Proje verilerini (Bütçe ve İlerleme) çek
-    var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == reportData.ProjectId);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
 
-    // 3. Varsa logo dosyasını oku (Örn: wwwroot/images/logo.png içinden)
-    byte[]? logoBytes = null;
-    string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "logo.png");
-    if (File.Exists(logoPath))
-    {
-        logoBytes = await File.ReadAllBytesAsync(logoPath);
-    }
+            if (!await PermissionHelper.CanAccessProjectAsync(
+                    db,
+                    reportData.ProjectId,
+                    userId,
+                    userRole))
+            {
+                return Results.Json(
+                    new { message = "Bu projenin raporunu dışa aktarma yetkiniz yok." },
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
 
-    // 4. PDF Veri Paketini Hazırla
-    var pdfData = new Services.PirPdfData(
-        Report: reportData,
-        Bac: project?.Bac ?? 0,
-        PlannedProgress: project?.PlannedProgress ?? 0,
-        ActualProgress: project?.ActualProgress ?? 0,
-        Cpi: 1.00m, // Varsa EVM tablosundan anlık değer çekilebilir
-        Spi: 1.00m,
-        Currency: project?.Currency ?? "TRY",
-        LogoBytes: logoBytes
-    );
+            reportData.ManualHealth =
+                HealthStatusHelper.Normalize(reportData.ManualHealth);
 
-    // 5. PDF'i Üret ve Fırlat
-    byte[] pdfBytes = Services.PirPdfGenerator.Generate(pdfData);
-    string fileName = $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.pdf";
+            var project = await db.Projects
+                .FirstOrDefaultAsync(item =>
+                    item.ProjectId == reportData.ProjectId);
 
-    return Results.File(pdfBytes, "application/pdf", fileName);
-});
+            byte[]? logoBytes = null;
+            var logoPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "wwwroot",
+                "images",
+                "logo.png");
+            if (File.Exists(logoPath))
+                logoBytes = await File.ReadAllBytesAsync(logoPath);
 
-// 6. PIR Raporunu Excel olarak dışa aktarma
-        app.MapGet("pirs/{id}/export/excel", async (string id, AppDbContext db) =>
-{
-    var reportData = await db.Set<VwPir>().FirstOrDefaultAsync(p => p.PirReportId == id);
-    if (reportData == null) 
-        return Results.NotFound(new { message = "Rapor bulunamadı." });
+            var pdfData = new Services.PirPdfData(
+                Report: reportData,
+                Bac: project?.Bac ?? 0,
+                PlannedProgress: project?.PlannedProgress ?? 0,
+                ActualProgress: project?.ActualProgress ?? 0,
+                Cpi: 1.00m,
+                Spi: 1.00m,
+                Currency: project?.Currency ?? "TRY",
+                LogoBytes: logoBytes);
 
-    var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == reportData.ProjectId);
+            var pdfBytes = Services.PirPdfGenerator.Generate(pdfData);
+            var fileName =
+                $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.pdf";
 
-    // Aynı veri yapısını kullanıyoruz
-    var excelData = new Services.PirPdfData(
-        Report: reportData,
-        Bac: project?.Bac ?? 0,
-        PlannedProgress: project?.PlannedProgress ?? 0,
-        ActualProgress: project?.ActualProgress ?? 0,
-        Cpi: 1.00m,
-        Spi: 1.00m,
-        Currency: project?.Currency ?? "TRY"
-    );
+            return Results.File(pdfBytes, "application/pdf", fileName);
+        };
 
-    byte[] excelBytes = dashboardapi.Services.PirExcelGenerator.Generate(excelData);
-    string fileName = $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.xlsx";
+        Func<string, ClaimsPrincipal, AppDbContext, Task<IResult>>
+            exportPirExcel = async (id, userClaims, db) =>
+        {
+            var reportData = await db.Set<VwPir>()
+                .FirstOrDefaultAsync(report => report.PirReportId == id);
+            if (reportData?.ProjectId is null)
+                return Results.NotFound(new { message = "Rapor bulunamadı." });
 
-    return Results.File(
-        fileContents: excelBytes, 
-        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-        fileDownloadName: fileName
-    );
-});
+            var userId = PermissionHelper.GetUserId(userClaims);
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
+
+            if (!await PermissionHelper.CanAccessProjectAsync(
+                    db,
+                    reportData.ProjectId,
+                    userId,
+                    userRole))
+            {
+                return Results.Json(
+                    new { message = "Bu projenin raporunu dışa aktarma yetkiniz yok." },
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            reportData.ManualHealth =
+                HealthStatusHelper.Normalize(reportData.ManualHealth);
+
+            var project = await db.Projects
+                .FirstOrDefaultAsync(item =>
+                    item.ProjectId == reportData.ProjectId);
+
+            var excelData = new Services.PirPdfData(
+                Report: reportData,
+                Bac: project?.Bac ?? 0,
+                PlannedProgress: project?.PlannedProgress ?? 0,
+                ActualProgress: project?.ActualProgress ?? 0,
+                Cpi: 1.00m,
+                Spi: 1.00m,
+                Currency: project?.Currency ?? "TRY");
+
+            var excelBytes = Services.PirExcelGenerator.Generate(excelData);
+            var fileName =
+                $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.xlsx";
+
+            return Results.File(
+                fileContents: excelBytes,
+                contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileDownloadName: fileName);
+        };
+
+        app.MapGet("pirs/{id}/export/pdf", exportPirPdf);
+        app.MapGet("reports/{id}/export/pdf", exportPirPdf);
+        app.MapGet("pirs/{id}/export/excel", exportPirExcel);
+        app.MapGet("reports/{id}/export/excel", exportPirExcel);
     }
 }

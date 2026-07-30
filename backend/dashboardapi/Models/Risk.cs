@@ -39,7 +39,11 @@ public partial class Risk
 
     public DateTime UpdatedAt { get; set; }
 
+    public virtual ICollection<Action> Actions { get; set; } = new List<Action>();
+
     public virtual User CreatedByUser { get; set; } = null!;
+
+    public virtual ICollection<Issue> Issues { get; set; } = new List<Issue>();
 
     public virtual Project Project { get; set; } = null!;
 

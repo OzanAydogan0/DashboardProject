@@ -27,6 +27,28 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# --- Secrets & local runtime configuration ---
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+compose.override.yaml
+compose.override.yml
+docker-compose.override.yaml
+docker-compose.override.yml
+
+# --- Runtime data, backups & test reports ---
+*.db-shm
+*.db-wal
+*.db-journal
+database/dashboard.db
+database/SQLiteQuery*.sql
+backups/*
+!backups/.gitkeep
+TestResults/
+*.trx
+/release/
+
 # --- OS & IDE ---
 .DS_Store
 Thumbs.db

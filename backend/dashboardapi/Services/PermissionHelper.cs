@@ -35,17 +35,29 @@ public static class PermissionHelper
     public static string? GetUserRole(ClaimsPrincipal userClaims) =>
         NormalizeRole(userClaims.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value);
 
-    public static async Task<bool> CanAccessProjectAsync(AppDbContext db, string projectId, string userId, string? role)
+    public static async Task<bool> CanAccessProjectAsync(
+        AppDbContext db,
+        string projectId,
+        string userId,
+        string? role,
+        bool includeInactive = false)
     {
         role = NormalizeRole(role);
 
         if (IsSystemAdmin(role) || IsExecutive(role))
-            return await db.Projects.AnyAsync(p => p.ProjectId == projectId && p.IsActive == 1);
+        {
+            return await db.Projects.AnyAsync(project =>
+                project.ProjectId == projectId &&
+                (includeInactive || project.IsActive == 1));
+        }
 
-        return await db.Projects.AnyAsync(p =>
-            p.ProjectId == projectId &&
-            p.IsActive == 1 &&
-            (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
+        return await db.Projects.AnyAsync(project =>
+            project.ProjectId == projectId &&
+            (includeInactive || project.IsActive == 1) &&
+            (project.ProjectManagerUserId == userId ||
+             project.ProjectUsers.Any(assignment =>
+                 assignment.UserId == userId &&
+                 assignment.AssignmentStatus == "Aktif")));
     }
 
     public static async Task<bool> CanWriteProjectAsync(AppDbContext db, string projectId, string userId, string? role)
@@ -61,22 +73,34 @@ public static class PermissionHelper
         return await db.Projects.AnyAsync(p =>
             p.ProjectId == projectId &&
             p.IsActive == 1 &&
-            (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)));
+            (p.ProjectManagerUserId == userId ||
+             p.ProjectUsers.Any(pu =>
+                 pu.UserId == userId &&
+                 pu.AssignmentStatus == "Aktif")));
     }
 
-    public static async Task<bool> CanManageProjectAsync(AppDbContext db, string projectId, string userId, string? role)
+    public static async Task<bool> CanManageProjectAsync(
+        AppDbContext db,
+        string projectId,
+        string userId,
+        string? role,
+        bool includeInactive = false)
     {
         role = NormalizeRole(role);
 
         if (IsSystemAdmin(role))
-            return await db.Projects.AnyAsync(p => p.ProjectId == projectId && p.IsActive == 1);
+        {
+            return await db.Projects.AnyAsync(project =>
+                project.ProjectId == projectId &&
+                (includeInactive || project.IsActive == 1));
+        }
 
         if (IsExecutive(role))
             return false;
 
-        return await db.Projects.AnyAsync(p =>
-            p.ProjectId == projectId &&
-            p.IsActive == 1 &&
-            p.ProjectManagerUserId == userId);
+        return await db.Projects.AnyAsync(project =>
+            project.ProjectId == projectId &&
+            (includeInactive || project.IsActive == 1) &&
+            project.ProjectManagerUserId == userId);
     }
 }

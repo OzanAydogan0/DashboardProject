@@ -1,34 +1,114 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import './SettingsPage.css'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
+import { useAlert } from '../components/alertContext'
 
 const roleOptions = [
   'Sistem Yöneticisi',
   'Proje Yöneticisi',
   'Üst Yönetim İzleyicisi',
-  'Üst Yönetim',
 ]
 
 const userStatusOptions = ['Aktif', 'Pasif']
 const customerTypeOptions = ['Kurumsal', 'Hükümet', 'Sivil Toplum', 'Diğer']
 const customerStatusOptions = ['Aktif', 'Pasif']
+const programStatusOptions = ['Aktif', 'Pasif']
+
+const tabs = [
+  { id: 'users', label: 'Kullanıcılar ve Yetkiler' },
+  { id: 'programs', label: 'Programlar' },
+  { id: 'customers', label: 'Müşteriler' },
+  { id: 'logs', label: 'Loglar' },
+]
+
+const getInitialTab = () => {
+  if (typeof window === 'undefined') return 'users'
+  const requestedTab = new URLSearchParams(window.location.search).get('tab')
+  return tabs.some(tab => tab.id === requestedTab) ? requestedTab : 'users'
+}
+
+const entityLabels = {
+  actions: 'Aksiyon',
+  customers: 'Müşteri',
+  evm_records: 'EVM Kaydı',
+  issues: 'Sorun',
+  management_decisions: 'Yönetim Kararı',
+  milestones: 'Kilometre Taşı',
+  pir_reports: 'PIR Raporu',
+  programs: 'Program',
+  project_users: 'Proje Ataması',
+  projects: 'Proje',
+  risks: 'Risk',
+  users: 'Kullanıcı',
+}
+
+const actionLabels = {
+  INSERT: 'Oluşturma',
+  UPDATE: 'Güncelleme',
+  DELETE: 'Silme',
+}
+
+const formatAuditValues = (value) => {
+  if (!value) return 'Değer yok'
+
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+const getInitials = (fullName = '') => fullName
+  .split(' ')
+  .filter(Boolean)
+  .slice(0, 2)
+  .map(part => part[0])
+  .join('')
+  .toLocaleUpperCase('tr-TR')
+
+const getIsAdmin = () => {
+  if (typeof window === 'undefined') return false
+
+  const userString = window.localStorage.getItem('user')
+  if (!userString) return false
+
+  try {
+    const storedUser = JSON.parse(userString)
+    const role = storedUser?.userRole || storedUser?.UserRole || storedUser?.role || storedUser?.Role
+    return role === 'Sistem Yöneticisi'
+  } catch {
+    return false
+  }
+}
 
 function SettingsPage() {
   const { addAlert } = useAlert()
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin] = useState(getIsAdmin)
+  const [activeTab, setActiveTab] = useState(getInitialTab)
   const [loading, setLoading] = useState(false)
+  const [logsLoading, setLogsLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('success')
+  const [programs, setPrograms] = useState([])
   const [customers, setCustomers] = useState([])
   const [users, setUsers] = useState([])
+  const [projects, setProjects] = useState([])
+  const [auditLogs, setAuditLogs] = useState([])
+  const [logSearch, setLogSearch] = useState('')
+  const [logActionFilter, setLogActionFilter] = useState('')
   const [newCustomer, setNewCustomer] = useState({
     CustomerName: '',
     CustomerType: customerTypeOptions[0],
     CustomerStatus: customerStatusOptions[0],
   })
   const [editingCustomerId, setEditingCustomerId] = useState(null)
+  const [newProgram, setNewProgram] = useState({
+    ProgramName: '',
+    ProgramDescription: '',
+    ProgramStatus: programStatusOptions[0],
+  })
+  const [editingProgramId, setEditingProgramId] = useState(null)
   const [newUser, setNewUser] = useState({
     Email: '',
     FullName: '',
@@ -36,56 +116,94 @@ function SettingsPage() {
     Password: '',
   })
   const [userEdits, setUserEdits] = useState({})
+  const showSuccess = (successMessage) => {
+    setMessage(successMessage)
+    setMessageType('success')
+    setError('')
+    addAlert(successMessage, 'success')
+  }
 
-  useEffect(() => {
-    const userString = localStorage.getItem('user')
-    if (!userString) return
-
-    try {
-      const storedUser = JSON.parse(userString)
-      const role = storedUser?.userRole || storedUser?.UserRole || storedUser?.role || storedUser?.Role
-      setIsAdmin(role === 'Sistem Yöneticisi')
-    } catch {
-      setIsAdmin(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isAdmin) return
-    loadAdminData()
-  }, [isAdmin])
+  const showError = (requestError, fallbackMessage) => {
+    const errorMessage = requestError?.response?.data?.message || fallbackMessage
+    setError(errorMessage)
+    setMessage('')
+    addAlert(errorMessage, 'error')
+  }
 
   const loadAdminData = async () => {
     setLoading(true)
     setError('')
 
     try {
-      const [customerData, userData] = await Promise.all([
+      const [programData, customerData, userData, projectData, logData] = await Promise.all([
+        projectService.getPrograms(),
         projectService.getCustomers(),
         projectService.getUsers(),
+        projectService.getProjects(),
+        projectService.getAuditLogs(),
       ])
 
-      setCustomers(customerData)
-      setUsers(userData)
+      const activeProjectIds = new Set(
+        projectData
+          .filter(project => project.isActive !== 0)
+          .map(project => project.projectId),
+      )
 
       const edits = userData.reduce((acc, user) => {
         acc[user.userId] = {
+          fullName: user.fullName || '',
+          email: user.email || '',
           role: user.userRole || user.role || user.Role || roleOptions[0],
           status: user.userStatus || user.status || user.Status || userStatusOptions[0],
+          password: '',
+          projectIds: (user.projectIds || []).filter(projectId => activeProjectIds.has(projectId)),
         }
         return acc
       }, {})
 
+      setPrograms(programData)
+      setCustomers(customerData)
+      setUsers(userData)
+      setProjects(projectData)
+      setAuditLogs(logData)
       setUserEdits(edits)
     } catch (loadError) {
-      setError('Veriler yüklenirken hata oluştu. Lütfen tekrar deneyin.')
+      showError(loadError, 'Admin paneli verileri yüklenirken hata oluştu. Lütfen tekrar deneyin.')
     } finally {
       setLoading(false)
     }
   }
 
+  const loadAuditLogs = async () => {
+    setLogsLoading(true)
+    setError('')
+
+    try {
+      setAuditLogs(await projectService.getAuditLogs())
+    } catch (loadError) {
+      showError(loadError, 'Loglar yenilenirken hata oluştu.')
+    } finally {
+      setLogsLoading(false)
+    }
+  }
+
+  const loadInitialAdminData = useEffectEvent(() => {
+    void loadAdminData()
+  })
+
+  useEffect(() => {
+    if (!isAdmin) return
+
+    const timeoutId = window.setTimeout(loadInitialAdminData, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [isAdmin])
+
   const handleChangeCustomer = (field, value) => {
     setNewCustomer(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleChangeProgram = (field, value) => {
+    setNewProgram(prev => ({ ...prev, [field]: value }))
   }
 
   const handleChangeNewUser = (field, value) => {
@@ -100,6 +218,23 @@ function SettingsPage() {
         [field]: value,
       },
     }))
+  }
+
+  const handleProjectToggle = (userId, projectId) => {
+    setUserEdits(prev => {
+      const currentProjectIds = prev[userId]?.projectIds || []
+      const projectIds = currentProjectIds.includes(projectId)
+        ? currentProjectIds.filter(id => id !== projectId)
+        : [...currentProjectIds, projectId]
+
+      return {
+        ...prev,
+        [userId]: {
+          ...prev[userId],
+          projectIds,
+        },
+      }
+    })
   }
 
   const handleEditCustomer = (customer) => {
@@ -130,23 +265,16 @@ function SettingsPage() {
     try {
       if (editingCustomerId) {
         await projectService.updateCustomer(editingCustomerId, newCustomer)
-        setMessage('Müşteri başarıyla güncellendi.')
-        addAlert('Müşteri başarıyla güncellendi.', 'success')
+        showSuccess('Müşteri başarıyla güncellendi.')
       } else {
         await projectService.createCustomer(newCustomer)
-        setMessage('Müşteri başarıyla oluşturuldu.')
-        addAlert('Müşteri başarıyla oluşturuldu.', 'success')
+        showSuccess('Müşteri başarıyla oluşturuldu.')
       }
-      setMessageType('success')
+
       handleCancelCustomerEdit()
-      window.scrollTo({ top: 0, behavior: 'smooth' })
       await loadAdminData()
-    } catch (createError) {
-      const serverMessage = createError?.response?.data?.message
-      const errorMessage = serverMessage || 'Müşteri kaydedilirken hata oluştu. Lütfen alanları kontrol edin.'
-      setError(errorMessage)
-      setMessage('')
-      addAlert(errorMessage, 'error')
+    } catch (saveError) {
+      showError(saveError, 'Müşteri kaydedilirken hata oluştu. Lütfen alanları kontrol edin.')
     } finally {
       setLoading(false)
     }
@@ -154,21 +282,78 @@ function SettingsPage() {
 
   const handleDeleteCustomer = async (id) => {
     if (!window.confirm('Müşteriyi silmek istediğinizden emin misiniz?')) return
+
     setLoading(true)
     setError('')
     setMessage('')
 
     try {
       await projectService.deleteCustomer(id)
-      setMessage('Müşteri başarıyla silindi.')
-      setMessageType('success')
-      addAlert('Müşteri başarıyla silindi.', 'success')
+      showSuccess('Müşteri başarıyla silindi.')
       await loadAdminData()
     } catch (deleteError) {
-      const serverMessage = deleteError?.response?.data?.message
-      const errorMessage = serverMessage || 'Müşteri silinirken hata oluştu.'
-      setError(errorMessage)
-      addAlert(errorMessage, 'error')
+      showError(deleteError, 'Müşteri silinirken hata oluştu.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEditProgram = (program) => {
+    setEditingProgramId(program.programId)
+    setNewProgram({
+      ProgramName: program.programName,
+      ProgramDescription: program.programDescription || '',
+      ProgramStatus: program.programStatus,
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCancelProgramEdit = () => {
+    setEditingProgramId(null)
+    setNewProgram({
+      ProgramName: '',
+      ProgramDescription: '',
+      ProgramStatus: programStatusOptions[0],
+    })
+  }
+
+  const handleSaveProgram = async (event) => {
+    event.preventDefault()
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      if (editingProgramId) {
+        await projectService.updateProgram(editingProgramId, newProgram)
+        showSuccess('Program başarıyla güncellendi.')
+      } else {
+        await projectService.createProgram(newProgram)
+        showSuccess('Program başarıyla oluşturuldu.')
+      }
+
+      handleCancelProgramEdit()
+      await loadAdminData()
+    } catch (saveError) {
+      showError(saveError, 'Program kaydedilirken hata oluştu. Lütfen alanları kontrol edin.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteProgram = async (id) => {
+    if (!window.confirm('Programı silmek istediğinizden emin misiniz?')) return
+
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      await projectService.deleteProgram(id)
+      showSuccess('Program başarıyla silindi.')
+      await loadAdminData()
+    } catch (deleteError) {
+      showError(deleteError, 'Program silinirken hata oluştu.')
     } finally {
       setLoading(false)
     }
@@ -188,21 +373,17 @@ function SettingsPage() {
         Role: roleOptions[1],
         Password: '',
       })
-      setMessage('Kullanıcı başarıyla oluşturuldu.')
-      setMessageType('success')
-      addAlert('Kullanıcı başarıyla oluşturuldu.', 'success')
+      showSuccess('Kullanıcı başarıyla oluşturuldu.')
       await loadAdminData()
     } catch (createError) {
-      const serverMessage = createError?.response?.data?.message
-      const errorMessage = serverMessage || 'Kullanıcı oluşturulurken hata oluştu. Lütfen bilgileri kontrol edin.'
-      setError(errorMessage)
-      addAlert(errorMessage, 'error')
+      showError(createError, 'Kullanıcı oluşturulurken hata oluştu. Lütfen bilgileri kontrol edin.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleUpdateUser = async (id) => {
+  const handleUpdateUser = async (event, id) => {
+    event.preventDefault()
     const updatePayload = userEdits[id]
     if (!updatePayload) return
 
@@ -212,18 +393,17 @@ function SettingsPage() {
 
     try {
       await projectService.updateUser(id, {
+        Email: updatePayload.email,
+        FullName: updatePayload.fullName,
         Role: updatePayload.role,
         Status: updatePayload.status,
+        Password: updatePayload.password.trim() || null,
+        ProjectIds: updatePayload.projectIds,
       })
-      setMessage('Kullanıcı başarıyla güncellendi.')
-      setMessageType('success')
-      addAlert('Kullanıcı başarıyla güncellendi.', 'success')
+      showSuccess('Kullanıcı bilgileri ve yetkileri başarıyla güncellendi.')
       await loadAdminData()
     } catch (updateError) {
-      const serverMessage = updateError?.response?.data?.message
-      const errorMessage = serverMessage || 'Kullanıcı güncellenirken hata oluştu.'
-      setError(errorMessage)
-      addAlert(errorMessage, 'error')
+      showError(updateError, 'Kullanıcı güncellenirken hata oluştu.')
     } finally {
       setLoading(false)
     }
@@ -231,89 +411,367 @@ function SettingsPage() {
 
   const handleDeleteUser = async (id) => {
     if (!window.confirm('Kullanıcıyı silmek istediğinizden emin misiniz?')) return
+
     setLoading(true)
     setError('')
     setMessage('')
 
     try {
       await projectService.deleteUser(id)
-      setMessage('Kullanıcı başarıyla silindi.')
-      setMessageType('success')
-      addAlert('Kullanıcı başarıyla silindi.', 'success')
+      showSuccess('Kullanıcı başarıyla silindi.')
       await loadAdminData()
     } catch (deleteError) {
-      const serverMessage = deleteError?.response?.data?.message
-      const errorMessage = serverMessage || 'Kullanıcı silinirken hata oluştu.'
-      setError(errorMessage)
-      addAlert(errorMessage, 'error')
+      showError(deleteError, 'Kullanıcı silinirken hata oluştu.')
     } finally {
       setLoading(false)
     }
   }
+
+  const activeProjects = projects.filter(project => project.isActive !== 0)
+  const normalizedLogSearch = logSearch.trim().toLocaleLowerCase('tr-TR')
+  const filteredAuditLogs = auditLogs.filter((log) => {
+    if (logActionFilter && log.actionType !== logActionFilter) return false
+    if (!normalizedLogSearch) return true
+
+    return [
+      log.userFullName,
+      log.userId,
+      log.entityName,
+      entityLabels[log.entityName],
+      log.entityId,
+      log.actionType,
+      actionLabels[log.actionType],
+      log.oldValues,
+      log.newValues,
+    ]
+      .filter(Boolean)
+      .some(value => String(value).toLocaleLowerCase('tr-TR').includes(normalizedLogSearch))
+  })
 
   return (
     <div className="settings-page page-content">
       {!isAdmin ? (
         <div className="dashboard-card full-width settings-access-warning">
           <h3>Erişim Reddedildi</h3>
-          <p>Bu panel yalnızca Sistem Yöneticisi rolleri tarafından görüntülenebilir.</p>
+          <p>Bu panel yalnızca Sistem Yöneticisi rolü tarafından görüntülenebilir.</p>
         </div>
       ) : (
         <>
+          <section className="admin-hero">
+            <div className="admin-hero-copy">
+              <span className="admin-hero-kicker">Sistem Yönetimi</span>
+              <h2>Admin Kontrol Merkezi</h2>
+              <p>Kullanıcıları, erişimleri, bildirimleri ve sistem hareketlerini tek noktadan yönetin.</p>
+            </div>
+            <div className="admin-hero-stats" aria-label="Sistem özeti">
+              <div className="admin-hero-stat">
+                <strong>{users.length}</strong>
+                <span>Kullanıcı</span>
+              </div>
+              <div className="admin-hero-stat">
+                <strong>{activeProjects.length}</strong>
+                <span>Aktif Proje</span>
+              </div>
+            </div>
+          </section>
+
           {message && <div className={`settings-message ${messageType}`}>{message}</div>}
           {error && <div className="settings-error">{error}</div>}
 
-          <div className="settings-grid">
-            <section className="dashboard-card settings-card">
+          <nav className="settings-tabs" role="tablist" aria-label="Admin paneli bölümleri">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                className={`settings-tab${activeTab === tab.id ? ' active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <span>{tab.label}</span>
+                {tab.id === 'logs' && auditLogs.length > 0 && (
+                  <small>{auditLogs.length}</small>
+                )}
+              </button>
+            ))}
+          </nav>
+
+          {activeTab === 'users' && (
+            <div className="settings-panel-stack">
+              <section className="dashboard-card settings-panel">
+                <div className="settings-card-header">
+                  <h3>Yeni Kullanıcı</h3>
+                  <span>Yeni hesap oluşturun; proje erişimlerini oluşturduktan sonra aşağıdan atayın.</span>
+                </div>
+
+                <form className="settings-form" onSubmit={handleCreateUser}>
+                  <div className="settings-form-grid">
+                    <div className="settings-form-row">
+                      <label htmlFor="userFullName">Ad Soyad</label>
+                      <input
+                        id="userFullName"
+                        value={newUser.FullName}
+                        onChange={event => handleChangeNewUser('FullName', event.target.value)}
+                        placeholder="Ad Soyad"
+                        required
+                      />
+                    </div>
+
+                    <div className="settings-form-row">
+                      <label htmlFor="userEmail">E-posta</label>
+                      <input
+                        id="userEmail"
+                        type="email"
+                        value={newUser.Email}
+                        onChange={event => handleChangeNewUser('Email', event.target.value)}
+                        placeholder="kullanici@example.test"
+                        required
+                      />
+                    </div>
+
+                    <div className="settings-form-row">
+                      <label htmlFor="userRole">Sistem Rolü</label>
+                      <select
+                        id="userRole"
+                        value={newUser.Role}
+                        onChange={event => handleChangeNewUser('Role', event.target.value)}
+                      >
+                        {roleOptions.map(role => (
+                          <option key={role} value={role}>{role}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="settings-form-row">
+                      <label htmlFor="userPassword">Geçici Şifre</label>
+                      <input
+                        id="userPassword"
+                        type="password"
+                        minLength="8"
+                        value={newUser.Password}
+                        onChange={event => handleChangeNewUser('Password', event.target.value)}
+                        placeholder="En az 8 karakter"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <button className="primary-button settings-submit-button" type="submit" disabled={loading}>
+                    Kullanıcı Oluştur
+                  </button>
+                </form>
+              </section>
+
+              <section className="dashboard-card settings-panel">
+                <div className="settings-card-header">
+                  <h3>Kullanıcılar ve Yetkiler</h3>
+                  <span>Bir kullanıcıyı açarak profilini, şifresini, rolünü ve proje erişimlerini yönetin.</span>
+                </div>
+
+                {users.length === 0 ? (
+                  <div className="settings-empty-state">
+                    <strong>Henüz kullanıcı bulunamadı</strong>
+                  </div>
+                ) : (
+                  <div className="user-admin-list">
+                    {users.map(user => {
+                      const edit = userEdits[user.userId] || {}
+                      const assignedCount = edit.projectIds?.length || 0
+                      const managedProjects = activeProjects.filter(
+                        project => project.projectManagerUserId === user.userId,
+                      )
+
+                      return (
+                        <details className="user-admin-card" key={user.userId}>
+                          <summary>
+                            <div className="user-avatar">{getInitials(user.fullName) || '?'}</div>
+                            <div className="user-summary-copy">
+                              <strong>{user.fullName}</strong>
+                              <span>{user.email}</span>
+                            </div>
+                            <div className="user-summary-meta">
+                              <span className={`status-pill ${edit.status === 'Pasif' ? 'inactive' : 'active'}`}>
+                                {edit.status || user.status}
+                              </span>
+                              <span>{assignedCount} proje erişimi</span>
+                            </div>
+                          </summary>
+
+                          <form className="user-edit-form" onSubmit={event => handleUpdateUser(event, user.userId)}>
+                            <div className="settings-form-grid user-profile-grid">
+                              <div className="settings-form-row">
+                                <label htmlFor={`fullName-${user.userId}`}>Ad Soyad</label>
+                                <input
+                                  id={`fullName-${user.userId}`}
+                                  value={edit.fullName || ''}
+                                  onChange={event => handleUserEditChange(user.userId, 'fullName', event.target.value)}
+                                  required
+                                />
+                              </div>
+
+                              <div className="settings-form-row">
+                                <label htmlFor={`email-${user.userId}`}>E-posta</label>
+                                <input
+                                  id={`email-${user.userId}`}
+                                  type="email"
+                                  value={edit.email || ''}
+                                  onChange={event => handleUserEditChange(user.userId, 'email', event.target.value)}
+                                  required
+                                />
+                              </div>
+
+                              <div className="settings-form-row">
+                                <label htmlFor={`role-${user.userId}`}>Sistem Rolü</label>
+                                <select
+                                  id={`role-${user.userId}`}
+                                  value={edit.role || roleOptions[0]}
+                                  onChange={event => handleUserEditChange(user.userId, 'role', event.target.value)}
+                                >
+                                  {roleOptions.map(role => (
+                                    <option key={role} value={role}>{role}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="settings-form-row">
+                                <label htmlFor={`status-${user.userId}`}>Hesap Durumu</label>
+                                <select
+                                  id={`status-${user.userId}`}
+                                  value={edit.status || userStatusOptions[0]}
+                                  onChange={event => handleUserEditChange(user.userId, 'status', event.target.value)}
+                                >
+                                  {userStatusOptions.map(status => (
+                                    <option key={status} value={status}>{status}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="settings-form-row user-password-field">
+                                <label htmlFor={`password-${user.userId}`}>Yeni Şifre</label>
+                                <input
+                                  id={`password-${user.userId}`}
+                                  type="password"
+                                  minLength="8"
+                                  value={edit.password || ''}
+                                  onChange={event => handleUserEditChange(user.userId, 'password', event.target.value)}
+                                  placeholder="Değiştirmek istemiyorsanız boş bırakın"
+                                />
+                              </div>
+                            </div>
+
+                            <fieldset className="project-access-fieldset">
+                              <legend>Proje Erişimleri</legend>
+                              <p>Seçilen projeler kullanıcıya görüntüleme ve rolünün izin verdiği işlemleri yapma erişimi verir.</p>
+
+                              {managedProjects.length > 0 && (
+                                <div className="managed-project-note">
+                                  Bu kullanıcı {managedProjects.map(project => project.projectCode).join(', ')} projelerinde
+                                  proje yöneticisidir ve bu projelere otomatik erişir.
+                                </div>
+                              )}
+
+                              {activeProjects.length === 0 ? (
+                                <span className="project-access-empty">Atanabilecek aktif proje bulunamadı.</span>
+                              ) : (
+                                <div className="project-checkbox-grid">
+                                  {activeProjects.map(project => (
+                                    <label className="project-checkbox" key={project.projectId}>
+                                      <input
+                                        type="checkbox"
+                                        checked={edit.projectIds?.includes(project.projectId) || false}
+                                        onChange={() => handleProjectToggle(user.userId, project.projectId)}
+                                      />
+                                      <span>
+                                        <strong>{project.projectCode}</strong>
+                                        <small>{project.projectName}</small>
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </fieldset>
+
+                            <div className="user-edit-actions">
+                              <button className="primary-button" type="submit" disabled={loading}>
+                                Değişiklikleri Kaydet
+                              </button>
+                              <button
+                                className="danger-button"
+                                type="button"
+                                onClick={() => handleDeleteUser(user.userId)}
+                                disabled={loading}
+                              >
+                                Kullanıcıyı Sil
+                              </button>
+                            </div>
+                          </form>
+                        </details>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'customers' && (
+            <section className="dashboard-card settings-panel">
               <div className="settings-card-header">
                 <h3>Müşteri Yönetimi</h3>
-                <span>Yeni müşteri ekleyebilir ve mevcut müşterileri silebilirsiniz.</span>
+                <span>Yeni müşteri ekleyin veya mevcut müşteri bilgilerini düzenleyin.</span>
               </div>
 
               <form className="settings-form" onSubmit={handleSaveCustomer}>
-                <div className="settings-form-row">
-                  <label htmlFor="customerName">Müşteri Adı</label>
-                  <input
-                    id="customerName"
-                    value={newCustomer.CustomerName}
-                    onChange={(e) => handleChangeCustomer('CustomerName', e.target.value)}
-                    placeholder="Müşteri adı girin"
-                    required
-                  />
-                </div>
+                <div className="settings-form-grid">
+                  <div className="settings-form-row">
+                    <label htmlFor="customerName">Müşteri Adı</label>
+                    <input
+                      id="customerName"
+                      value={newCustomer.CustomerName}
+                      onChange={event => handleChangeCustomer('CustomerName', event.target.value)}
+                      placeholder="Müşteri adı girin"
+                      required
+                    />
+                  </div>
 
-                <div className="settings-form-row">
-                  <label htmlFor="customerType">Müşteri Türü</label>
-                  <select
-                    id="customerType"
-                    value={newCustomer.CustomerType}
-                    onChange={(e) => handleChangeCustomer('CustomerType', e.target.value)}
-                  >
-                    {customerTypeOptions.map((type) => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="settings-form-row">
+                    <label htmlFor="customerType">Müşteri Türü</label>
+                    <select
+                      id="customerType"
+                      value={newCustomer.CustomerType}
+                      onChange={event => handleChangeCustomer('CustomerType', event.target.value)}
+                    >
+                      {customerTypeOptions.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="settings-form-row">
-                  <label htmlFor="customerStatus">Durum</label>
-                  <select
-                    id="customerStatus"
-                    value={newCustomer.CustomerStatus}
-                    onChange={(e) => handleChangeCustomer('CustomerStatus', e.target.value)}
-                  >
-                    {customerStatusOptions.map((status) => (
-                      <option key={status} value={status}>{status}</option>
-                    ))}
-                  </select>
+                  <div className="settings-form-row">
+                    <label htmlFor="customerStatus">Durum</label>
+                    <select
+                      id="customerStatus"
+                      value={newCustomer.CustomerStatus}
+                      onChange={event => handleChangeCustomer('CustomerStatus', event.target.value)}
+                    >
+                      {customerStatusOptions.map(status => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="settings-form-actions">
                   <button className="primary-button" type="submit" disabled={loading}>
-                    {editingCustomerId ? 'Müşteri Güncelle' : 'Müşteri Oluştur'}
+                    {editingCustomerId ? 'Müşteriyi Güncelle' : 'Müşteri Oluştur'}
                   </button>
                   {editingCustomerId && (
-                    <button className="secondary-button" type="button" onClick={handleCancelCustomerEdit} disabled={loading}>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={handleCancelCustomerEdit}
+                      disabled={loading}
+                    >
                       İptal
                     </button>
                   )}
@@ -321,7 +779,6 @@ function SettingsPage() {
               </form>
 
               <div className="settings-table-wrapper">
-                <h4>Mevcut Müşteriler</h4>
                 <table className="settings-table">
                   <thead>
                     <tr>
@@ -337,7 +794,7 @@ function SettingsPage() {
                         <td colSpan="4">Henüz müşteri bulunamadı.</td>
                       </tr>
                     ) : (
-                      customers.map((customer) => (
+                      customers.map(customer => (
                         <tr key={customer.customerId}>
                           <td>{customer.customerName}</td>
                           <td>{customer.customerType}</td>
@@ -369,141 +826,111 @@ function SettingsPage() {
                 </table>
               </div>
             </section>
+          )}
 
-            <section className="dashboard-card settings-card">
-              <div className="settings-card-header">
-                <h3>Kullanıcı Yönetimi</h3>
-                <span>Kullanıcı ekleyebilir, rollerini güncelleyebilir ya da silebilirsiniz.</span>
+          {activeTab === 'logs' && (
+            <section className="dashboard-card full-width settings-panel audit-panel">
+              <div className="settings-card-header settings-card-header-with-action">
+                <div>
+                  <h3>Sistem Logları</h3>
+                  <span>Kullanıcıların sistemde oluşturduğu, güncellediği ve sildiği tüm kayıtlar.</span>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={loadAuditLogs}
+                  disabled={logsLoading}
+                >
+                  {logsLoading ? 'Yenileniyor...' : 'Logları Yenile'}
+                </button>
               </div>
 
-              <form className="settings-form" onSubmit={handleCreateUser}>
-                <div className="settings-form-row">
-                  <label htmlFor="userFullName">Tam Adı</label>
+              <div className="audit-toolbar">
+                <label>
+                  <span>Loglarda ara</span>
                   <input
-                    id="userFullName"
-                    value={newUser.FullName}
-                    onChange={(e) => handleChangeNewUser('FullName', e.target.value)}
-                    placeholder="Ad Soyad"
-                    required
+                    type="search"
+                    value={logSearch}
+                    onChange={event => setLogSearch(event.target.value)}
+                    placeholder="Kullanıcı, kayıt veya işlem ara"
                   />
-                </div>
-
-                <div className="settings-form-row">
-                  <label htmlFor="userEmail">E-posta</label>
-                  <input
-                    id="userEmail"
-                    type="email"
-                    value={newUser.Email}
-                    onChange={(e) => handleChangeNewUser('Email', e.target.value)}
-                    placeholder="e-posta adresi"
-                    required
-                  />
-                </div>
-
-                <div className="settings-form-row">
-                  <label htmlFor="userRole">Rol</label>
+                </label>
+                <label>
+                  <span>İşlem türü</span>
                   <select
-                    id="userRole"
-                    value={newUser.Role}
-                    onChange={(e) => handleChangeNewUser('Role', e.target.value)}
+                    value={logActionFilter}
+                    onChange={event => setLogActionFilter(event.target.value)}
                   >
-                    {roleOptions.map((role) => (
-                      <option key={role} value={role}>{role}</option>
-                    ))}
+                    <option value="">Tüm işlemler</option>
+                    <option value="INSERT">Oluşturma</option>
+                    <option value="UPDATE">Güncelleme</option>
+                    <option value="DELETE">Silme</option>
                   </select>
+                </label>
+                <div className="audit-result-count">
+                  <strong>{filteredAuditLogs.length}</strong>
+                  <span>kayıt gösteriliyor</span>
                 </div>
-
-                <div className="settings-form-row">
-                  <label htmlFor="userPassword">Şifre</label>
-                  <input
-                    id="userPassword"
-                    type="password"
-                    value={newUser.Password}
-                    onChange={(e) => handleChangeNewUser('Password', e.target.value)}
-                    placeholder="Güçlü bir şifre girin"
-                    required
-                  />
-                </div>
-
-                <button className="primary-button" type="submit" disabled={loading}>
-                  Kullanıcı Oluştur
-                </button>
-              </form>
+              </div>
 
               <div className="settings-table-wrapper">
-                <h4>Mevcut Kullanıcılar</h4>
-                <table className="settings-table">
+                <table className="settings-table audit-table">
                   <thead>
                     <tr>
-                      <th>Ad Soyad</th>
-                      <th>E-posta</th>
-                      <th>Rol</th>
-                      <th>Durum</th>
-                      <th>Aksiyon</th>
+                      <th>Tarih</th>
+                      <th>Kullanıcı</th>
+                      <th>İşlem</th>
+                      <th>Kayıt</th>
+                      <th>Değişiklik</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {users.length === 0 ? (
+                    {filteredAuditLogs.length === 0 ? (
                       <tr>
-                        <td colSpan="5">Henüz kullanıcı bulunamadı.</td>
+                        <td colSpan="5">Filtreye uygun log kaydı bulunamadı.</td>
                       </tr>
                     ) : (
-                      users.map((user) => {
-                        const edit = userEdits[user.userId] || {}
-                        const currentRole = edit.role || user.userRole || roleOptions[0]
-                        const currentStatus = edit.status || user.userStatus || userStatusOptions[0]
-
-                        return (
-                          <tr key={user.userId}>
-                            <td>{user.fullName}</td>
-                            <td>{user.email}</td>
-                            <td>
-                              <select
-                                value={currentRole}
-                                onChange={(e) => handleUserEditChange(user.userId, 'role', e.target.value)}
-                              >
-                                {roleOptions.map((role) => (
-                                  <option key={role} value={role}>{role}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <select
-                                value={currentStatus}
-                                onChange={(e) => handleUserEditChange(user.userId, 'status', e.target.value)}
-                              >
-                                {userStatusOptions.map((status) => (
-                                  <option key={status} value={status}>{status}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="settings-action-cell">
-                              <button
-                                type="button"
-                                className="edit-button"
-                                onClick={() => handleUpdateUser(user.userId)}
-                                disabled={loading}
-                              >
-                                Düzenle
-                              </button>
-                              <button
-                                type="button"
-                                className="danger-button"
-                                onClick={() => handleDeleteUser(user.userId)}
-                                disabled={loading}
-                              >
-                                Sil
-                              </button>
-                            </td>
-                          </tr>
-                        )
-                      })
+                      filteredAuditLogs.map(log => (
+                        <tr key={log.auditLogId}>
+                          <td className="audit-date-cell">
+                            {new Date(log.changedAt).toLocaleString('tr-TR')}
+                          </td>
+                          <td>
+                            <strong>{log.userFullName || 'Sistem'}</strong>
+                            <small>{log.userId || log.ipAddress || 'Otomatik işlem'}</small>
+                          </td>
+                          <td>
+                            <span className={`audit-action ${log.actionType.toLowerCase()}`}>
+                              {actionLabels[log.actionType] || log.actionType}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>{entityLabels[log.entityName] || log.entityName}</strong>
+                            <small>{log.entityId}</small>
+                          </td>
+                          <td>
+                            <details className="audit-details">
+                              <summary>Değişiklikleri göster</summary>
+                              <div className="audit-values">
+                                <section>
+                                  <strong>Önceki Değer</strong>
+                                  <pre>{formatAuditValues(log.oldValues)}</pre>
+                                </section>
+                                <section>
+                                  <strong>Yeni Değer</strong>
+                                  <pre>{formatAuditValues(log.newValues)}</pre>
+                                </section>
+                              </div>
+                            </details>
+                          </td>
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>
               </div>
             </section>
-          </div>
+          )}
         </>
       )}
     </div>

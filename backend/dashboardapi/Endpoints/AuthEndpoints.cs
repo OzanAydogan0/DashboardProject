@@ -16,10 +16,23 @@ public static class AuthEndpoints
         var group = app.MapGroup("auth");
 
         // POST /auth/login
-        group.MapPost("login", async (LoginRequest request, AppDbContext db, IConfiguration config) =>
+        group.MapPost("login", async (LoginRequest? request, AppDbContext db, IConfiguration config) =>
         {
-            // Veritabanından kullanıcıyı e-posta ile buluyoruz
-            var user = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+            if (request is null ||
+                string.IsNullOrWhiteSpace(request.Email) ||
+                string.IsNullOrWhiteSpace(request.Password))
+            {
+                return Results.BadRequest(new
+                {
+                    message = "E-posta ve şifre alanları zorunludur."
+                });
+            }
+
+            var normalizedEmail =
+                request.Email.Trim().ToLowerInvariant();
+            var user = await db.Users.FirstOrDefaultAsync(
+                candidate =>
+                    candidate.Email.ToLower() == normalizedEmail);
             
             // 🛡️ BCrypt ile Şifre Doğrulama (Düz metin yerine hash kontrolü yapıyoruz)
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -37,13 +50,20 @@ public static class AuthEndpoints
                 new Claim(ClaimTypes.NameIdentifier, user.UserId),
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.Role, user.UserRole),
-                new Claim("fullName", user.FullName)
+                new Claim("fullName", user.FullName),
+                new Claim(
+                    "securityVersion",
+                    user.UpdatedAt.Ticks.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture))
             };
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddMinutes(double.Parse(jwtSettings["ExpiryMinutes"]!)),
+                Expires = DateTime.UtcNow.AddMinutes(
+                    double.Parse(
+                        jwtSettings["ExpiryMinutes"]!,
+                        System.Globalization.CultureInfo.InvariantCulture)),
                 Issuer = jwtSettings["Issuer"],
                 Audience = jwtSettings["Audience"],
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
@@ -54,7 +74,9 @@ public static class AuthEndpoints
             var tokenString = tokenHandler.WriteToken(token);
 
             return Results.Ok(new LoginResponse(tokenString, user.UserId, user.FullName, user.UserRole));
-        }).RequireRateLimiting("LoginLimiter"); // 🛡️ Hız sınırını bu endpoint'e bağladık!
+        })
+            .AllowAnonymous()
+            .RequireRateLimiting("LoginLimiter"); // 🛡️ Hız sınırını bu endpoint'e bağladık!
 
         // GET /auth/me
         group.MapGet("me", async (ClaimsPrincipal userClaims, AppDbContext db) =>
@@ -70,10 +92,5 @@ public static class AuthEndpoints
             return Results.Ok(new MeResponse(user.UserId, user.Email, user.FullName, user.UserRole, user.UserStatus));
         }).RequireAuthorization(); // JWT koruması ekledik
 
-        group.MapGet("generate-hash", (string password) =>
-        {
-            var hash = BCrypt.Net.BCrypt.HashPassword(password);
-            return Results.Ok(new { PlainText = password, BcryptHash = hash });
-        });
     }
 }

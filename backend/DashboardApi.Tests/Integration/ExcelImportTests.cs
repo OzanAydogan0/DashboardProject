@@ -5,9 +5,9 @@ using dashboardapi.Data;
 using dashboardapi.DTOs;
 using DashboardApi.Tests.Builders;
 using DashboardApi.Tests.Fixtures;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using OfficeOpenXml;
 
 namespace DashboardApi.Tests.Integration;
 
@@ -184,54 +184,99 @@ public sealed class ExcelImportTests
     private static byte[] CreateInvalidExcelFile(
         string projectName)
     {
-        ExcelPackage.License.SetNonCommercialPersonal(
-    "DashboardApi Tests");
-
-        using var package = new ExcelPackage();
+        using var workbook = new XLWorkbook();
 
         var worksheet =
-            package.Workbook.Worksheets.Add("Projeler");
+            workbook.Worksheets.Add("Projeler");
 
         // Başlık satırı
-        worksheet.Cells[1, 1].Value = "Proje Kodu";
-        worksheet.Cells[1, 2].Value = "Proje Adı";
-        worksheet.Cells[1, 3].Value = "Müşteri Adı";
-        worksheet.Cells[1, 4].Value = "PM E-posta";
-        worksheet.Cells[1, 5].Value = "Başlangıç Tarihi";
-        worksheet.Cells[1, 6].Value = "Bitiş Tarihi";
-        worksheet.Cells[1, 7].Value = "BAC";
-        worksheet.Cells[1, 8].Value = "Para Birimi";
-        worksheet.Cells[1, 9].Value = "Gizlilik";
-        worksheet.Cells[1, 10].Value = "Raporlama Sıklığı";
-        worksheet.Cells[1, 11].Value = "Durum";
-        worksheet.Cells[1, 12].Value = "Açıklama";
-        worksheet.Cells[1, 13].Value = "Sağlık";
-        worksheet.Cells[1, 14].Value = "Planlanan İlerleme";
-        worksheet.Cells[1, 15].Value = "Gerçekleşen İlerleme";
-        worksheet.Cells[1, 16].Value = "Aktiflik";
+        WriteProjectHeaders(worksheet);
 
         /*
          * Proje kodu özellikle boş bırakılıyor.
          * Bu nedenle satır içe aktarılmamalıdır.
          */
-        worksheet.Cells[2, 1].Value = null;
-        worksheet.Cells[2, 2].Value = projectName;
-        worksheet.Cells[2, 3].Value = "Test Müşterisi";
-        worksheet.Cells[2, 4].Value = "pm1@pir.local";
-        worksheet.Cells[2, 5].Value = "2026-08-01";
-        worksheet.Cells[2, 6].Value = "2027-08-01";
-        worksheet.Cells[2, 7].Value = 500000;
-        worksheet.Cells[2, 8].Value = "TRY";
-        worksheet.Cells[2, 9].Value = "Şirket İçi";
-        worksheet.Cells[2, 10].Value = "Aylık";
-        worksheet.Cells[2, 11].Value = "Aktif";
-        worksheet.Cells[2, 12].Value = "Test proje açıklaması";
-        worksheet.Cells[2, 13].Value = "Sarı";
-        worksheet.Cells[2, 14].Value = 40;
-        worksheet.Cells[2, 15].Value = 30;
-        worksheet.Cells[2, 16].Value = 1;
+        worksheet.Cell(2, 2).Value = projectName;
+        worksheet.Cell(2, 3).Value = "Test Müşterisi";
+        worksheet.Cell(2, 4).Value = "fixture.pm.alfa@example.test";
+        worksheet.Cell(2, 5).Value = "2026-08-01";
+        worksheet.Cell(2, 6).Value = "2027-08-01";
+        worksheet.Cell(2, 7).Value = 500000;
+        worksheet.Cell(2, 8).Value = "TRY";
+        worksheet.Cell(2, 9).Value = "Şirket İçi";
+        worksheet.Cell(2, 10).Value = "Aylık";
+        worksheet.Cell(2, 11).Value = "Aktif";
+        worksheet.Cell(2, 12).Value = "Test proje açıklaması";
+        worksheet.Cell(2, 13).Value = "Sarı";
+        worksheet.Cell(2, 14).Value = 40;
+        worksheet.Cell(2, 15).Value = 30;
+        worksheet.Cell(2, 16).Value = 1;
 
-        return package.GetAsByteArray();
+        return SaveWorkbook(workbook);
+    }
+
+    private static byte[] CreateValidExcelFile(
+        string projectCode,
+        string projectName,
+        string manualHealth)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Projeler");
+
+        WriteProjectHeaders(worksheet);
+
+        worksheet.Cell(2, 1).Value = projectCode;
+        worksheet.Cell(2, 2).Value = projectName;
+        worksheet.Cell(2, 3).Value = "Test Müşterisi Alfa";
+        worksheet.Cell(2, 4).Value = "fixture.pm.alfa@example.test";
+        worksheet.Cell(2, 5).Value = "2026-08-01";
+        worksheet.Cell(2, 6).Value = "2027-08-01";
+        worksheet.Cell(2, 7).Value = 500000;
+        worksheet.Cell(2, 8).Value = "TRY";
+        worksheet.Cell(2, 9).Value = "Şirket İçi";
+        worksheet.Cell(2, 10).Value = "Aylık";
+        worksheet.Cell(2, 11).Value = "Aktif";
+        worksheet.Cell(2, 12).Value =
+            "Excel sağlık dönüşümü test projesi";
+        worksheet.Cell(2, 13).Value = manualHealth;
+        worksheet.Cell(2, 14).Value = 40;
+        worksheet.Cell(2, 15).Value = 30;
+        worksheet.Cell(2, 16).Value = 1;
+
+        return SaveWorkbook(workbook);
+    }
+
+    private static void WriteProjectHeaders(IXLWorksheet worksheet)
+    {
+        string[] headers =
+        [
+            "Proje Kodu",
+            "Proje Adı",
+            "Müşteri Adı",
+            "PM E-posta",
+            "Başlangıç Tarihi",
+            "Bitiş Tarihi",
+            "BAC",
+            "Para Birimi",
+            "Gizlilik",
+            "Raporlama Sıklığı",
+            "Durum",
+            "Açıklama",
+            "Sağlık",
+            "Planlanan İlerleme",
+            "Gerçekleşen İlerleme",
+            "Aktiflik"
+        ];
+
+        for (var index = 0; index < headers.Length; index++)
+            worksheet.Cell(1, index + 1).Value = headers[index];
+    }
+
+    private static byte[] SaveWorkbook(XLWorkbook workbook)
+    {
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
     }
 
     private static async Task<TestUserCredentials> CreateActiveUserAsync(

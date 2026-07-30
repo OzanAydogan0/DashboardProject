@@ -25,7 +25,11 @@ public static class ProjectEndpoints
 
             if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
-                query = query.Where(p => p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId));
+                query = query.Where(p =>
+                    p.ProjectManagerUserId == userId ||
+                    p.ProjectUsers.Any(pu =>
+                        pu.UserId == userId &&
+                        pu.AssignmentStatus == "Aktif"));
             }
 
             var projects = await query
@@ -48,7 +52,14 @@ public static class ProjectEndpoints
                 ))
                 .ToListAsync();
 
-            return Results.Ok(projects);
+            var result = projects
+                .Select(project => project with
+                {
+                    ManualHealth = HealthStatusHelper.Normalize(project.ManualHealth)
+                })
+                .ToList();
+
+            return Results.Ok(result);
         });
 
         // 2. GET /projects/{id} -> Detaylı Proje Verisi + Otomatik Hesaplama Motoru
@@ -57,17 +68,26 @@ public static class ProjectEndpoints
             var userRole = PermissionHelper.GetUserRole(userClaims);
             var userId = PermissionHelper.GetUserId(userClaims);
 
-            var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == id && p.IsActive == 1);
+            if (string.IsNullOrEmpty(userId))
+                return Results.Unauthorized();
+
+            var project = await db.Projects.FirstOrDefaultAsync(
+                candidate => candidate.ProjectId == id);
             if (project == null) return Results.NotFound(new { message = "Proje bulunamadı." });
 
-            if (!string.IsNullOrEmpty(userId) && !await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+            if (!await PermissionHelper.CanAccessProjectAsync(
+                    db,
+                    id,
+                    userId,
+                    userRole,
+                    includeInactive: true))
                 return Results.Json(new { message = "Bu projenin detaylarını görmeye yetkiniz yok!" }, statusCode: 403);
 
             // 🧮 RAPOR KURALI: Otomatik Sağlık Önerisi Algoritması (Planlanan vs Gerçekleşen İlerleme kıyası)
-            string autoHealthRecommendation = "İyi";
+            string autoHealthRecommendation = HealthStatusHelper.Good;
             decimal progressGap = project.PlannedProgress - project.ActualProgress;
-            if (progressGap > 15) autoHealthRecommendation = "Kötü";
-            else if (progressGap > 5) autoHealthRecommendation = "Orta";
+            if (progressGap > 15) autoHealthRecommendation = HealthStatusHelper.Critical;
+            else if (progressGap > 5) autoHealthRecommendation = HealthStatusHelper.Medium;
 
             // 🧮 RAPOR KURALI: EVM (Kazanılmış Değer) Temel Hesaplamaları
             decimal bac = project.Bac;
@@ -82,7 +102,7 @@ public static class ProjectEndpoints
                 project.ProjectName,
                 project.ProjectDescription,
                 project.ProjectStatus,
-                project.ManualHealth,
+                HealthStatusHelper.Normalize(project.ManualHealth),
                 autoHealthRecommendation, // Hesaplanan otomatik sağlık durumu
                 project.PlannedProgress,
                 project.ActualProgress,
@@ -124,12 +144,12 @@ public static class ProjectEndpoints
 
             var newProject = new Project
             {
-                ProjectId = "PRJ-" + Guid.NewGuid().ToString()[..8].ToUpper(),
+                ProjectId = await IdentifierGenerator.GenerateAsync(db.Projects, p => p.ProjectId, "PRJ-"),
                 ProjectCode = dto.ProjectCode,
                 ProjectName = dto.ProjectName,
                 ProjectDescription = dto.ProjectDescription,
                 ProjectStatus = dto.ProjectStatus ?? "Taslak",
-                ManualHealth = dto.ManualHealth ?? "İyi",
+                ManualHealth = HealthStatusHelper.ToStorageValue(dto.ManualHealth, HealthStatusHelper.Good),
                 PlannedProgress = dto.PlannedProgress,
                 ActualProgress = dto.ActualProgress,
                 Bac = dto.Bac,
@@ -163,20 +183,30 @@ public static class ProjectEndpoints
             var userRole = PermissionHelper.GetUserRole(userClaims);
             var userId = PermissionHelper.GetUserId(userClaims);
 
+            if (string.IsNullOrEmpty(userId))
+                return Results.Unauthorized();
+
             var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == id);
             if (project == null) return Results.NotFound(new { message = "Proje bulunamadı." });
 
             if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolü projeler üzerinde değişiklik yapamaz!" }, statusCode: 403);
 
-            if (!PermissionHelper.IsSystemAdmin(userRole) && !await PermissionHelper.CanManageProjectAsync(db, id, userId!, userRole))
+            if (!PermissionHelper.IsSystemAdmin(userRole) &&
+                !await PermissionHelper.CanManageProjectAsync(
+                    db,
+                    id,
+                    userId,
+                    userRole,
+                    includeInactive: true))
                 return Results.Json(new { message = "Sadece kendi sorumlu olduğunuz projeleri güncelleyebilirsiniz!" }, statusCode: 403);
 
             // Alanları Güvenli Şekilde Güncelleme
             if (!string.IsNullOrEmpty(dto.ProjectName)) project.ProjectName = dto.ProjectName;
             if (!string.IsNullOrEmpty(dto.ProjectDescription)) project.ProjectDescription = dto.ProjectDescription;
             if (!string.IsNullOrEmpty(dto.ProjectStatus)) project.ProjectStatus = dto.ProjectStatus;
-            if (!string.IsNullOrEmpty(dto.ManualHealth)) project.ManualHealth = dto.ManualHealth;
+            if (!string.IsNullOrEmpty(dto.ManualHealth))
+                project.ManualHealth = HealthStatusHelper.ToStorageValue(dto.ManualHealth);
             if (dto.PlannedProgress.HasValue) project.PlannedProgress = dto.PlannedProgress.Value;
             if (dto.ActualProgress.HasValue) project.ActualProgress = dto.ActualProgress.Value;
             if (dto.Bac.HasValue) project.Bac = dto.Bac.Value;

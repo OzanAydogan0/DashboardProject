@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from '../router';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { useAlert } from '../components/AlertProvider';
+import Pagination from '../components/Pagination';
+import { useAlert } from '../components/alertContext';
 import { canWriteProject } from '../utils/permissionHelper';
+import { usePagination } from '../utils/usePagination';
+import api from '../services/api';
 import './EvmRecordsPage.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5074';
 
 const getMetricStatusStyle = (metricType, value) => {
     if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -27,6 +28,13 @@ const getMetricStatusStyle = (metricType, value) => {
     }
 };
 
+const getApiErrorMessage = (error, fallback) => (
+    error.response?.data?.message ||
+    error.response?.data?.title ||
+    error.message ||
+    fallback
+);
+
 function EvmRecordsPage() {
     const { id: projectId } = useParams();
     const { addAlert } = useAlert();
@@ -38,6 +46,7 @@ function EvmRecordsPage() {
     const [editingRecordId, setEditingRecordId] = useState(null);
     const [formValues, setFormValues] = useState({ period: '', bac: '', pv: '', ev: '', ac: '' });
     const canManage = canWriteProject();
+    const recordPagination = usePagination(records);
 
     const formatCurrency = (val, currencyCode = 'TRY') => {
         if (val === null || val === undefined) return '-';
@@ -53,15 +62,9 @@ function EvmRecordsPage() {
 
     const fetchEvmRecords = useCallback(async () => {
         try {
+            const response = await api.get(`/projects/${projectId}/evm-records`);
             setError(null);
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/projects/${projectId}/evm-records`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('EVM verileri alınamadı.');
-
-            const data = await response.json();
-            setRecords(data);
+            setRecords(Array.isArray(response.data) ? response.data : []);
         } catch {
             setError('EVM verileri alınamadı.');
         } finally {
@@ -69,11 +72,18 @@ function EvmRecordsPage() {
         }
     }, [projectId]);
 
+    const refreshEvmRecords = useCallback(() => {
+        setLoading(true);
+        setError(null);
+        return fetchEvmRecords();
+    }, [fetchEvmRecords]);
+
     useEffect(() => {
         if (!projectId) return;
 
-        fetchEvmRecords();
-    }, [projectId, fetchEvmRecords]);
+        const timeoutId = window.setTimeout(refreshEvmRecords, 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [projectId, refreshEvmRecords]);
 
     const resetForm = () => {
         setShowForm(false);
@@ -90,7 +100,6 @@ function EvmRecordsPage() {
         event.preventDefault();
 
         try {
-            const token = localStorage.getItem('token');
             const payload = {
                 projectId,
                 period: formValues.period,
@@ -100,30 +109,19 @@ function EvmRecordsPage() {
                 ac: Number(formValues.ac)
             };
 
-            const url = editingRecordId
-                ? `${API_BASE_URL}/evm-records/${editingRecordId}`
-                : `${API_BASE_URL}/evm-records`;
-            const method = editingRecordId ? 'PUT' : 'POST';
-
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await response.json().catch(() => null);
-            if (!response.ok) throw new Error(data?.message || 'İşlem başarısız oldu.');
+            const response = editingRecordId
+                ? await api.put(`/evm-records/${editingRecordId}`, payload)
+                : await api.post('/evm-records', payload);
+            const data = response.data;
 
             setSuccessMessage(data?.message || 'EVM kaydı kaydedildi.');
             addAlert(data?.message || 'EVM kaydı kaydedildi.', 'success');
             resetForm();
             await fetchEvmRecords();
         } catch (err) {
-            setError(err.message);
-            addAlert(err.message, 'error');
+            const message = getApiErrorMessage(err, 'İşlem başarısız oldu.');
+            setError(message);
+            addAlert(message, 'error');
         }
     };
 
@@ -133,20 +131,16 @@ function EvmRecordsPage() {
         }
 
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/evm-records/${recordId}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = await response.json().catch(() => null);
-            if (!response.ok) throw new Error(data?.message || 'Silme işlemi başarısız oldu.');
+            const response = await api.delete(`/evm-records/${recordId}`);
+            const data = response.data;
 
             setSuccessMessage(data?.message || 'EVM kaydı silindi.');
             addAlert(data?.message || 'EVM kaydı silindi.', 'success');
             await fetchEvmRecords();
         } catch (err) {
-            setError(err.message);
-            addAlert(err.message, 'error');
+            const message = getApiErrorMessage(err, 'Silme işlemi başarısız oldu.');
+            setError(message);
+            addAlert(message, 'error');
         }
     };
 
@@ -239,7 +233,7 @@ function EvmRecordsPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {records.map((r) => {
+                            {recordPagination.paginatedItems.map((r) => {
                                 const spiStyle = getMetricStatusStyle('spi', r.spi);
                                 const cpiStyle = getMetricStatusStyle('cpi', r.cpi);
                                 const currentCurrency = r.currency || 'TRY';
@@ -281,6 +275,13 @@ function EvmRecordsPage() {
                             })}
                         </tbody>
                     </table>
+                    <Pagination
+                        currentPage={recordPagination.currentPage}
+                        itemLabel="EVM kaydı"
+                        onPageChange={recordPagination.setCurrentPage}
+                        totalItems={recordPagination.totalItems}
+                        totalPages={recordPagination.totalPages}
+                    />
                 </div>
 
                 <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>

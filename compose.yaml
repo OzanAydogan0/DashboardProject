@@ -1,0 +1,188 @@
+name: ${COMPOSE_PROJECT_NAME:-dashboard-project}
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "5"
+
+services:
+  db-init:
+    image: alpine:3.22
+    network_mode: none
+    restart: "no"
+    user: "0:0"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    environment:
+      SQLITE_UID: ${SQLITE_UID:-1654}
+      SQLITE_GID: ${SQLITE_GID:-1654}
+      SEED_SHA256: ${SEED_SHA256:-A8165F4C37F80430408F9290189E158CBD17E6B817884283A2EC0EEA19052EB8}
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        actual_sha="$$(sha256sum /seed/dashboard.db | awk '{print $$1}' | tr '[:lower:]' '[:upper:]')"
+        expected_sha="$$(printf '%s' "$${SEED_SHA256}" | tr '[:lower:]' '[:upper:]')"
+        if [ "$${actual_sha}" != "$${expected_sha}" ]; then
+          echo "Schema seed checksum mismatch." >&2
+          exit 1
+        fi
+        if [ ! -s /data/dashboard.db ]; then
+          echo "SQLite volume is empty; copying the schema-only seed."
+          cp /seed/dashboard.db /data/dashboard.db
+        else
+          echo "Existing SQLite volume found; seed will not overwrite it."
+        fi
+        chown -R "$${SQLITE_UID}:$${SQLITE_GID}" /data
+        chmod 0700 /data
+        chmod 0600 /data/dashboard.db
+    volumes:
+      - type: volume
+        source: dashboard-data
+        target: /data
+      - type: bind
+        source: ./database/seed/dashboard.seed.db
+        target: /seed/dashboard.db
+        read_only: true
+
+  api:
+    <<: *service-defaults
+    image: dashboard-api:${APP_VERSION:-1.0.0}
+    build:
+      context: ./backend
+      dockerfile: dashboardapi/Dockerfile
+      args:
+        DOTNET_VERSION: "10.0"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Data Source=/app/data/dashboard.db;Cache=Shared
+      JwtSettings__Secret: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JwtSettings__Issuer: ${JWT_ISSUER:-PIR-API}
+      JwtSettings__Audience: ${JWT_AUDIENCE:-PIR-React}
+      JwtSettings__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-180}
+      Cors__AllowedOrigins: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      ReverseProxy__KnownProxies: ${REVERSE_PROXY_KNOWN_PROXIES:-172.30.0.3}
+      ReverseProxy__ForwardLimit: ${REVERSE_PROXY_FORWARD_LIMIT:-1}
+      Licensing__QuestPDF__LicenseType: ${QUESTPDF_LICENSE:?QUESTPDF_LICENSE must be set; Production accepts Community, Professional or Enterprise}
+      BootstrapAdmin__Email: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BootstrapAdmin__FullName: ${BOOTSTRAP_ADMIN_FULL_NAME:-}
+      BootstrapAdmin__Password: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      TZ: ${TZ:-Europe/Istanbul}
+    expose:
+      - "8080"
+    volumes:
+      - type: volume
+        source: dashboard-data
+        target: /app/data
+    networks:
+      dashboard-internal:
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - --show-error
+        - http://127.0.0.1:8080/health
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    stop_grace_period: 30s
+
+  frontend:
+    <<: *service-defaults
+    image: dashboard-frontend:${APP_VERSION:-1.0.0}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_VERSION: "24"
+        VITE_API_URL: /api
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${APP_BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8080}:8080"
+    networks:
+      dashboard-internal:
+        ipv4_address: ${FRONTEND_INTERNAL_IP:-172.30.0.3}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --output-document=/dev/null
+        - http://127.0.0.1:8080/healthz
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    stop_grace_period: 15s
+
+  db-tools:
+    image: alpine:3.22
+    network_mode: none
+    profiles:
+      - tools
+    restart: "no"
+    user: "0:0"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    environment:
+      SQLITE_UID: ${SQLITE_UID:-1654}
+      SQLITE_GID: ${SQLITE_GID:-1654}
+    command:
+      - "true"
+    volumes:
+      - type: volume
+        source: dashboard-data
+        target: /data
+      - type: bind
+        source: ./backups
+        target: /backups
+
+volumes:
+  dashboard-data:
+    name: ${DATA_VOLUME_NAME:-dashboard-project-data}
+
+networks:
+  dashboard-internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${APP_NETWORK_SUBNET:-172.30.0.0/24}

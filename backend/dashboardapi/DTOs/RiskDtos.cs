@@ -33,6 +33,12 @@ public record CreateRiskRequest(
 );
 
 public record UpdateRiskRequest(
-    string? RiskTitle, string? RiskCategory, int? RiskProbability, 
-    int? RiskImpact, string? RiskStatus, string? RiskMitigation, DateTime? RiskDueDate
+    string? RiskTitle = null,
+    string? RiskCategory = null,
+    int? RiskProbability = null,
+    int? RiskImpact = null,
+    string? RiskStatus = null,
+    string? RiskMitigation = null,
+    DateTime? RiskDueDate = null,
+    string? RiskOwnerUserId = null
 );

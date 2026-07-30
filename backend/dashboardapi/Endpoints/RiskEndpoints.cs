@@ -60,7 +60,7 @@ public static class RiskEndpoints
 
             var newRisk = new Risk
             {
-                RiskId = "RSK-" + Guid.NewGuid().ToString()[..8].ToUpper(),
+                RiskId = await IdentifierGenerator.GenerateAsync(db.Set<Risk>(), r => r.RiskId, "RSK-"),
                 ProjectId = request.ProjectId,
                 RiskTitle = request.RiskTitle,
                 RiskCategory = request.RiskCategory,
@@ -106,9 +106,24 @@ public static class RiskEndpoints
             if (!string.IsNullOrEmpty(request.RiskCategory)) risk.RiskCategory = request.RiskCategory;
             if (request.RiskProbability.HasValue) risk.RiskProbability = request.RiskProbability.Value;
             if (request.RiskImpact.HasValue) risk.RiskImpact = request.RiskImpact.Value;
-            if (!string.IsNullOrEmpty(request.RiskStatus)) risk.RiskStatus = request.RiskStatus;
+            if (!string.IsNullOrEmpty(request.RiskStatus))
+            {
+                risk.RiskStatus = request.RiskStatus;
+                if (string.Equals(request.RiskStatus, "Kapalı", StringComparison.OrdinalIgnoreCase))
+                    risk.ClosedDate ??= DateTime.UtcNow;
+                else
+                    risk.ClosedDate = null;
+            }
             if (!string.IsNullOrEmpty(request.RiskMitigation)) risk.RiskMitigation = request.RiskMitigation;
             if (request.RiskDueDate.HasValue) risk.RiskDueDate = request.RiskDueDate.Value;
+            if (!string.IsNullOrWhiteSpace(request.RiskOwnerUserId)) risk.RiskOwnerUserId = request.RiskOwnerUserId;
+
+            if (string.IsNullOrWhiteSpace(risk.RiskTitle)) risk.RiskTitle = "Başlık Belirtilmedi";
+            if (string.IsNullOrWhiteSpace(risk.RiskCategory)) risk.RiskCategory = "Genel";
+            if (string.IsNullOrWhiteSpace(risk.RiskStatus)) risk.RiskStatus = "Açık";
+            if (string.IsNullOrWhiteSpace(risk.RiskMitigation)) risk.RiskMitigation = "Belirtilmedi";
+            if (string.IsNullOrWhiteSpace(risk.RiskOwnerUserId)) risk.RiskOwnerUserId = userId;
+            if (risk.RiskDueDate == default) risk.RiskDueDate = DateTime.UtcNow;
             
             risk.UpdatedByUserId = userId;
             risk.UpdatedAt = DateTime.UtcNow;
@@ -162,7 +177,12 @@ public static class RiskEndpoints
             if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
                 var accessibleProjectIds = await db.Projects
-                    .Where(p => p.IsActive == 1 && (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)))
+                    .Where(p =>
+                        p.IsActive == 1 &&
+                        (p.ProjectManagerUserId == userId ||
+                         p.ProjectUsers.Any(pu =>
+                             pu.UserId == userId &&
+                             pu.AssignmentStatus == "Aktif")))
                     .Select(p => p.ProjectId)
                     .ToListAsync();
 
@@ -181,9 +201,9 @@ public static class RiskEndpoints
     {
         var riskHealth = risk.RiskScore switch
         {
-            <= 4 => "Yeşil",
-            <= 15 => "Sarı",
-            _ => "Kırmızı"
+            <= 4 => HealthStatusHelper.Good,
+            <= 15 => HealthStatusHelper.Medium,
+            _ => HealthStatusHelper.Critical
         };
 
         return new RiskDto(

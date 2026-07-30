@@ -1,46 +1,76 @@
+using System.Data;
+using System.Security.Claims;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
-using BCrypt.Net; // 1. BCrypt kütüphanesini yukarıya ekledik
+using dashboardapi.Models;
+using dashboardapi.Services;
 
 namespace dashboardapi.Endpoints;
 
 public static class UserEndpoints
 {
+    private static readonly HashSet<string> AllowedRoles =
+    [
+        "Sistem Yöneticisi",
+        "Proje Yöneticisi",
+        "Üst Yönetim İzleyicisi"
+    ];
+
+    private static readonly HashSet<string> AllowedStatuses = ["Aktif", "Pasif"];
+
     public static void MapUserEndpoints(this IEndpointRouteBuilder app)
     {
-        // 🛡️ RAPOR UYARISI: Kullanıcı yönetimi modülü (SCR-09) SADECE Sistem Yöneticisi'ne açıktır.
-        // Güvenlik riski oluşmaması için rol kontrolünü direkt GRUP seviyesine uygulayarak tüm uçları koruyoruz.
         var group = app.MapGroup("users")
-            .RequireAuthorization(policy => policy.RequireRole("Sistem Yöneticisi")); 
+            .RequireAuthorization(policy => policy.RequireRole("Sistem Yöneticisi"));
 
-        // GET /users - Kullanıcıları Listeleme (Artık sadece Sistem Yöneticisi erişebilir)
         group.MapGet("", async (AppDbContext db) =>
         {
             var users = await db.Users
-                .Select(u => new UserDto(u.UserId, u.Email, u.FullName, u.UserRole, u.UserStatus))
+                .AsNoTracking()
+                .Include(u => u.ProjectUserUsers)
+                .OrderBy(u => u.FullName)
                 .ToListAsync();
 
-            return Results.Ok(users);
+            return Results.Ok(users.Select(ToDto).ToList());
         });
 
-        // POST /users - Kullanıcı Ekleme
         group.MapPost("", async (UserCreateDto dto, AppDbContext db) =>
         {
-            var exists = await db.Users.AnyAsync(u => u.Email == dto.Email);
+            var email = dto.Email?.Trim().ToLowerInvariant();
+            var fullName = dto.FullName?.Trim();
+            var role = dto.Role?.Trim();
+
+            if (string.IsNullOrWhiteSpace(email) ||
+                string.IsNullOrWhiteSpace(fullName) ||
+                string.IsNullOrWhiteSpace(role) ||
+                string.IsNullOrWhiteSpace(dto.Password))
+            {
+                return Results.BadRequest(new { message = "Ad soyad, e-posta, rol ve şifre alanları zorunludur." });
+            }
+
+            if (!AllowedRoles.Contains(role))
+                return Results.BadRequest(new { message = "Geçersiz kullanıcı rolü seçildi." });
+
+            if (!PasswordPolicy.IsStrong(dto.Password))
+                return Results.BadRequest(new { message = PasswordPolicy.RequirementsMessage });
+
+            var exists = await db.Users.AnyAsync(u => u.Email.ToLower() == email);
             if (exists)
                 return Results.BadRequest(new { message = "Bu e-posta adresi zaten kullanımda!" });
 
-            // 🛡️ RAPOR KURALI: Gelen düz şifreyi DB'ye yazmadan önce BCrypt ile güvenli şekilde hash'liyoruz.
-            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(
+                dto.Password,
+                workFactor: 12);
 
-            var newUser = new dashboardapi.Models.User
+            var newUser = new User
             {
-                UserId = "USR-" + Guid.NewGuid().ToString()[..8].ToUpper(),
-                Email = dto.Email,
-                FullName = dto.FullName,
-                UserRole = dto.Role,
-                PasswordHash = hashedPassword, // Artık hash'lenmiş şifre kaydediliyor
+                UserId = await IdentifierGenerator.GenerateAsync(db.Users, u => u.UserId, "USR-"),
+                Email = email,
+                FullName = fullName,
+                UserRole = role,
+                PasswordHash = hashedPassword,
                 UserStatus = "Aktif",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -49,39 +79,284 @@ public static class UserEndpoints
             db.Users.Add(newUser);
             await db.SaveChangesAsync();
 
-            return Results.Created($"/users/{newUser.UserId}", 
-                new UserDto(newUser.UserId, newUser.Email, newUser.FullName, newUser.UserRole, newUser.UserStatus));
+            return Results.Created(
+                $"/users/{newUser.UserId}",
+                new UserDto(
+                    newUser.UserId,
+                    newUser.Email,
+                    newUser.FullName,
+                    newUser.UserRole,
+                    newUser.UserStatus,
+                    []));
         });
 
-        // PATCH /users/{id} - Rol ve Aktiflik Güncelleme
-        group.MapPatch("{id}", async (string id, UserUpdateDto dto, AppDbContext db) =>
+        group.MapPatch("{id}", async (
+            string id,
+            UserUpdateDto dto,
+            ClaimsPrincipal userClaims,
+            AppDbContext db) =>
         {
-            var user = await db.Users.FindAsync(id);
+            var administratorId = PermissionHelper.GetUserId(userClaims);
+            if (string.IsNullOrWhiteSpace(administratorId))
+                return Results.Unauthorized();
+
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+            var user = await db.Users
+                .Include(u => u.ProjectUserUsers)
+                .FirstOrDefaultAsync(u => u.UserId == id);
+
             if (user == null)
                 return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
 
-            if (!string.IsNullOrEmpty(dto.Role))
-                user.UserRole = dto.Role;
+            var role = dto.Role?.Trim();
+            if (role is not null && !AllowedRoles.Contains(role))
+                return Results.BadRequest(new { message = "Geçersiz kullanıcı rolü seçildi." });
 
-            if (!string.IsNullOrEmpty(dto.Status))
-                user.UserStatus = dto.Status;
+            var status = dto.Status?.Trim();
+            if (status is not null && !AllowedStatuses.Contains(status))
+                return Results.BadRequest(new { message = "Geçersiz kullanıcı durumu seçildi." });
 
-            user.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync();
+            var email = dto.Email?.Trim().ToLowerInvariant();
+            if (dto.Email is not null && string.IsNullOrWhiteSpace(email))
+                return Results.BadRequest(new { message = "E-posta adresi boş bırakılamaz." });
 
-            return Results.Ok(new UserDto(user.UserId, user.Email, user.FullName, user.UserRole, user.UserStatus));
+            if (email is not null)
+            {
+                var emailInUse = await db.Users.AnyAsync(u =>
+                    u.UserId != id && u.Email.ToLower() == email);
+
+                if (emailInUse)
+                    return Results.BadRequest(new { message = "Bu e-posta adresi başka bir kullanıcı tarafından kullanılıyor." });
+            }
+
+            var fullName = dto.FullName?.Trim();
+            if (dto.FullName is not null && string.IsNullOrWhiteSpace(fullName))
+                return Results.BadRequest(new { message = "Ad soyad alanı boş bırakılamaz." });
+
+            if (dto.Password is not null &&
+                !PasswordPolicy.IsStrong(dto.Password))
+            {
+                return Results.BadRequest(new
+                {
+                    message = PasswordPolicy.RequirementsMessage
+                });
+            }
+
+            var resultingRole = role ?? user.UserRole;
+            var resultingStatus = status ?? user.UserStatus;
+            var removesLastActiveAdministrator =
+                user.UserRole == PermissionHelper.SystemAdminRole &&
+                user.UserStatus == "Aktif" &&
+                (resultingRole != PermissionHelper.SystemAdminRole ||
+                 resultingStatus != "Aktif") &&
+                !await db.Users.AnyAsync(candidate =>
+                    candidate.UserId != user.UserId &&
+                    candidate.UserRole == PermissionHelper.SystemAdminRole &&
+                    candidate.UserStatus == "Aktif");
+
+            if (removesLastActiveAdministrator)
+            {
+                return Results.Conflict(new
+                {
+                    message = "Sistemde en az bir aktif Sistem Yöneticisi bulunmalıdır."
+                });
+            }
+
+            HashSet<string>? desiredProjectIds = null;
+            if (dto.ProjectIds is not null)
+            {
+                desiredProjectIds = dto.ProjectIds
+                    .Where(projectId => !string.IsNullOrWhiteSpace(projectId))
+                    .ToHashSet(StringComparer.Ordinal);
+
+                var existingProjectIds = desiredProjectIds.Count == 0
+                    ? []
+                    : await db.Projects
+                        .Where(project => desiredProjectIds.Contains(project.ProjectId))
+                        .Select(project => project.ProjectId)
+                        .ToListAsync();
+
+                var missingProjectIds = desiredProjectIds
+                    .Except(existingProjectIds)
+                    .ToList();
+
+                if (missingProjectIds.Count > 0)
+                {
+                    return Results.BadRequest(new
+                    {
+                        message = $"Bulunamayan proje: {string.Join(", ", missingProjectIds)}"
+                    });
+                }
+            }
+
+            var userChanged = false;
+
+            if (role is not null && user.UserRole != role)
+            {
+                user.UserRole = role;
+                userChanged = true;
+            }
+
+            if (status is not null && user.UserStatus != status)
+            {
+                user.UserStatus = status;
+                userChanged = true;
+            }
+
+            if (email is not null && user.Email != email)
+            {
+                user.Email = email;
+                userChanged = true;
+            }
+
+            if (fullName is not null && user.FullName != fullName)
+            {
+                user.FullName = fullName;
+                userChanged = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.Password))
+            {
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(
+                    dto.Password,
+                    workFactor: 12);
+                userChanged = true;
+            }
+
+            if (desiredProjectIds is not null)
+            {
+                var assignmentsByProject = user.ProjectUserUsers
+                    .ToDictionary(assignment => assignment.ProjectId);
+
+                foreach (var assignment in user.ProjectUserUsers
+                    .Where(assignment => !desiredProjectIds.Contains(assignment.ProjectId))
+                    .ToList())
+                {
+                    db.ProjectUsers.Remove(assignment);
+                    userChanged = true;
+                }
+
+                foreach (var projectId in desiredProjectIds)
+                {
+                    if (assignmentsByProject.TryGetValue(projectId, out var assignment))
+                    {
+                        if (assignment.AssignmentStatus != "Aktif")
+                        {
+                            assignment.AssignmentStatus = "Aktif";
+                            assignment.AssignedByUserId = administratorId;
+                            assignment.AssignedAt = DateTime.UtcNow;
+                            assignment.UpdatedAt = DateTime.UtcNow;
+                            userChanged = true;
+                        }
+
+                        continue;
+                    }
+
+                    db.ProjectUsers.Add(new ProjectUser
+                    {
+                        ProjectUserId = await IdentifierGenerator.GenerateAsync(
+                            db.ProjectUsers,
+                            projectUser => projectUser.ProjectUserId,
+                            "PU-"),
+                        ProjectId = projectId,
+                        UserId = id,
+                        AssignedByUserId = administratorId,
+                        AssignmentStatus = "Aktif",
+                        AssignedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+
+                    userChanged = true;
+                }
+            }
+
+            if (userChanged)
+            {
+                user.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+
+            var assignedProjectIds = desiredProjectIds ??
+                user.ProjectUserUsers
+                    .Where(assignment =>
+                        assignment.AssignmentStatus == "Aktif" &&
+                        db.Entry(assignment).State != EntityState.Deleted)
+                    .Select(assignment => assignment.ProjectId)
+                    .ToHashSet(StringComparer.Ordinal);
+
+            await transaction.CommitAsync();
+
+            return Results.Ok(new UserDto(
+                user.UserId,
+                user.Email,
+                user.FullName,
+                user.UserRole,
+                user.UserStatus,
+                assignedProjectIds.OrderBy(projectId => projectId).ToList()));
         });
 
         group.MapDelete("{id}", async (string id, AppDbContext db) =>
         {
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
             var user = await db.Users.FindAsync(id);
             if (user == null)
                 return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
 
-            db.Users.Remove(user);
-            await db.SaveChangesAsync();
+            if (user.UserRole == PermissionHelper.SystemAdminRole &&
+                user.UserStatus == "Aktif" &&
+                !await db.Users.AnyAsync(candidate =>
+                    candidate.UserId != user.UserId &&
+                    candidate.UserRole == PermissionHelper.SystemAdminRole &&
+                    candidate.UserStatus == "Aktif"))
+            {
+                return Results.Conflict(new
+                {
+                    message = "Sistemde en az bir aktif Sistem Yöneticisi bulunmalıdır."
+                });
+            }
+
+            try
+            {
+                db.Users.Remove(user);
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (DbUpdateException exception)
+                when (exception.InnerException is SqliteException
+                {
+                    SqliteErrorCode: 19
+                })
+            {
+                await transaction.RollbackAsync();
+                return Results.Conflict(new
+                {
+                    message =
+                        "Bu kullanıcı ilişkili proje veya işlem kayıtlarında kullanıldığı için silinemez. " +
+                        "Kullanıcıyı silmek yerine pasife alın."
+                });
+            }
 
             return Results.Ok(new { message = "Kullanıcı başarıyla silindi." });
         });
     }
+
+    private static UserDto ToDto(User user) =>
+        new(
+            user.UserId,
+            user.Email,
+            user.FullName,
+            user.UserRole,
+            user.UserStatus,
+            user.ProjectUserUsers
+                .Where(assignment => assignment.AssignmentStatus == "Aktif")
+                .Select(assignment => assignment.ProjectId)
+                .OrderBy(projectId => projectId)
+                .ToList());
 }

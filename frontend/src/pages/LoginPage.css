@@ -168,7 +168,7 @@
   border: none;
   border-radius: 14px;
   background: rgb(30, 113, 168);
-  color: var(--accent);
+  color: white;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.2s, filter 0.2s;
@@ -177,6 +177,69 @@
 .login-button:hover {
   transform: translateY(-1px);
   filter: brightness(1.05);
+}
+
+.forgot-password-wrapper {
+  display: grid;
+  gap: 10px;
+}
+
+.forgot-password-link {
+  justify-self: start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #eff6ff;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.forgot-password-link:hover {
+  color: white;
+  text-decoration-thickness: 2px;
+}
+
+.forgot-password-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.forgot-password-field {
+  display: grid;
+  gap: 6px;
+  color: white;
+  font-weight: 500;
+}
+
+.forgot-password-button {
+  padding: 12px 14px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.forgot-password-button:hover {
+  background: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.forgot-password-link:disabled,
+.forgot-password-button:disabled,
+.login-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
 }
 
 @media (max-width: 960px) {
