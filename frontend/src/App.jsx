@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, Link, useNavigate } from 'react-router-dom'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, Link, useNavigate } from './router'
 import './App.css'
 import api from './services/api'
 
@@ -11,15 +11,14 @@ import settingsIcon from './icons/settings_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz2
 import reportIcon from './icons/lab_profile_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.png'
 import actionsIcon from './icons/ads_click_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.png'
 
-// Sayfalar
-import HomePage from './pages/HomePage'
-import ProjectsPage from './pages/ProjectsPage'
-import ProjectDetailPage from './pages/ProjectDetailPage'
-import ReportsPage from './pages/ReportsPage'
-import RisksPage from './pages/RisksPage'
-import ActionsPage from './pages/ActionsPage'
-import SettingsPage from './pages/SettingsPage'
-import LoginPage from './pages/LoginPage'
+const HomePage = lazy(() => import('./pages/HomePage'))
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'))
+const ReportsPage = lazy(() => import('./pages/ReportsPage'))
+const RisksPage = lazy(() => import('./pages/RisksPage'))
+const ActionsPage = lazy(() => import('./pages/ActionsPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
 
 const pageInfo = {
   '/': { title: 'Portföy Dashboard'},
@@ -188,18 +187,21 @@ const ProtectedLayout = () => {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/projects/:id" element={<ProjectDetailPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/risks" element={<RisksPage />} />
-          <Route path="/actions" element={<ActionsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<div className="page-content">Yükleniyor...</div>}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<ProtectedLayout />}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/:id" element={<ProjectDetailPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/risks" element={<RisksPage />} />
+            <Route path="/actions" element={<ActionsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

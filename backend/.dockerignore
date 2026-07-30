@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/*.user
+**/*.suo
+**/.vs/
+DashboardApi.Tests/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.db-journal
+.git/
+.gitignore
+README*

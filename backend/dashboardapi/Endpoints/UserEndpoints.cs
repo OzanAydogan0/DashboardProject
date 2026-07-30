@@ -1,4 +1,6 @@
+using System.Data;
 using System.Security.Claims;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using dashboardapi.Data;
 using dashboardapi.DTOs;
@@ -51,14 +53,16 @@ public static class UserEndpoints
             if (!AllowedRoles.Contains(role))
                 return Results.BadRequest(new { message = "Geçersiz kullanıcı rolü seçildi." });
 
-            if (dto.Password.Length < 8)
-                return Results.BadRequest(new { message = "Şifre en az 8 karakter olmalıdır." });
+            if (!PasswordPolicy.IsStrong(dto.Password))
+                return Results.BadRequest(new { message = PasswordPolicy.RequirementsMessage });
 
             var exists = await db.Users.AnyAsync(u => u.Email.ToLower() == email);
             if (exists)
                 return Results.BadRequest(new { message = "Bu e-posta adresi zaten kullanımda!" });
 
-            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(
+                dto.Password,
+                workFactor: 12);
 
             var newUser = new User
             {
@@ -96,6 +100,10 @@ public static class UserEndpoints
             if (string.IsNullOrWhiteSpace(administratorId))
                 return Results.Unauthorized();
 
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
             var user = await db.Users
                 .Include(u => u.ProjectUserUsers)
                 .FirstOrDefaultAsync(u => u.UserId == id);
@@ -128,8 +136,34 @@ public static class UserEndpoints
             if (dto.FullName is not null && string.IsNullOrWhiteSpace(fullName))
                 return Results.BadRequest(new { message = "Ad soyad alanı boş bırakılamaz." });
 
-            if (!string.IsNullOrWhiteSpace(dto.Password) && dto.Password.Length < 8)
-                return Results.BadRequest(new { message = "Yeni şifre en az 8 karakter olmalıdır." });
+            if (dto.Password is not null &&
+                !PasswordPolicy.IsStrong(dto.Password))
+            {
+                return Results.BadRequest(new
+                {
+                    message = PasswordPolicy.RequirementsMessage
+                });
+            }
+
+            var resultingRole = role ?? user.UserRole;
+            var resultingStatus = status ?? user.UserStatus;
+            var removesLastActiveAdministrator =
+                user.UserRole == PermissionHelper.SystemAdminRole &&
+                user.UserStatus == "Aktif" &&
+                (resultingRole != PermissionHelper.SystemAdminRole ||
+                 resultingStatus != "Aktif") &&
+                !await db.Users.AnyAsync(candidate =>
+                    candidate.UserId != user.UserId &&
+                    candidate.UserRole == PermissionHelper.SystemAdminRole &&
+                    candidate.UserStatus == "Aktif");
+
+            if (removesLastActiveAdministrator)
+            {
+                return Results.Conflict(new
+                {
+                    message = "Sistemde en az bir aktif Sistem Yöneticisi bulunmalıdır."
+                });
+            }
 
             HashSet<string>? desiredProjectIds = null;
             if (dto.ProjectIds is not null)
@@ -186,7 +220,9 @@ public static class UserEndpoints
 
             if (!string.IsNullOrWhiteSpace(dto.Password))
             {
-                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(
+                    dto.Password,
+                    workFactor: 12);
                 userChanged = true;
             }
 
@@ -252,6 +288,8 @@ public static class UserEndpoints
                     .Select(assignment => assignment.ProjectId)
                     .ToHashSet(StringComparer.Ordinal);
 
+            await transaction.CommitAsync();
+
             return Results.Ok(new UserDto(
                 user.UserId,
                 user.Email,
@@ -263,12 +301,47 @@ public static class UserEndpoints
 
         group.MapDelete("{id}", async (string id, AppDbContext db) =>
         {
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
             var user = await db.Users.FindAsync(id);
             if (user == null)
                 return Results.NotFound(new { message = "Kullanıcı bulunamadı." });
 
-            db.Users.Remove(user);
-            await db.SaveChangesAsync();
+            if (user.UserRole == PermissionHelper.SystemAdminRole &&
+                user.UserStatus == "Aktif" &&
+                !await db.Users.AnyAsync(candidate =>
+                    candidate.UserId != user.UserId &&
+                    candidate.UserRole == PermissionHelper.SystemAdminRole &&
+                    candidate.UserStatus == "Aktif"))
+            {
+                return Results.Conflict(new
+                {
+                    message = "Sistemde en az bir aktif Sistem Yöneticisi bulunmalıdır."
+                });
+            }
+
+            try
+            {
+                db.Users.Remove(user);
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (DbUpdateException exception)
+                when (exception.InnerException is SqliteException
+                {
+                    SqliteErrorCode: 19
+                })
+            {
+                await transaction.RollbackAsync();
+                return Results.Conflict(new
+                {
+                    message =
+                        "Bu kullanıcı ilişkili proje veya işlem kayıtlarında kullanıldığı için silinemez. " +
+                        "Kullanıcıyı silmek yerine pasife alın."
+                });
+            }
 
             return Results.Ok(new { message = "Kullanıcı başarıyla silindi." });
         });

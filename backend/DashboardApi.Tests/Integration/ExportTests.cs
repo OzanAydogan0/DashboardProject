@@ -6,10 +6,10 @@ using dashboardapi.Data;
 using dashboardapi.DTOs;
 using DashboardApi.Tests.Builders;
 using DashboardApi.Tests.Fixtures;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
-using OfficeOpenXml;
 
 
 namespace DashboardApi.Tests.Integration;
@@ -141,6 +141,57 @@ public sealed class ExportSecurityTests
             pirCountAfterRequest);
     }
 
+    [Theory]
+    [InlineData("/pirs/PIR-01/export/pdf")]
+    [InlineData("/reports/PIR-01/export/pdf")]
+    [InlineData("/pirs/PIR-01/export/excel")]
+    [InlineData("/reports/PIR-01/export/excel")]
+    public async Task ExportPir_FromAnotherManagersProject_ReturnsForbidden(
+        string endpoint)
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        TestUserCredentials credentials;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            credentials = await new TestDataBuilder(db)
+                .CreateActiveUserAsync("Proje Yöneticisi");
+
+            var ownProject = await db.Projects
+                .SingleAsync(project => project.ProjectId == "PRJ-002");
+            ownProject.ProjectManagerUserId = credentials.User.UserId;
+            await db.SaveChangesAsync();
+        }
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            new LoginRequest(
+                credentials.User.Email,
+                credentials.PlainTextPassword));
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+
+        var loginResult =
+            await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.NotNull(loginResult);
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                loginResult.Token);
+
+        using var response = await client.GetAsync(endpoint);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.NotEqual(
+            "application/pdf",
+            response.Content.Headers.ContentType?.MediaType);
+        Assert.NotEqual(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            response.Content.Headers.ContentType?.MediaType);
+    }
+
         [Fact]
         public async Task ExportPirExcel_WithValidReport_ReturnsValidXlsx()
         {
@@ -256,17 +307,17 @@ public sealed class ExportSecurityTests
             }
 
             using var stream = new MemoryStream(excelBytes);
-            using var package = new ExcelPackage(stream);
+            using var workbook = new XLWorkbook(stream);
 
-            Assert.NotEmpty(package.Workbook.Worksheets);
+            Assert.NotEmpty(workbook.Worksheets);
 
-            var worksheet =
-                package.Workbook.Worksheets["PIR Raporu"];
-
-            Assert.NotNull(worksheet);
+            Assert.True(
+                workbook.TryGetWorksheet(
+                    "PIR Raporu",
+                    out var worksheet));
 
             var title =
-                worksheet.Cells["A1"].Text;
+                worksheet.Cell("A1").GetFormattedString();
 
             Assert.False(string.IsNullOrWhiteSpace(title));
 
@@ -277,11 +328,11 @@ public sealed class ExportSecurityTests
 
             Assert.Equal(
                 expectedProjectCode,
-                worksheet.Cells["B3"].Text);
+                worksheet.Cell("B3").GetFormattedString());
 
             Assert.Equal(
                 expectedPeriod,
-                worksheet.Cells["B5"].Text);
+                worksheet.Cell("B5").GetFormattedString());
 
             using var verificationScope =
                 factory.Services.CreateScope();

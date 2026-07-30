@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
+import { useAlert } from '../components/alertContext'
 import { HEALTH_STATUS, HEALTH_STATUS_OPTIONS, normalizeHealthStatus } from '../utils/healthStatus'
 import './HomePage.css'
 
 function HomePage() {
   const { addAlert } = useAlert()
-  const [activeTab, setActiveTab] = useState('overview')
   const [rawProjects, setRawProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -51,10 +50,12 @@ function HomePage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [addAlert])
 
   // 🔄 2. Kullanıcı Etkileşimi ile Yenileme veya Filtreleme (Buton tıklamaları için)
   const handleRefetch = async () => {
+    setCurrentPage(1)
+    setChartPage(1)
     setLoading(true)
     setError(null)
     try {
@@ -111,11 +112,6 @@ function HomePage() {
     const startIndex = (currentPage - 1) * pageSize
     return filteredProjects.slice(startIndex, startIndex + pageSize)
   }, [filteredProjects, currentPage])
-
-  useEffect(() => {
-    setCurrentPage(1)
-    setChartPage(1)
-  }, [filters, rawProjects])
 
   // 🧮 Gelen DTO Verisinden Dinamik KPI Hesaplamaları
   const kpis = useMemo(() => {
@@ -195,12 +191,13 @@ function HomePage() {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target
+    setCurrentPage(1)
+    setChartPage(1)
     setFilters((prev) => ({ ...prev, [name]: value }))
   }
 
   const handleFilterSubmit = (e) => {
     e.preventDefault()
-    setCurrentPage(1)
     handleRefetch()
   }
 

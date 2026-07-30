@@ -1,16 +1,34 @@
-# React + Vite
+# Dashboard Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Proje Yönetim Dashboard uygulamasının React 19 ve Vite 8 tabanlı kullanıcı arayüzü.
 
-Currently, two official plugins are available:
+## Gereksinimler
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 24
+- `npm ci` kullanabilen güncel npm
+- Yerel geliştirmede varsayılan olarak `http://localhost:5074` üzerinde çalışan API
 
-## React Compiler
+## Geliştirme
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```text
+npm ci
+npm run dev
+```
 
-## Expanding the ESLint configuration
+Uygulama API çağrılarını aynı-origin `/api` yoluna yapar. Vite geliştirme sunucusu bu yolu `http://localhost:5074` adresine proxy eder. Farklı bir yerel API adresi gerekiyorsa `vite.config.js` içindeki geliştirme proxy hedefini yerel çalışma için güncelleyin.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Kalite kontrolleri
+
+```text
+npm run lint
+npm test
+npm run build
+```
+
+Testler istemci router davranışını, lint statik kod kurallarını ve build üretim paketini doğrular.
+
+## Üretim
+
+Üretim image'ı multi-stage [Dockerfile](Dockerfile) ile oluşturulur. Build sırasında `VITE_API_URL=/api` kullanılır; Nginx `/api/` prefix'ini kaldırıp iç ağdaki .NET API'ye iletir ve diğer yollar için SPA fallback uygular.
+
+Kök dizindeki [README](../README.md), [kurulum](../INSTALLATION.md) ve [işletim](../OPERATIONS.md) belgeleri teslim sürecinin bağlayıcı adımlarını içerir.

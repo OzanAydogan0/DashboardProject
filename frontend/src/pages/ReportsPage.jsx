@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { projectService } from '../services/projectService';
-import { useAlert } from '../components/AlertProvider';
+import { useAlert } from '../components/alertContext';
 import './ReportsPage.css';
 
 function ReportsPage() {

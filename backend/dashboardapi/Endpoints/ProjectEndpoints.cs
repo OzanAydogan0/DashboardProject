@@ -25,7 +25,11 @@ public static class ProjectEndpoints
 
             if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
-                query = query.Where(p => p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId));
+                query = query.Where(p =>
+                    p.ProjectManagerUserId == userId ||
+                    p.ProjectUsers.Any(pu =>
+                        pu.UserId == userId &&
+                        pu.AssignmentStatus == "Aktif"));
             }
 
             var projects = await query
@@ -64,10 +68,19 @@ public static class ProjectEndpoints
             var userRole = PermissionHelper.GetUserRole(userClaims);
             var userId = PermissionHelper.GetUserId(userClaims);
 
-            var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == id && p.IsActive == 1);
+            if (string.IsNullOrEmpty(userId))
+                return Results.Unauthorized();
+
+            var project = await db.Projects.FirstOrDefaultAsync(
+                candidate => candidate.ProjectId == id);
             if (project == null) return Results.NotFound(new { message = "Proje bulunamadı." });
 
-            if (!string.IsNullOrEmpty(userId) && !await PermissionHelper.CanAccessProjectAsync(db, id, userId, userRole))
+            if (!await PermissionHelper.CanAccessProjectAsync(
+                    db,
+                    id,
+                    userId,
+                    userRole,
+                    includeInactive: true))
                 return Results.Json(new { message = "Bu projenin detaylarını görmeye yetkiniz yok!" }, statusCode: 403);
 
             // 🧮 RAPOR KURALI: Otomatik Sağlık Önerisi Algoritması (Planlanan vs Gerçekleşen İlerleme kıyası)
@@ -170,13 +183,22 @@ public static class ProjectEndpoints
             var userRole = PermissionHelper.GetUserRole(userClaims);
             var userId = PermissionHelper.GetUserId(userClaims);
 
+            if (string.IsNullOrEmpty(userId))
+                return Results.Unauthorized();
+
             var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == id);
             if (project == null) return Results.NotFound(new { message = "Proje bulunamadı." });
 
             if (PermissionHelper.IsExecutive(userRole))
                 return Results.Json(new { message = "Üst Yönetim rolü projeler üzerinde değişiklik yapamaz!" }, statusCode: 403);
 
-            if (!PermissionHelper.IsSystemAdmin(userRole) && !await PermissionHelper.CanManageProjectAsync(db, id, userId!, userRole))
+            if (!PermissionHelper.IsSystemAdmin(userRole) &&
+                !await PermissionHelper.CanManageProjectAsync(
+                    db,
+                    id,
+                    userId,
+                    userRole,
+                    includeInactive: true))
                 return Results.Json(new { message = "Sadece kendi sorumlu olduğunuz projeleri güncelleyebilirsiniz!" }, statusCode: 403);
 
             // Alanları Güvenli Şekilde Güncelleme

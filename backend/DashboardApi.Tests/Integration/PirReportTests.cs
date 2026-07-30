@@ -209,6 +209,10 @@ public sealed class PirReportTests
         using var client = factory.CreateHttpsClient();
 
         var credentials = await CreateActiveUserAsync(factory, role: "Proje Yöneticisi");
+        await AssignUserToProjectAsync(
+            factory,
+            credentials.User.UserId,
+            projectId: "PRJ-001");
 
         using var loginResponse = await client.PostAsJsonAsync(
             "/auth/login",
@@ -250,6 +254,10 @@ public sealed class PirReportTests
         using var client = factory.CreateHttpsClient();
 
         var credentials = await CreateActiveUserAsync(factory, role: "Proje Yöneticisi");
+        await AssignUserToProjectAsync(
+            factory,
+            credentials.User.UserId,
+            projectId: "PRJ-001");
 
         using var loginResponse = await client.PostAsJsonAsync(
             "/auth/login",
@@ -587,5 +595,29 @@ public sealed class PirReportTests
         var builder = new TestDataBuilder(db);
 
         return await builder.CreateActiveUserAsync(role);
+    }
+
+    private static async Task AssignUserToProjectAsync(
+        TestWebApplicationFactory factory,
+        string userId,
+        string projectId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var now = DateTime.UtcNow;
+
+        db.ProjectUsers.Add(new ProjectUser
+        {
+            ProjectUserId = $"TEST-PU-{Guid.NewGuid():N}",
+            ProjectId = projectId,
+            UserId = userId,
+            AssignedByUserId = "USR-ADMIN",
+            AssignmentStatus = "Aktif",
+            AssignedAt = now,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+
+        await db.SaveChangesAsync();
     }
 }

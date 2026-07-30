@@ -3,7 +3,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using OfficeOpenXml;
+using ClosedXML.Excel;
 using dashboardapi.Data;
 using dashboardapi.Models;
 using dashboardapi.DTOs;
@@ -18,8 +18,10 @@ public static class ExcelImportEndpoints
         app.MapPost("projects/import", async (
             [FromForm] IFormFile file, // 👈 1. [FromForm] özniteliği eklendi (415 hatasını çözer)
             ClaimsPrincipal userClaims, 
-            AppDbContext db) =>
+            AppDbContext db,
+            ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("ProjectExcelImport");
             var userRole = userClaims.FindFirst(ClaimTypes.Role)?.Value;
             var userId = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
@@ -31,7 +33,6 @@ public static class ExcelImportEndpoints
             if (file == null || file.Length == 0)
                 return Results.BadRequest(new { message = "Lütfen geçerli bir Excel dosyası yükleyin." });
 
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
             var importedCount = 0;
             var errorLogs = new List<string>();
@@ -39,34 +40,35 @@ public static class ExcelImportEndpoints
             using (var stream = new MemoryStream())
             {
                 await file.CopyToAsync(stream);
-                using var package = new ExcelPackage(stream);
-                var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+                stream.Position = 0;
+                using var workbook = new XLWorkbook(stream);
+                var worksheet = workbook.Worksheets.FirstOrDefault();
                 
                 if (worksheet == null) return Results.BadRequest(new { message = "Çalışma sayfası bulunamadı." });
 
-                var rowCount = worksheet.Dimension?.End.Row ?? 0;
+                var rowCount = worksheet.LastRowUsed()?.RowNumber() ?? 0;
                 if (rowCount < 2) return Results.BadRequest(new { message = "İşlenecek veri bulunamadı." });
 
                 for (int row = 2; row <= rowCount; row++)
                 {
                     try
                     {
-                        var projectCode = worksheet.Cells[row, 1].Value?.ToString()?.Trim();
-                        var projectName = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
-                        var customerName = worksheet.Cells[row, 3].Value?.ToString()?.Trim(); 
-                        var pmIdentifier = worksheet.Cells[row, 4].Value?.ToString()?.Trim(); // PM ID veya E-posta
-                        var startDateStr = worksheet.Cells[row, 5].Value?.ToString();
-                        var endDateStr = worksheet.Cells[row, 6].Value?.ToString();
-                        var bacStr = worksheet.Cells[row, 7].Value?.ToString()?.Trim();
-                        var currency = worksheet.Cells[row, 8].Value?.ToString()?.Trim() ?? "TRY";
-                        var confidentiality = worksheet.Cells[row, 9].Value?.ToString()?.Trim() ?? "Şirket İçi";
-                        var reportingFreq = worksheet.Cells[row, 10].Value?.ToString()?.Trim() ?? "Aylık";
-                        var status = worksheet.Cells[row, 11].Value?.ToString()?.Trim() ?? "Planlandı";
-                        var projectDescription = worksheet.Cells[row, 12].Value?.ToString()?.Trim();
-                        var manualHealth = worksheet.Cells[row, 13].Value?.ToString()?.Trim() ?? HealthStatusHelper.Good;
-                        var plannedProgressStr = worksheet.Cells[row, 14].Value?.ToString()?.Trim();
-                        var actualProgressStr = worksheet.Cells[row, 15].Value?.ToString()?.Trim();
-                        var isActiveStr = worksheet.Cells[row, 16].Value?.ToString()?.Trim();
+                        var projectCode = ReadCellText(worksheet.Cell(row, 1));
+                        var projectName = ReadCellText(worksheet.Cell(row, 2));
+                        var customerName = ReadCellText(worksheet.Cell(row, 3));
+                        var pmIdentifier = ReadCellText(worksheet.Cell(row, 4)); // PM ID veya E-posta
+                        var startDateStr = ReadCellText(worksheet.Cell(row, 5));
+                        var endDateStr = ReadCellText(worksheet.Cell(row, 6));
+                        var bacStr = ReadCellText(worksheet.Cell(row, 7));
+                        var currency = ReadCellText(worksheet.Cell(row, 8)) ?? "TRY";
+                        var confidentiality = ReadCellText(worksheet.Cell(row, 9)) ?? "Şirket İçi";
+                        var reportingFreq = ReadCellText(worksheet.Cell(row, 10)) ?? "Aylık";
+                        var status = ReadCellText(worksheet.Cell(row, 11)) ?? "Planlandı";
+                        var projectDescription = ReadCellText(worksheet.Cell(row, 12));
+                        var manualHealth = ReadCellText(worksheet.Cell(row, 13)) ?? HealthStatusHelper.Good;
+                        var plannedProgressStr = ReadCellText(worksheet.Cell(row, 14));
+                        var actualProgressStr = ReadCellText(worksheet.Cell(row, 15));
+                        var isActiveStr = ReadCellText(worksheet.Cell(row, 16));
 
                         if (string.IsNullOrEmpty(projectCode) || string.IsNullOrEmpty(projectName) || 
                             string.IsNullOrEmpty(pmIdentifier) || string.IsNullOrEmpty(customerName))
@@ -180,7 +182,11 @@ public static class ExcelImportEndpoints
                     }
                     catch (Exception ex)
                     {
-                        errorLogs.Add($"Satır {row}: Beklenmeyen bir hata oluştu -> {ex.Message}");
+                        logger.LogWarning(
+                            ex,
+                            "Proje Excel içe aktarımında {RowNumber}. satır işlenemedi.",
+                            row);
+                        errorLogs.Add($"Satır {row}: Beklenmeyen bir hata oluştu.");
                     }
                 }
 
@@ -223,16 +229,17 @@ public static class ExcelImportEndpoints
             if (!string.Equals(Path.GetExtension(file.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
                 return Results.BadRequest(new { message = "Risk içe aktarma işlemi yalnızca .xlsx dosyalarını destekler." });
 
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
             try
             {
                 using var stream = new MemoryStream();
                 await file.CopyToAsync(stream);
-                using var package = new ExcelPackage(stream);
-                var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+                stream.Position = 0;
+                using var workbook = new XLWorkbook(stream);
+                var worksheet = workbook.Worksheets.FirstOrDefault();
 
-                if (worksheet?.Dimension == null || worksheet.Dimension.End.Row < 2)
+                var lastRow = worksheet?.LastRowUsed()?.RowNumber() ?? 0;
+                if (worksheet == null || lastRow < 2)
                     return Results.BadRequest(new { message = "Excel dosyasında başlık ve en az bir veri satırı bulunmalıdır." });
 
                 var headerColumns = ReadHeaderColumns(worksheet);
@@ -287,19 +294,19 @@ public static class ExcelImportEndpoints
                 var importedCount = 0;
                 var errorLogs = new List<string>();
 
-                for (var row = 2; row <= worksheet.Dimension.End.Row; row++)
+                for (var row = 2; row <= lastRow; row++)
                 {
                     if (IsEmptyRow(worksheet, row))
                         continue;
 
-                    var riskTitle = worksheet.Cells[row, riskTitleColumn].Text.Trim();
+                    var riskTitle = GetCellText(worksheet.Cell(row, riskTitleColumn));
                     if (string.IsNullOrWhiteSpace(riskTitle))
                     {
                         errorLogs.Add($"Satır {row}: Risk Başlığı zorunludur.");
                         continue;
                     }
 
-                    var category = worksheet.Cells[row, categoryColumn].Text.Trim();
+                    var category = GetCellText(worksheet.Cell(row, categoryColumn));
                     if (string.IsNullOrWhiteSpace(category))
                     {
                         errorLogs.Add($"Satır {row}: Kategori zorunludur.");
@@ -307,7 +314,7 @@ public static class ExcelImportEndpoints
                     }
 
                     if (!int.TryParse(
-                            worksheet.Cells[row, probabilityColumn].Text.Trim(),
+                            GetCellText(worksheet.Cell(row, probabilityColumn)),
                             NumberStyles.Integer,
                             CultureInfo.InvariantCulture,
                             out var probability) ||
@@ -318,7 +325,7 @@ public static class ExcelImportEndpoints
                     }
 
                     if (!int.TryParse(
-                            worksheet.Cells[row, impactColumn].Text.Trim(),
+                            GetCellText(worksheet.Cell(row, impactColumn)),
                             NumberStyles.Integer,
                             CultureInfo.InvariantCulture,
                             out var impact) ||
@@ -328,20 +335,20 @@ public static class ExcelImportEndpoints
                         continue;
                     }
 
-                    var riskStatus = NormalizeRiskStatus(worksheet.Cells[row, statusColumn].Text);
+                    var riskStatus = NormalizeRiskStatus(GetCellText(worksheet.Cell(row, statusColumn)));
                     if (riskStatus == null)
                     {
                         errorLogs.Add($"Satır {row}: Durum Açık, İzleniyor, Azaltıldı veya Kapalı olmalıdır.");
                         continue;
                     }
 
-                    if (!TryReadDate(worksheet.Cells[row, dueDateColumn], out var dueDate))
+                    if (!TryReadDate(worksheet.Cell(row, dueDateColumn), out var dueDate))
                     {
                         errorLogs.Add($"Satır {row}: Bitiş Tarihi geçerli bir tarih olmalıdır.");
                         continue;
                     }
 
-                    var ownerValue = worksheet.Cells[row, ownerColumn].Text.Trim();
+                    var ownerValue = GetCellText(worksheet.Cell(row, ownerColumn));
                     var ownerMatch = FindRiskOwner(assignableUsers, ownerValue);
                     if (ownerMatch.Ambiguous)
                     {
@@ -356,7 +363,7 @@ public static class ExcelImportEndpoints
                     }
 
                     var importedAt = DateTime.UtcNow;
-                    var mitigation = worksheet.Cells[row, mitigationColumn].Text.Trim();
+                    var mitigation = GetCellText(worksheet.Cell(row, mitigationColumn));
                     var risk = new Risk
                     {
                         RiskId = await IdentifierGenerator.GenerateAsync(db.Risks, item => item.RiskId, "RSK-"),
@@ -396,10 +403,10 @@ public static class ExcelImportEndpoints
             {
                 return Results.BadRequest(new { message = "Excel dosyası okunamadı. Geçerli bir .xlsx dosyası yükleyin." });
             }
-            catch (Exception exception)
+            catch (Exception)
             {
                 return Results.Json(
-                    new { message = "Riskler Excel dosyasından içe aktarılırken hata oluştu.", detail = exception.Message },
+                    new { message = "Riskler Excel dosyasından içe aktarılırken hata oluştu." },
                     statusCode: 500);
             }
         })
@@ -408,13 +415,14 @@ public static class ExcelImportEndpoints
 
     private static readonly CultureInfo TurkishCulture = CultureInfo.GetCultureInfo("tr-TR");
 
-    private static Dictionary<string, int> ReadHeaderColumns(ExcelWorksheet worksheet)
+    private static Dictionary<string, int> ReadHeaderColumns(IXLWorksheet worksheet)
     {
         var columns = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var lastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
 
-        for (var column = 1; column <= worksheet.Dimension.End.Column; column++)
+        for (var column = 1; column <= lastColumn; column++)
         {
-            var header = NormalizeHeader(worksheet.Cells[1, column].Text);
+            var header = NormalizeHeader(GetCellText(worksheet.Cell(1, column)));
             if (!string.IsNullOrEmpty(header))
                 columns.TryAdd(header, column);
         }
@@ -439,9 +447,13 @@ public static class ExcelImportEndpoints
             .ToLower(TurkishCulture)
             .Where(char.IsLetterOrDigit));
 
-    private static bool IsEmptyRow(ExcelWorksheet worksheet, int row) =>
-        Enumerable.Range(1, worksheet.Dimension.End.Column)
-            .All(column => string.IsNullOrWhiteSpace(worksheet.Cells[row, column].Text));
+    private static bool IsEmptyRow(IXLWorksheet worksheet, int row)
+    {
+        var lastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+        return lastColumn == 0 ||
+               Enumerable.Range(1, lastColumn)
+                   .All(column => worksheet.Cell(row, column).IsEmpty());
+    }
 
     private static string? NormalizeRiskStatus(string value)
     {
@@ -458,15 +470,15 @@ public static class ExcelImportEndpoints
         };
     }
 
-    private static bool TryReadDate(ExcelRangeBase cell, out DateTime date)
+    private static bool TryReadDate(IXLCell cell, out DateTime date)
     {
-        if (cell.Value is DateTime dateValue)
+        if (cell.TryGetValue<DateTime>(out var dateValue))
         {
             date = dateValue.Date;
             return true;
         }
 
-        if (cell.Value is double serialDate)
+        if (cell.TryGetValue<double>(out var serialDate))
         {
             try
             {
@@ -479,7 +491,7 @@ public static class ExcelImportEndpoints
             }
         }
 
-        var text = cell.Text.Trim();
+        var text = GetCellText(cell);
         if (DateTime.TryParse(text, TurkishCulture, DateTimeStyles.AllowWhiteSpaces, out date) ||
             DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out date))
         {
@@ -489,6 +501,15 @@ public static class ExcelImportEndpoints
 
         date = default;
         return false;
+    }
+
+    private static string GetCellText(IXLCell cell) =>
+        cell.GetFormattedString().Trim();
+
+    private static string? ReadCellText(IXLCell cell)
+    {
+        var value = GetCellText(cell);
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private static (User? User, bool Ambiguous) FindRiskOwner(

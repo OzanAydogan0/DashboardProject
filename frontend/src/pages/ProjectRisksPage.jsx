@@ -1,8 +1,8 @@
 import { useState, useEffect, useEffectEvent, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from '../router';
 import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
-import { useAlert } from '../components/AlertProvider';
+import { useAlert } from '../components/alertContext';
 import {
     canWriteProject,
     getAssignableProjectUsers,

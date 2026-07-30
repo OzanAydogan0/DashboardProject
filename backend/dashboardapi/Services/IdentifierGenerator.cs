@@ -5,9 +5,17 @@ namespace dashboardapi.Services;
 
 public static class IdentifierGenerator
 {
-    public static async Task<string> GenerateAsync<T>(DbSet<T> dbSet, Expression<Func<T, string>> idSelector, string prefix, CancellationToken cancellationToken = default)
+    public static async Task<string> GenerateAsync<T>(
+        DbSet<T> dbSet,
+        Expression<Func<T, string>> idSelector,
+        string prefix,
+        CancellationToken cancellationToken = default,
+        int minimumDigits = 4)
         where T : class
     {
+        if (minimumDigits < 1)
+            throw new ArgumentOutOfRangeException(nameof(minimumDigits));
+
         var selectorFunc = idSelector.Compile();
 
         var existingIds = await dbSet
@@ -24,7 +32,7 @@ public static class IdentifierGenerator
             .DefaultIfEmpty(0)
             .Max();
 
-        return $"{prefix}{(maxNumber + 1):D4}";
+        return prefix + (maxNumber + 1).ToString($"D{minimumDigits}");
     }
 
     private static int? ParseNumericSuffix(string id, string prefix)

@@ -230,6 +230,21 @@ importProjectsExcel: (formData) => {
     return response.data;
   },
 
+  createProgram: async (programData) => {
+    const response = await api.post('/programs', programData);
+    return response.data;
+  },
+
+  updateProgram: async (programId, programData) => {
+    const response = await api.patch(`/programs/${programId}`, programData);
+    return response.data;
+  },
+
+  deleteProgram: async (programId) => {
+    const response = await api.delete(`/programs/${programId}`);
+    return response.data;
+  },
+
   getUsers: async () => {
     const response = await api.get('/users');
     return response.data;

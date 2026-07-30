@@ -44,8 +44,18 @@ export const getUserRecordRole = (user) =>
     '',
   )
 
+export const getUserRecordStatus = (user) =>
+  (
+    user?.userStatus ||
+    user?.UserStatus ||
+    user?.status ||
+    user?.Status ||
+    ''
+  ).toString().trim()
+
 export const isAssignableProjectUser = (user) =>
-  !['Sistem Yöneticisi', 'Üst Yönetim İzleyicisi'].includes(getUserRecordRole(user))
+  getUserRecordStatus(user) === 'Aktif' &&
+  getUserRecordRole(user) !== 'Üst Yönetim İzleyicisi'
 
 export const getAssignableProjectUsers = (users) =>
   (Array.isArray(users) ? users : []).filter(isAssignableProjectUser)

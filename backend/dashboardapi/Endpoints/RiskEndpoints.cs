@@ -128,15 +128,8 @@ public static class RiskEndpoints
             risk.UpdatedByUserId = userId;
             risk.UpdatedAt = DateTime.UtcNow;
 
-            try
-            {
-                await db.SaveChangesAsync();
-                return Results.Ok(new { message = "Risk başarıyla güncellendi." });
-            }
-            catch (Exception ex)
-            {
-                return Results.Json(new { message = "Risk durumu güncellenemedi. Lütfen tekrar deneyin.", detail = ex.Message }, statusCode: 500);
-            }
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "Risk başarıyla güncellendi." });
         });
 
         // 4. DELETE /risks/{id} -> Risk Silme
@@ -184,7 +177,12 @@ public static class RiskEndpoints
             if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
                 var accessibleProjectIds = await db.Projects
-                    .Where(p => p.IsActive == 1 && (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)))
+                    .Where(p =>
+                        p.IsActive == 1 &&
+                        (p.ProjectManagerUserId == userId ||
+                         p.ProjectUsers.Any(pu =>
+                             pu.UserId == userId &&
+                             pu.AssignmentStatus == "Aktif")))
                     .Select(p => p.ProjectId)
                     .ToListAsync();
 

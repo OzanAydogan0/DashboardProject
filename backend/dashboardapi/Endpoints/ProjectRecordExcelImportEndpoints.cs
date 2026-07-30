@@ -4,9 +4,9 @@ using dashboardapi.Data;
 using dashboardapi.DTOs;
 using dashboardapi.Models;
 using dashboardapi.Services;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using OfficeOpenXml;
 
 namespace dashboardapi.Endpoints;
 
@@ -45,16 +45,17 @@ public static class ProjectRecordExcelImportEndpoints
         if (fileValidationResult is not null)
             return fileValidationResult;
 
-        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
         try
         {
             using var stream = new MemoryStream();
             await file.CopyToAsync(stream);
-            using var package = new ExcelPackage(stream);
-            var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+            stream.Position = 0;
+            using var workbook = new XLWorkbook(stream);
+            var worksheet = workbook.Worksheets.FirstOrDefault();
 
-            if (worksheet?.Dimension == null || worksheet.Dimension.End.Row < 2)
+            var lastRow = worksheet?.LastRowUsed()?.RowNumber() ?? 0;
+            if (worksheet == null || lastRow < 2)
                 return Results.BadRequest(new { message = "Excel dosyasında başlık ve en az bir veri satırı bulunmalıdır." });
 
             var columns = ReadHeaderColumns(worksheet);
@@ -109,46 +110,46 @@ public static class ProjectRecordExcelImportEndpoints
             var importedCount = 0;
             var errors = new List<string>();
 
-            for (var row = 2; row <= worksheet.Dimension.End.Row; row++)
+            for (var row = 2; row <= lastRow; row++)
             {
                 if (IsEmptyRow(worksheet, row))
                     continue;
 
-                var title = worksheet.Cells[row, titleColumn].Text.Trim();
+                var title = GetCellText(worksheet.Cell(row, titleColumn));
                 if (string.IsNullOrWhiteSpace(title))
                 {
                     errors.Add($"Satır {row}: Sorun Tanımı zorunludur.");
                     continue;
                 }
 
-                var priority = NormalizeLevel(worksheet.Cells[row, priorityColumn].Text);
+                var priority = NormalizeLevel(GetCellText(worksheet.Cell(row, priorityColumn)));
                 if (priority is null)
                 {
                     errors.Add($"Satır {row}: Öncelik Düşük, Orta, Yüksek veya Kritik olmalıdır.");
                     continue;
                 }
 
-                var impact = NormalizeLevel(worksheet.Cells[row, impactColumn].Text);
+                var impact = NormalizeLevel(GetCellText(worksheet.Cell(row, impactColumn)));
                 if (impact is null)
                 {
                     errors.Add($"Satır {row}: Etki Düşük, Orta, Yüksek veya Kritik olmalıdır.");
                     continue;
                 }
 
-                var status = NormalizeIssueStatus(worksheet.Cells[row, statusColumn].Text);
+                var status = NormalizeIssueStatus(GetCellText(worksheet.Cell(row, statusColumn)));
                 if (status is null)
                 {
                     errors.Add($"Satır {row}: Durum Açık, Devam Ediyor, Çözüldü veya Kapalı olmalıdır.");
                     continue;
                 }
 
-                if (!TryReadDate(worksheet.Cells[row, dueDateColumn], out var dueDate))
+                if (!TryReadDate(worksheet.Cell(row, dueDateColumn), out var dueDate))
                 {
                     errors.Add($"Satır {row}: Hedef Tarihi geçerli bir tarih olmalıdır.");
                     continue;
                 }
 
-                var ownerValue = worksheet.Cells[row, ownerColumn].Text.Trim();
+                var ownerValue = GetCellText(worksheet.Cell(row, ownerColumn));
                 var ownerMatch = FindOwner(assignableUsers, ownerValue);
                 if (ownerMatch.Ambiguous)
                 {
@@ -165,7 +166,7 @@ public static class ProjectRecordExcelImportEndpoints
                 string? riskId = null;
                 if (riskIdColumn > 0)
                 {
-                    var riskIdValue = worksheet.Cells[row, riskIdColumn].Text.Trim();
+                    var riskIdValue = GetCellText(worksheet.Cell(row, riskIdColumn));
                     if (!string.IsNullOrWhiteSpace(riskIdValue))
                     {
                         if (!projectRisks.TryGetValue(riskIdValue, out var linkedRisk))
@@ -219,10 +220,10 @@ public static class ProjectRecordExcelImportEndpoints
         {
             return Results.BadRequest(new { message = "Excel dosyası okunamadı. Geçerli bir .xlsx dosyası yükleyin." });
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             return Results.Json(
-                new { message = "Sorunlar Excel dosyasından içe aktarılırken hata oluştu.", detail = exception.Message },
+                new { message = "Sorunlar Excel dosyasından içe aktarılırken hata oluştu." },
                 statusCode: 500);
         }
     }
@@ -249,16 +250,17 @@ public static class ProjectRecordExcelImportEndpoints
         if (fileValidationResult is not null)
             return fileValidationResult;
 
-        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
         try
         {
             using var stream = new MemoryStream();
             await file.CopyToAsync(stream);
-            using var package = new ExcelPackage(stream);
-            var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+            stream.Position = 0;
+            using var workbook = new XLWorkbook(stream);
+            var worksheet = workbook.Worksheets.FirstOrDefault();
 
-            if (worksheet?.Dimension == null || worksheet.Dimension.End.Row < 2)
+            var lastRow = worksheet?.LastRowUsed()?.RowNumber() ?? 0;
+            if (worksheet == null || lastRow < 2)
                 return Results.BadRequest(new { message = "Excel dosyasında başlık ve en az bir veri satırı bulunmalıdır." });
 
             var columns = ReadHeaderColumns(worksheet);
@@ -321,40 +323,40 @@ public static class ProjectRecordExcelImportEndpoints
             var importedCount = 0;
             var errors = new List<string>();
 
-            for (var row = 2; row <= worksheet.Dimension.End.Row; row++)
+            for (var row = 2; row <= lastRow; row++)
             {
                 if (IsEmptyRow(worksheet, row))
                     continue;
 
-                var description = worksheet.Cells[row, descriptionColumn].Text.Trim();
+                var description = GetCellText(worksheet.Cell(row, descriptionColumn));
                 if (string.IsNullOrWhiteSpace(description))
                 {
                     errors.Add($"Satır {row}: Aksiyon Tanımı zorunludur.");
                     continue;
                 }
 
-                var sourceType = NormalizeSourceType(worksheet.Cells[row, sourceTypeColumn].Text);
+                var sourceType = NormalizeSourceType(GetCellText(worksheet.Cell(row, sourceTypeColumn)));
                 if (sourceType is null)
                 {
                     errors.Add($"Satır {row}: Kaynak Türü Risk, Sorun, Kilometre Taşı, PIR, Yönetim Kararı veya Diğer olmalıdır.");
                     continue;
                 }
 
-                var priority = NormalizeLevel(worksheet.Cells[row, priorityColumn].Text);
+                var priority = NormalizeLevel(GetCellText(worksheet.Cell(row, priorityColumn)));
                 if (priority is null)
                 {
                     errors.Add($"Satır {row}: Öncelik Düşük, Orta, Yüksek veya Kritik olmalıdır.");
                     continue;
                 }
 
-                var status = NormalizeActionStatus(worksheet.Cells[row, statusColumn].Text);
+                var status = NormalizeActionStatus(GetCellText(worksheet.Cell(row, statusColumn)));
                 if (status is null)
                 {
                     errors.Add($"Satır {row}: Durum Açık, Devam Ediyor, Tamamlandı veya İptal olmalıdır.");
                     continue;
                 }
 
-                if (!TryReadProgress(worksheet.Cells[row, progressColumn], out var progress))
+                if (!TryReadProgress(worksheet.Cell(row, progressColumn), out var progress))
                 {
                     errors.Add($"Satır {row}: İlerleme 0 ile 100 arasında bir sayı olmalıdır.");
                     continue;
@@ -366,13 +368,13 @@ public static class ProjectRecordExcelImportEndpoints
                     continue;
                 }
 
-                if (!TryReadDate(worksheet.Cells[row, dueDateColumn], out var dueDate))
+                if (!TryReadDate(worksheet.Cell(row, dueDateColumn), out var dueDate))
                 {
                     errors.Add($"Satır {row}: Hedef Tarihi geçerli bir tarih olmalıdır.");
                     continue;
                 }
 
-                var ownerValue = worksheet.Cells[row, ownerColumn].Text.Trim();
+                var ownerValue = GetCellText(worksheet.Cell(row, ownerColumn));
                 var ownerMatch = FindOwner(assignableUsers, ownerValue);
                 if (ownerMatch.Ambiguous)
                 {
@@ -465,10 +467,10 @@ public static class ProjectRecordExcelImportEndpoints
         {
             return Results.BadRequest(new { message = "Excel dosyası okunamadı. Geçerli bir .xlsx dosyası yükleyin." });
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             return Results.Json(
-                new { message = "Aksiyonlar Excel dosyasından içe aktarılırken hata oluştu.", detail = exception.Message },
+                new { message = "Aksiyonlar Excel dosyasından içe aktarılırken hata oluştu." },
                 statusCode: 500);
         }
     }
@@ -496,13 +498,14 @@ public static class ProjectRecordExcelImportEndpoints
             !PermissionHelper.IsExecutive(user.UserRole))
         .ToList();
 
-    private static Dictionary<string, int> ReadHeaderColumns(ExcelWorksheet worksheet)
+    private static Dictionary<string, int> ReadHeaderColumns(IXLWorksheet worksheet)
     {
         var columns = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var lastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
 
-        for (var column = 1; column <= worksheet.Dimension.End.Column; column++)
+        for (var column = 1; column <= lastColumn; column++)
         {
-            var header = NormalizeHeader(worksheet.Cells[1, column].Text);
+            var header = NormalizeHeader(GetCellText(worksheet.Cell(1, column)));
             if (!string.IsNullOrEmpty(header))
                 columns.TryAdd(header, column);
         }
@@ -527,16 +530,20 @@ public static class ProjectRecordExcelImportEndpoints
             .ToLower(TurkishCulture)
             .Where(char.IsLetterOrDigit));
 
-    private static bool IsEmptyRow(ExcelWorksheet worksheet, int row) =>
-        Enumerable.Range(1, worksheet.Dimension.End.Column)
-            .All(column => string.IsNullOrWhiteSpace(worksheet.Cells[row, column].Text));
+    private static bool IsEmptyRow(IXLWorksheet worksheet, int row)
+    {
+        var lastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+        return lastColumn == 0 ||
+               Enumerable.Range(1, lastColumn)
+                   .All(column => worksheet.Cell(row, column).IsEmpty());
+    }
 
-    private static string? ReadOptionalText(ExcelWorksheet worksheet, int row, int column)
+    private static string? ReadOptionalText(IXLWorksheet worksheet, int row, int column)
     {
         if (column <= 0)
             return null;
 
-        var value = worksheet.Cells[row, column].Text.Trim();
+        var value = GetCellText(worksheet.Cell(row, column));
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
@@ -582,9 +589,9 @@ public static class ProjectRecordExcelImportEndpoints
             _ => null
         };
 
-    private static bool TryReadProgress(ExcelRangeBase cell, out decimal progress)
+    private static bool TryReadProgress(IXLCell cell, out decimal progress)
     {
-        var text = cell.Text.Trim().TrimEnd('%').Trim();
+        var text = GetCellText(cell).TrimEnd('%').Trim();
         var parsed =
             decimal.TryParse(text, NumberStyles.Number, TurkishCulture, out progress) ||
             decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out progress);
@@ -592,15 +599,15 @@ public static class ProjectRecordExcelImportEndpoints
         return parsed && progress is >= 0m and <= 100m;
     }
 
-    private static bool TryReadDate(ExcelRangeBase cell, out DateTime date)
+    private static bool TryReadDate(IXLCell cell, out DateTime date)
     {
-        if (cell.Value is DateTime dateValue)
+        if (cell.TryGetValue<DateTime>(out var dateValue))
         {
             date = dateValue.Date;
             return true;
         }
 
-        if (cell.Value is double serialDate)
+        if (cell.TryGetValue<double>(out var serialDate))
         {
             try
             {
@@ -613,7 +620,7 @@ public static class ProjectRecordExcelImportEndpoints
             }
         }
 
-        var text = cell.Text.Trim();
+        var text = GetCellText(cell);
         if (DateTime.TryParse(text, TurkishCulture, DateTimeStyles.AllowWhiteSpaces, out date) ||
             DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out date))
         {
@@ -624,6 +631,9 @@ public static class ProjectRecordExcelImportEndpoints
         date = default;
         return false;
     }
+
+    private static string GetCellText(IXLCell cell) =>
+        cell.GetFormattedString().Trim();
 
     private static (User? User, bool Ambiguous) FindOwner(
         IReadOnlyCollection<User> users,

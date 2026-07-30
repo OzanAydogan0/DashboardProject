@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../router';
 import { projectService } from '../services/projectService';
-import { useAlert } from '../components/AlertProvider';
+import { useAlert } from '../components/alertContext';
 import { HEALTH_STATUS, normalizeHealthStatus } from '../utils/healthStatus';
 import './RisksPage.css';
 

@@ -1,19 +1,15 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '../router'
 import { authService } from '../services/authService'
-import { useAlert } from '../components/AlertProvider'
-import { notifyPasswordChangeRequest } from '../utils/adminNotifications'
+import { useAlert } from '../components/alertContext'
 import './LoginPage.css'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [forgotName, setForgotName] = useState('')
-  const [forgotEmail, setForgotEmail] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isForgotLoading, setIsForgotLoading] = useState(false)
   const navigate = useNavigate()
   const { addAlert } = useAlert()
 
@@ -34,33 +30,6 @@ function LoginPage() {
     }
   }
 
-  const handleForgotPassword = async (e) => {
-    e.preventDefault()
-
-    if (!forgotName.trim()) {
-      addAlert('Lütfen isim soyisim girin.', 'error')
-      return
-    }
-
-    setIsForgotLoading(true)
-
-    try {
-      const request = notifyPasswordChangeRequest({
-        fullName: forgotName.trim(),
-        email: forgotEmail.trim() || email.trim(),
-      })
-
-      addAlert(`Şifre değiştirme isteğiniz yöneticilere iletildi. ${request.fullName} için işlem takip edilecek.`, 'success')
-      setForgotName('')
-      setForgotEmail('')
-    } catch (error) {
-      console.error('Şifre değiştirme isteği gönderilemedi:', error)
-      addAlert('İstek gönderilirken bir hata oluştu. Lütfen tekrar deneyin.', 'error')
-    } finally {
-      setIsForgotLoading(false)
-    }
-  }
-
   return (
     <div className="login-shell">
       <aside className="login-sidebar">
@@ -75,7 +44,7 @@ function LoginPage() {
           </div>
         </div>
         <div className="login-sidebar-footer">
-          <p>© 2026 yakisikliadnanbey bey, bilge hanım ve ozi. All rights reserved.</p>
+          <p>© 2026 PİR Dashboard. Tüm hakları saklıdır.</p>
         </div>
       </aside>
 
@@ -128,38 +97,19 @@ function LoginPage() {
                 type="button"
                 className="forgot-password-link"
                 onClick={() => setShowForgotPassword((prev) => !prev)}
-                disabled={isLoading || isForgotLoading}
+                disabled={isLoading}
               >
                 {showForgotPassword ? 'Şifremi unuttum alanını kapat' : 'Şifremi unuttum'}
               </button>
 
               {showForgotPassword && (
-                <div className="forgot-password-panel">
-                  <label className="forgot-password-field">
-                    <span>İsim Soyisim</span>
-                    <input
-                      type="text"
-                      value={forgotName}
-                      onChange={(e) => setForgotName(e.target.value)}
-                      placeholder="Ad Soyad"
-                      disabled={isLoading || isForgotLoading}
-                    />
-                  </label>
-
-                  <label className="forgot-password-field">
-                    <span>E-posta</span>
-                    <input
-                      type="email"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="e-posta"
-                      disabled={isLoading || isForgotLoading}
-                    />
-                  </label>
-
-                  <button type="button" className="forgot-password-button" onClick={handleForgotPassword} disabled={isLoading || isForgotLoading}>
-                    {isForgotLoading ? 'Gönderiliyor...' : 'İsteği Gönder'}
-                  </button>
+                <div className="forgot-password-panel" role="status">
+                  <strong>Parola sıfırlama</strong>
+                  <p>
+                    Güvenlik nedeniyle parolanızı yalnızca sistem yöneticiniz
+                    sıfırlayabilir. Kurumunuzun yetkili destek kanalıyla
+                    iletişime geçin.
+                  </p>
                 </div>
               )}
             </div>

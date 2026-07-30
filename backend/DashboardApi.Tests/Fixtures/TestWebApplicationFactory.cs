@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using dashboardapi.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -12,9 +13,15 @@ public sealed class TestWebApplicationFactory
     : WebApplicationFactory<Program>, IAsyncDisposable
 {
     private readonly SqliteTestDatabase _database;
+    private readonly string _jwtSecret =
+        Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
+    private readonly IReadOnlyDictionary<string, string?> _settings;
 
-    public TestWebApplicationFactory()
+    public TestWebApplicationFactory(
+        IReadOnlyDictionary<string, string?>? settings = null)
     {
+        _settings = settings ??
+            new Dictionary<string, string?>();
         _database = new SqliteTestDatabase();
         _database.InitializeAsync().GetAwaiter().GetResult();
     }
@@ -25,6 +32,12 @@ public sealed class TestWebApplicationFactory
         IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseSetting("JwtSettings:Secret", _jwtSecret);
+        foreach (var (key, value) in _settings)
+        {
+            if (value is not null)
+                builder.UseSetting(key, value);
+        }
 
         builder.ConfigureServices(services =>
         {
@@ -38,7 +51,7 @@ public sealed class TestWebApplicationFactory
             services.AddSingleton(options);
 
             services.AddScoped<AppDbContext>(_ =>
-                new TestAppDbContext(options));
+                new AppDbContext(options));
         });
     }
 
@@ -56,21 +69,5 @@ public sealed class TestWebApplicationFactory
     {
         Dispose();
         await _database.DisposeAsync();
-    }
-
-    private sealed class TestAppDbContext : AppDbContext
-    {
-        public TestAppDbContext(
-            DbContextOptions<AppDbContext> options)
-            : base(options)
-        {
-        }
-
-        protected override void OnConfiguring(
-            DbContextOptionsBuilder optionsBuilder)
-        {
-            // Production AppDbContext içindeki sabit bağlantı yolunun
-            // test bağlantısını ezmesini engeller.
-        }
     }
 }

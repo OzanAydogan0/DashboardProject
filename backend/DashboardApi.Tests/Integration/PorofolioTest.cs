@@ -56,6 +56,79 @@ public sealed class PortfolioTests
     }
 
     [Fact]
+    public async Task LegacyExecutive_CannotMutateCustomersOrPrograms()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        using var client = factory.CreateHttpsClient();
+
+        TestUserCredentials credentials;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "PRAGMA ignore_check_constraints = ON;");
+            try
+            {
+                credentials = await new TestDataBuilder(db)
+                    .CreateActiveUserAsync("Üst Yönetim");
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    "PRAGMA ignore_check_constraints = OFF;");
+            }
+        }
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/auth/login",
+            new LoginRequest(
+                credentials.User.Email,
+                credentials.PlainTextPassword));
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+
+        var loginResult =
+            await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.NotNull(loginResult);
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                loginResult.Token);
+
+        var customerRequest = new CreateCustomerRequest(
+            "Yetkisiz Müşteri",
+            "Özel",
+            "Aktif");
+        var programRequest = new CreateProgramRequest(
+            "Yetkisiz Program",
+            "Oluşturulmamalı",
+            "Aktif");
+
+        using var createCustomerResponse =
+            await client.PostAsJsonAsync("/customers", customerRequest);
+        using var updateCustomerResponse =
+            await client.PatchAsJsonAsync(
+                "/customers/CST-001",
+                customerRequest);
+        using var deleteCustomerResponse =
+            await client.DeleteAsync("/customers/CST-001");
+        using var createProgramResponse =
+            await client.PostAsJsonAsync("/programs", programRequest);
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            createCustomerResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            updateCustomerResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            deleteCustomerResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            createProgramResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task GetPortfolio_WithSelectedProjectIds_ReturnsOnlySelectedProjects()
     {
         // Arrange

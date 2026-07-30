@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-// Backend portunuz: 5074
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5074';
+const API_BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/+$/, '') || '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

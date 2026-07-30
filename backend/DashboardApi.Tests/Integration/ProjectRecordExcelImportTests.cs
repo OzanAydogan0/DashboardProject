@@ -5,9 +5,9 @@ using dashboardapi.Data;
 using dashboardapi.DTOs;
 using DashboardApi.Tests.Builders;
 using DashboardApi.Tests.Fixtures;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using OfficeOpenXml;
 
 namespace DashboardApi.Tests.Integration;
 
@@ -117,10 +117,8 @@ public sealed class ProjectRecordExcelImportTests
 
     private static byte[] CreateIssueExcelFile(string importedIssueTitle)
     {
-        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-        using var package = new ExcelPackage();
-        var worksheet = package.Workbook.Worksheets.Add("Sorunlar");
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Sorunlar");
         var headers = new[]
         {
             "Sorun Tanımı",
@@ -136,34 +134,34 @@ public sealed class ProjectRecordExcelImportTests
 
         WriteHeaders(worksheet, headers);
 
-        worksheet.Cells[2, 1].Value = importedIssueTitle;
-        worksheet.Cells[2, 2].Value = "yuksek";
-        worksheet.Cells[2, 3].Value = "Kritik";
-        worksheet.Cells[2, 4].Value = "devam ediyor";
-        worksheet.Cells[2, 5].Value = "USR-PM1";
-        worksheet.Cells[2, 6].Value = new DateTime(2027, 2, 15);
-        worksheet.Cells[2, 7].Value = "Entegrasyon ortamındaki kapasite yetersizliği.";
-        worksheet.Cells[2, 8].Value = "Ek kapasite devreye alınacak.";
-        worksheet.Cells[2, 9].Value = "RSK-001";
+        worksheet.Cell(2, 1).Value = importedIssueTitle;
+        worksheet.Cell(2, 2).Value = "yuksek";
+        worksheet.Cell(2, 3).Value = "Kritik";
+        worksheet.Cell(2, 4).Value = "devam ediyor";
+        worksheet.Cell(2, 5).Value = "USR-PM1";
+        worksheet.Cell(2, 6).Value = new DateTime(2027, 2, 15);
+        worksheet.Cell(2, 7).Value =
+            "Entegrasyon ortamındaki kapasite yetersizliği.";
+        worksheet.Cell(2, 8).Value = "Ek kapasite devreye alınacak.";
+        worksheet.Cell(2, 9).Value = "RSK-001";
 
-        worksheet.Cells[3, 1].Value = "Başka projeye ait riskli geçersiz sorun";
-        worksheet.Cells[3, 2].Value = "Orta";
-        worksheet.Cells[3, 3].Value = "Yüksek";
-        worksheet.Cells[3, 4].Value = "Açık";
-        worksheet.Cells[3, 5].Value = "USR-PM1";
-        worksheet.Cells[3, 6].Value = new DateTime(2027, 2, 20);
-        worksheet.Cells[3, 7].Value = "Test kök nedeni.";
-        worksheet.Cells[3, 9].Value = "RSK-002";
+        worksheet.Cell(3, 1).Value =
+            "Başka projeye ait riskli geçersiz sorun";
+        worksheet.Cell(3, 2).Value = "Orta";
+        worksheet.Cell(3, 3).Value = "Yüksek";
+        worksheet.Cell(3, 4).Value = "Açık";
+        worksheet.Cell(3, 5).Value = "USR-PM1";
+        worksheet.Cell(3, 6).Value = new DateTime(2027, 2, 20);
+        worksheet.Cell(3, 7).Value = "Test kök nedeni.";
+        worksheet.Cell(3, 9).Value = "RSK-002";
 
-        return package.GetAsByteArray();
+        return SaveWorkbook(workbook);
     }
 
     private static byte[] CreateActionExcelFile(string importedActionDescription)
     {
-        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-        using var package = new ExcelPackage();
-        var worksheet = package.Workbook.Worksheets.Add("Aksiyonlar");
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Aksiyonlar");
         var headers = new[]
         {
             "Aksiyon Tanımı",
@@ -180,28 +178,29 @@ public sealed class ProjectRecordExcelImportTests
 
         WriteHeaders(worksheet, headers);
 
-        worksheet.Cells[2, 1].Value = importedActionDescription;
-        worksheet.Cells[2, 2].Value = "Risk";
-        worksheet.Cells[2, 3].Value = "YOK-SAYILMALI";
-        worksheet.Cells[2, 4].Value = "Kritik";
-        worksheet.Cells[2, 5].Value = "devam ediyor";
-        worksheet.Cells[2, 6].Value = 35;
-        worksheet.Cells[2, 7].Value = "USR-PM1";
-        worksheet.Cells[2, 8].Value = new DateTime(2027, 3, 20);
-        worksheet.Cells[2, 10].Value = "ISS-001";
+        worksheet.Cell(2, 1).Value = importedActionDescription;
+        worksheet.Cell(2, 2).Value = "Risk";
+        worksheet.Cell(2, 3).Value = "YOK-SAYILMALI";
+        worksheet.Cell(2, 4).Value = "Kritik";
+        worksheet.Cell(2, 5).Value = "devam ediyor";
+        worksheet.Cell(2, 6).Value = 35;
+        worksheet.Cell(2, 7).Value = "USR-PM1";
+        worksheet.Cell(2, 8).Value = new DateTime(2027, 3, 20);
+        worksheet.Cell(2, 10).Value = "ISS-001";
 
-        worksheet.Cells[3, 1].Value = "Risk ve sorun ilişkisi çakışan aksiyon";
-        worksheet.Cells[3, 2].Value = "Diğer";
-        worksheet.Cells[3, 3].Value = "ÇAKIŞMA";
-        worksheet.Cells[3, 4].Value = "Orta";
-        worksheet.Cells[3, 5].Value = "Açık";
-        worksheet.Cells[3, 6].Value = 0;
-        worksheet.Cells[3, 7].Value = "USR-PM1";
-        worksheet.Cells[3, 8].Value = new DateTime(2027, 3, 25);
-        worksheet.Cells[3, 9].Value = "RSK-001";
-        worksheet.Cells[3, 10].Value = "ISS-001";
+        worksheet.Cell(3, 1).Value =
+            "Risk ve sorun ilişkisi çakışan aksiyon";
+        worksheet.Cell(3, 2).Value = "Diğer";
+        worksheet.Cell(3, 3).Value = "ÇAKIŞMA";
+        worksheet.Cell(3, 4).Value = "Orta";
+        worksheet.Cell(3, 5).Value = "Açık";
+        worksheet.Cell(3, 6).Value = 0;
+        worksheet.Cell(3, 7).Value = "USR-PM1";
+        worksheet.Cell(3, 8).Value = new DateTime(2027, 3, 25);
+        worksheet.Cell(3, 9).Value = "RSK-001";
+        worksheet.Cell(3, 10).Value = "ISS-001";
 
-        return package.GetAsByteArray();
+        return SaveWorkbook(workbook);
     }
 
     private static MultipartFormDataContent CreateMultipartContent(
@@ -216,10 +215,19 @@ public sealed class ProjectRecordExcelImportTests
         return multipartContent;
     }
 
-    private static void WriteHeaders(ExcelWorksheet worksheet, IReadOnlyList<string> headers)
+    private static void WriteHeaders(
+        IXLWorksheet worksheet,
+        IReadOnlyList<string> headers)
     {
         for (var column = 0; column < headers.Count; column++)
-            worksheet.Cells[1, column + 1].Value = headers[column];
+            worksheet.Cell(1, column + 1).Value = headers[column];
+    }
+
+    private static byte[] SaveWorkbook(XLWorkbook workbook)
+    {
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
     }
 
     private static async Task AuthenticateAsSystemAdministratorAsync(

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate, useLocation } from '../router'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
+import { useAlert } from '../components/alertContext'
 import { normalizeHealthStatus } from '../utils/healthStatus'
 import './ProjectDetailPage.css'
 import MileStone from './MileStonePage'
@@ -37,13 +37,10 @@ function ProjectDetailPage() {
   const [error, setError] = useState(null)
 
   // 3. VERİ ÇEKME İŞLEMİ
-  const fetchProjectData = async () => {
+  const fetchProjectData = useCallback(async () => {
     if (!id) return
 
     try {
-      setLoading(true)
-      setError(null)
-      
       const projectDetailData = await projectService.getProjectById(id)
 
       const [milestonesRes, risksRes, issuesRes, actionsRes, reportsRes, evmRes, customersRes, usersRes] = await Promise.allSettled([
@@ -57,6 +54,7 @@ function ProjectDetailPage() {
         projectService.getUsers()
       ])
 
+      setError(null)
       setProject(projectDetailData)
       setUsers(usersRes.status === 'fulfilled' && Array.isArray(usersRes.value) ? usersRes.value : [])
       setSubData({
@@ -78,11 +76,18 @@ function ProjectDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [addAlert, id])
+
+  const refreshProjectData = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    return fetchProjectData()
+  }, [fetchProjectData])
 
   useEffect(() => {
-    fetchProjectData()
-  }, [id])
+    const timeoutId = window.setTimeout(refreshProjectData, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [refreshProjectData])
 
   // 4. BİÇİMLENDİRME YARDIMCILARI
   const formatDate = (dateString) => {
@@ -366,12 +371,12 @@ function ProjectDetailPage() {
       )}
 
       {/* DİĞER SEKMELER */}
-      {activeTab === 'milestones' && <MileStone milestones={subData.milestones} projectId={project.projectId || project.ProjectId || id} onMilestoneAdded={fetchProjectData} onMilestoneUpdated={fetchProjectData} />}
+      {activeTab === 'milestones' && <MileStone milestones={subData.milestones} projectId={project.projectId || project.ProjectId || id} onMilestoneAdded={refreshProjectData} onMilestoneUpdated={refreshProjectData} />}
       {activeTab === 'risks' && <ProjectRisksPage risks={subData.risks} />}
       {activeTab === 'issues' && <ProblemsPage issues={subData.issues} />}
       {activeTab === 'actions' && <ActionsPage actions={subData.actions} />}
       {activeTab === 'evm' && <EvmRecordsPage evmRecords={subData.evmRecords} currency={project.currency} />}
-      {activeTab === 'reports' && <ReportsPage reports={subData.reports} onRefresh={fetchProjectData} />}
+      {activeTab === 'reports' && <ReportsPage reports={subData.reports} onRefresh={refreshProjectData} />}
 
     </div>
   )

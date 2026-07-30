@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Pagination from '../components/Pagination'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
+import { useAlert } from '../components/alertContext'
 import { canWriteProject } from '../utils/permissionHelper'
 import { usePagination } from '../utils/usePagination'
 import './MileStonePage.css'

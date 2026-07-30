@@ -204,7 +204,12 @@ public static class ActionEndpoints
             if (!PermissionHelper.IsSystemAdmin(userRole) && !PermissionHelper.IsExecutive(userRole))
             {
                 var accessibleProjectIds = await db.Projects
-                    .Where(p => p.IsActive == 1 && (p.ProjectManagerUserId == userId || p.ProjectUsers.Any(pu => pu.UserId == userId)))
+                    .Where(p =>
+                        p.IsActive == 1 &&
+                        (p.ProjectManagerUserId == userId ||
+                         p.ProjectUsers.Any(pu =>
+                             pu.UserId == userId &&
+                             pu.AssignmentStatus == "Aktif")))
                     .Select(p => p.ProjectId)
                     .ToListAsync();
 

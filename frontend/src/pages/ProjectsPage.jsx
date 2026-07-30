@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useEffectEvent, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '../router'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
+import { useAlert } from '../components/alertContext'
 import {
   canCreateProject,
   canEditProject,

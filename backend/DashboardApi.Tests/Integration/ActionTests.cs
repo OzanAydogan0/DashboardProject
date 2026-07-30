@@ -77,7 +77,7 @@ public sealed class ActionTests
         Assert.NotNull(actions);
         Assert.NotEmpty(actions);
 
-        var createdAction = Assert.Single(actions.Where(a => a.ActionId == actionId));
+        var createdAction = Assert.Single(actions, action => action.ActionId == actionId);
         Assert.Equal("PRJ-003", createdAction.ProjectId);
         Assert.False(string.IsNullOrWhiteSpace(createdAction.ProjectName));
     }

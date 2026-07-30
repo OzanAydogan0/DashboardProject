@@ -5,9 +5,9 @@ using dashboardapi.Data;
 using dashboardapi.DTOs;
 using DashboardApi.Tests.Builders;
 using DashboardApi.Tests.Fixtures;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using OfficeOpenXml;
 
 namespace DashboardApi.Tests.Integration;
 
@@ -76,10 +76,8 @@ public sealed class RiskExcelImportTests
 
     private static byte[] CreateRiskExcelFile()
     {
-        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-        using var package = new ExcelPackage();
-        var worksheet = package.Workbook.Worksheets.Add("Riskler");
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Riskler");
         var headers = new[]
         {
             "ID",
@@ -95,37 +93,39 @@ public sealed class RiskExcelImportTests
         };
 
         for (var column = 0; column < headers.Length; column++)
-            worksheet.Cells[1, column + 1].Value = headers[column];
+            worksheet.Cell(1, column + 1).Value = headers[column];
 
-        worksheet.Cells[2, 1].Value = "RSK-SABLON";
-        worksheet.Cells[2, 2].Value = "Excel ile içe aktarılan risk";
-        worksheet.Cells[2, 3].Value = "Teknik";
-        worksheet.Cells[2, 4].Value = 4;
-        worksheet.Cells[2, 5].Value = 5;
-        worksheet.Cells[2, 6].Value = "İzleniyor";
-        worksheet.Cells[2, 7].Value = "Alternatif teknik çözüm hazırlanacak.";
-        worksheet.Cells[2, 8].Value = "Ahmet Yılmaz";
-        worksheet.Cells[2, 9].Value = new DateTime(2027, 3, 15);
+        worksheet.Cell(2, 1).Value = "RSK-SABLON";
+        worksheet.Cell(2, 2).Value = "Excel ile içe aktarılan risk";
+        worksheet.Cell(2, 3).Value = "Teknik";
+        worksheet.Cell(2, 4).Value = 4;
+        worksheet.Cell(2, 5).Value = 5;
+        worksheet.Cell(2, 6).Value = "İzleniyor";
+        worksheet.Cell(2, 7).Value = "Alternatif teknik çözüm hazırlanacak.";
+        worksheet.Cell(2, 8).Value = "Test Proje Sorumlusu Alfa";
+        worksheet.Cell(2, 9).Value = new DateTime(2027, 3, 15);
 
-        worksheet.Cells[3, 2].Value = "İkinci Excel riski";
-        worksheet.Cells[3, 3].Value = "Teknik";
-        worksheet.Cells[3, 4].Value = 2;
-        worksheet.Cells[3, 5].Value = 3;
-        worksheet.Cells[3, 6].Value = "Kapalı";
-        worksheet.Cells[3, 7].Value = "Kontrol tamamlandı.";
-        worksheet.Cells[3, 8].Value = "pm1@pir.local";
-        worksheet.Cells[3, 9].Value = new DateTime(2027, 4, 1);
+        worksheet.Cell(3, 2).Value = "İkinci Excel riski";
+        worksheet.Cell(3, 3).Value = "Teknik";
+        worksheet.Cell(3, 4).Value = 2;
+        worksheet.Cell(3, 5).Value = 3;
+        worksheet.Cell(3, 6).Value = "Kapalı";
+        worksheet.Cell(3, 7).Value = "Kontrol tamamlandı.";
+        worksheet.Cell(3, 8).Value = "fixture.pm.alfa@example.test";
+        worksheet.Cell(3, 9).Value = new DateTime(2027, 4, 1);
 
-        worksheet.Cells[4, 2].Value = "Geçersiz olasılıklı risk";
-        worksheet.Cells[4, 3].Value = "Teknik";
-        worksheet.Cells[4, 4].Value = 8;
-        worksheet.Cells[4, 5].Value = 2;
-        worksheet.Cells[4, 6].Value = "Açık";
-        worksheet.Cells[4, 7].Value = "Takip edilecek.";
-        worksheet.Cells[4, 8].Value = "USR-PM1";
-        worksheet.Cells[4, 9].Value = new DateTime(2027, 5, 1);
+        worksheet.Cell(4, 2).Value = "Geçersiz olasılıklı risk";
+        worksheet.Cell(4, 3).Value = "Teknik";
+        worksheet.Cell(4, 4).Value = 8;
+        worksheet.Cell(4, 5).Value = 2;
+        worksheet.Cell(4, 6).Value = "Açık";
+        worksheet.Cell(4, 7).Value = "Takip edilecek.";
+        worksheet.Cell(4, 8).Value = "USR-PM1";
+        worksheet.Cell(4, 9).Value = new DateTime(2027, 5, 1);
 
-        return package.GetAsByteArray();
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
     }
 
     private static async Task<TestUserCredentials> CreateActiveUserAsync(

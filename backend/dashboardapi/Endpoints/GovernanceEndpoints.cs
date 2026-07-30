@@ -143,7 +143,8 @@ public static class GovernanceEndpoints
             return Results.Json(new { message = "PIR Raporu oluşturuldu.", pirId = newPir.PirReportId }, statusCode: 201);
         });
 
-        app.MapPatch("pirs/{id}", async (string id, UpdatePirReportRequest request, ClaimsPrincipal userClaims, AppDbContext db) =>
+        Func<string, UpdatePirReportRequest, ClaimsPrincipal, AppDbContext, Task<IResult>>
+            updatePirReport = async (id, request, userClaims, db) =>
         {
             var userRole = PermissionHelper.GetUserRole(userClaims);
             var userId = PermissionHelper.GetUserId(userClaims);
@@ -186,7 +187,11 @@ public static class GovernanceEndpoints
 
             await db.SaveChangesAsync();
             return Results.Ok(new { message = "PIR raporu güncellendi." });
-        });
+        };
+
+        app.MapPatch("pirs/{id}", updatePirReport);
+        // API kabul sözleşmesindeki eski ad için geriye uyumlu rota.
+        app.MapPatch("reports/{id}", updatePirReport);
 
         app.MapDelete("pirs/{id}", async (string id, ClaimsPrincipal userClaims, AppDbContext db) =>
         {
@@ -209,76 +214,116 @@ public static class GovernanceEndpoints
             return Results.Ok(new { message = "PIR raporu silindi." });
         });
 
-        // 5. PIR Raporunu PDF olarak dışa aktarma
-        app.MapGet("pirs/{id}/export/pdf", async (string id, AppDbContext db) =>
-{
-    // 1. PIR Raporunu View üzerinden çek
-    var reportData = await db.Set<VwPir>().FirstOrDefaultAsync(p => p.PirReportId == id);
-    if (reportData == null) 
-        return Results.NotFound(new { message = "Rapor bulunamadı." });
+        Func<string, ClaimsPrincipal, AppDbContext, Task<IResult>>
+            exportPirPdf = async (id, userClaims, db) =>
+        {
+            var reportData = await db.Set<VwPir>()
+                .FirstOrDefaultAsync(report => report.PirReportId == id);
+            if (reportData?.ProjectId is null)
+                return Results.NotFound(new { message = "Rapor bulunamadı." });
 
-    reportData.ManualHealth = HealthStatusHelper.Normalize(reportData.ManualHealth);
+            var userId = PermissionHelper.GetUserId(userClaims);
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
 
-    // 2. İlişkili Proje verilerini (Bütçe ve İlerleme) çek
-    var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == reportData.ProjectId);
+            if (!await PermissionHelper.CanAccessProjectAsync(
+                    db,
+                    reportData.ProjectId,
+                    userId,
+                    userRole))
+            {
+                return Results.Json(
+                    new { message = "Bu projenin raporunu dışa aktarma yetkiniz yok." },
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
 
-    // 3. Varsa logo dosyasını oku (Örn: wwwroot/images/logo.png içinden)
-    byte[]? logoBytes = null;
-    string logoPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "logo.png");
-    if (File.Exists(logoPath))
-    {
-        logoBytes = await File.ReadAllBytesAsync(logoPath);
-    }
+            reportData.ManualHealth =
+                HealthStatusHelper.Normalize(reportData.ManualHealth);
 
-    // 4. PDF Veri Paketini Hazırla
-    var pdfData = new Services.PirPdfData(
-        Report: reportData,
-        Bac: project?.Bac ?? 0,
-        PlannedProgress: project?.PlannedProgress ?? 0,
-        ActualProgress: project?.ActualProgress ?? 0,
-        Cpi: 1.00m, // Varsa EVM tablosundan anlık değer çekilebilir
-        Spi: 1.00m,
-        Currency: project?.Currency ?? "TRY",
-        LogoBytes: logoBytes
-    );
+            var project = await db.Projects
+                .FirstOrDefaultAsync(item =>
+                    item.ProjectId == reportData.ProjectId);
 
-    // 5. PDF'i Üret ve Fırlat
-    byte[] pdfBytes = Services.PirPdfGenerator.Generate(pdfData);
-    string fileName = $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.pdf";
+            byte[]? logoBytes = null;
+            var logoPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "wwwroot",
+                "images",
+                "logo.png");
+            if (File.Exists(logoPath))
+                logoBytes = await File.ReadAllBytesAsync(logoPath);
 
-    return Results.File(pdfBytes, "application/pdf", fileName);
-}).RequireAuthorization();
+            var pdfData = new Services.PirPdfData(
+                Report: reportData,
+                Bac: project?.Bac ?? 0,
+                PlannedProgress: project?.PlannedProgress ?? 0,
+                ActualProgress: project?.ActualProgress ?? 0,
+                Cpi: 1.00m,
+                Spi: 1.00m,
+                Currency: project?.Currency ?? "TRY",
+                LogoBytes: logoBytes);
 
-// 6. PIR Raporunu Excel olarak dışa aktarma
-        app.MapGet("pirs/{id}/export/excel", async (string id, AppDbContext db) =>
-{
-    var reportData = await db.Set<VwPir>().FirstOrDefaultAsync(p => p.PirReportId == id);
-    if (reportData == null) 
-        return Results.NotFound(new { message = "Rapor bulunamadı." });
+            var pdfBytes = Services.PirPdfGenerator.Generate(pdfData);
+            var fileName =
+                $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.pdf";
 
-    reportData.ManualHealth = HealthStatusHelper.Normalize(reportData.ManualHealth);
+            return Results.File(pdfBytes, "application/pdf", fileName);
+        };
 
-    var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == reportData.ProjectId);
+        Func<string, ClaimsPrincipal, AppDbContext, Task<IResult>>
+            exportPirExcel = async (id, userClaims, db) =>
+        {
+            var reportData = await db.Set<VwPir>()
+                .FirstOrDefaultAsync(report => report.PirReportId == id);
+            if (reportData?.ProjectId is null)
+                return Results.NotFound(new { message = "Rapor bulunamadı." });
 
-    // Aynı veri yapısını kullanıyoruz
-    var excelData = new Services.PirPdfData(
-        Report: reportData,
-        Bac: project?.Bac ?? 0,
-        PlannedProgress: project?.PlannedProgress ?? 0,
-        ActualProgress: project?.ActualProgress ?? 0,
-        Cpi: 1.00m,
-        Spi: 1.00m,
-        Currency: project?.Currency ?? "TRY"
-    );
+            var userId = PermissionHelper.GetUserId(userClaims);
+            var userRole = PermissionHelper.GetUserRole(userClaims);
+            if (string.IsNullOrWhiteSpace(userId))
+                return Results.Unauthorized();
 
-    byte[] excelBytes = dashboardapi.Services.PirExcelGenerator.Generate(excelData);
-    string fileName = $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.xlsx";
+            if (!await PermissionHelper.CanAccessProjectAsync(
+                    db,
+                    reportData.ProjectId,
+                    userId,
+                    userRole))
+            {
+                return Results.Json(
+                    new { message = "Bu projenin raporunu dışa aktarma yetkiniz yok." },
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
 
-    return Results.File(
-        fileContents: excelBytes, 
-        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-        fileDownloadName: fileName
-    );
-}).RequireAuthorization();
+            reportData.ManualHealth =
+                HealthStatusHelper.Normalize(reportData.ManualHealth);
+
+            var project = await db.Projects
+                .FirstOrDefaultAsync(item =>
+                    item.ProjectId == reportData.ProjectId);
+
+            var excelData = new Services.PirPdfData(
+                Report: reportData,
+                Bac: project?.Bac ?? 0,
+                PlannedProgress: project?.PlannedProgress ?? 0,
+                ActualProgress: project?.ActualProgress ?? 0,
+                Cpi: 1.00m,
+                Spi: 1.00m,
+                Currency: project?.Currency ?? "TRY");
+
+            var excelBytes = Services.PirExcelGenerator.Generate(excelData);
+            var fileName =
+                $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.xlsx";
+
+            return Results.File(
+                fileContents: excelBytes,
+                contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileDownloadName: fileName);
+        };
+
+        app.MapGet("pirs/{id}/export/pdf", exportPirPdf);
+        app.MapGet("reports/{id}/export/pdf", exportPirPdf);
+        app.MapGet("pirs/{id}/export/excel", exportPirExcel);
+        app.MapGet("reports/{id}/export/excel", exportPirExcel);
     }
 }

@@ -1,12 +1,7 @@
 import { useEffect, useEffectEvent, useState } from 'react'
 import './SettingsPage.css'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
-import {
-  clearPasswordChangeRequests,
-  getPasswordChangeRequests,
-  removePasswordChangeRequest,
-} from '../utils/adminNotifications'
+import { useAlert } from '../components/alertContext'
 
 const roleOptions = [
   'Sistem Yöneticisi',
@@ -17,13 +12,20 @@ const roleOptions = [
 const userStatusOptions = ['Aktif', 'Pasif']
 const customerTypeOptions = ['Kurumsal', 'Hükümet', 'Sivil Toplum', 'Diğer']
 const customerStatusOptions = ['Aktif', 'Pasif']
+const programStatusOptions = ['Aktif', 'Pasif']
 
 const tabs = [
-  { id: 'notifications', label: 'Bildirimler' },
   { id: 'users', label: 'Kullanıcılar ve Yetkiler' },
+  { id: 'programs', label: 'Programlar' },
   { id: 'customers', label: 'Müşteriler' },
   { id: 'logs', label: 'Loglar' },
 ]
+
+const getInitialTab = () => {
+  if (typeof window === 'undefined') return 'users'
+  const requestedTab = new URLSearchParams(window.location.search).get('tab')
+  return tabs.some(tab => tab.id === requestedTab) ? requestedTab : 'users'
+}
 
 const entityLabels = {
   actions: 'Aksiyon',
@@ -82,12 +84,13 @@ const getIsAdmin = () => {
 function SettingsPage() {
   const { addAlert } = useAlert()
   const [isAdmin] = useState(getIsAdmin)
-  const [activeTab, setActiveTab] = useState('notifications')
+  const [activeTab, setActiveTab] = useState(getInitialTab)
   const [loading, setLoading] = useState(false)
   const [logsLoading, setLogsLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('success')
+  const [programs, setPrograms] = useState([])
   const [customers, setCustomers] = useState([])
   const [users, setUsers] = useState([])
   const [projects, setProjects] = useState([])
@@ -100,6 +103,12 @@ function SettingsPage() {
     CustomerStatus: customerStatusOptions[0],
   })
   const [editingCustomerId, setEditingCustomerId] = useState(null)
+  const [newProgram, setNewProgram] = useState({
+    ProgramName: '',
+    ProgramDescription: '',
+    ProgramStatus: programStatusOptions[0],
+  })
+  const [editingProgramId, setEditingProgramId] = useState(null)
   const [newUser, setNewUser] = useState({
     Email: '',
     FullName: '',
@@ -107,17 +116,6 @@ function SettingsPage() {
     Password: '',
   })
   const [userEdits, setUserEdits] = useState({})
-  const [passwordChangeRequests, setPasswordChangeRequests] = useState(getPasswordChangeRequests)
-
-  useEffect(() => {
-    const refreshRequests = () => {
-      setPasswordChangeRequests(getPasswordChangeRequests())
-    }
-
-    window.addEventListener('password-change-request', refreshRequests)
-    return () => window.removeEventListener('password-change-request', refreshRequests)
-  }, [])
-
   const showSuccess = (successMessage) => {
     setMessage(successMessage)
     setMessageType('success')
@@ -137,7 +135,8 @@ function SettingsPage() {
     setError('')
 
     try {
-      const [customerData, userData, projectData, logData] = await Promise.all([
+      const [programData, customerData, userData, projectData, logData] = await Promise.all([
+        projectService.getPrograms(),
         projectService.getCustomers(),
         projectService.getUsers(),
         projectService.getProjects(),
@@ -162,6 +161,7 @@ function SettingsPage() {
         return acc
       }, {})
 
+      setPrograms(programData)
       setCustomers(customerData)
       setUsers(userData)
       setProjects(projectData)
@@ -202,6 +202,10 @@ function SettingsPage() {
     setNewCustomer(prev => ({ ...prev, [field]: value }))
   }
 
+  const handleChangeProgram = (field, value) => {
+    setNewProgram(prev => ({ ...prev, [field]: value }))
+  }
+
   const handleChangeNewUser = (field, value) => {
     setNewUser(prev => ({ ...prev, [field]: value }))
   }
@@ -231,18 +235,6 @@ function SettingsPage() {
         },
       }
     })
-  }
-
-  const handleClearRequest = (requestId) => {
-    removePasswordChangeRequest(requestId)
-    showSuccess('Şifre değiştirme bildirimi temizlendi.')
-  }
-
-  const handleClearAllRequests = () => {
-    if (!window.confirm('Tüm şifre değiştirme bildirimlerini temizlemek istiyor musunuz?')) return
-
-    clearPasswordChangeRequests()
-    showSuccess('Tüm şifre değiştirme bildirimleri temizlendi.')
   }
 
   const handleEditCustomer = (customer) => {
@@ -301,6 +293,67 @@ function SettingsPage() {
       await loadAdminData()
     } catch (deleteError) {
       showError(deleteError, 'Müşteri silinirken hata oluştu.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEditProgram = (program) => {
+    setEditingProgramId(program.programId)
+    setNewProgram({
+      ProgramName: program.programName,
+      ProgramDescription: program.programDescription || '',
+      ProgramStatus: program.programStatus,
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCancelProgramEdit = () => {
+    setEditingProgramId(null)
+    setNewProgram({
+      ProgramName: '',
+      ProgramDescription: '',
+      ProgramStatus: programStatusOptions[0],
+    })
+  }
+
+  const handleSaveProgram = async (event) => {
+    event.preventDefault()
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      if (editingProgramId) {
+        await projectService.updateProgram(editingProgramId, newProgram)
+        showSuccess('Program başarıyla güncellendi.')
+      } else {
+        await projectService.createProgram(newProgram)
+        showSuccess('Program başarıyla oluşturuldu.')
+      }
+
+      handleCancelProgramEdit()
+      await loadAdminData()
+    } catch (saveError) {
+      showError(saveError, 'Program kaydedilirken hata oluştu. Lütfen alanları kontrol edin.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteProgram = async (id) => {
+    if (!window.confirm('Programı silmek istediğinizden emin misiniz?')) return
+
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      await projectService.deleteProgram(id)
+      showSuccess('Program başarıyla silindi.')
+      await loadAdminData()
+    } catch (deleteError) {
+      showError(deleteError, 'Program silinirken hata oluştu.')
     } finally {
       setLoading(false)
     }
@@ -436,63 +489,12 @@ function SettingsPage() {
                 onClick={() => setActiveTab(tab.id)}
               >
                 <span>{tab.label}</span>
-                {tab.id === 'notifications' && passwordChangeRequests.length > 0 && (
-                  <strong>{passwordChangeRequests.length}</strong>
-                )}
                 {tab.id === 'logs' && auditLogs.length > 0 && (
                   <small>{auditLogs.length}</small>
                 )}
               </button>
             ))}
           </nav>
-
-          {activeTab === 'notifications' && (
-            <section className="dashboard-card full-width settings-panel">
-              <div className="settings-card-header settings-card-header-with-action">
-                <div>
-                  <h3>Şifre Değiştirme İstekleri</h3>
-                  <span>Giriş ekranından gelen şifre değiştirme taleplerini buradan takip edebilirsiniz.</span>
-                </div>
-                {passwordChangeRequests.length > 0 && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={handleClearAllRequests}
-                  >
-                    Tümünü Temizle
-                  </button>
-                )}
-              </div>
-
-              {passwordChangeRequests.length === 0 ? (
-                <div className="settings-empty-state">
-                  <strong>Bekleyen bildirim yok</strong>
-                  <span>Yeni bir şifre değiştirme isteği geldiğinde burada görünecek.</span>
-                </div>
-              ) : (
-                <ul className="password-request-list">
-                  {passwordChangeRequests.map(request => (
-                    <li key={request.id} className="password-request-item">
-                      <div className="password-request-avatar">{getInitials(request.fullName) || '?'}</div>
-                      <div className="password-request-content">
-                        <strong>{request.fullName}</strong>
-                        <span>{request.email}</span>
-                        <small>{new Date(request.requestedAt).toLocaleString('tr-TR')}</small>
-                        <p>{request.message}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="request-clear-button"
-                        onClick={() => handleClearRequest(request.id)}
-                      >
-                        Temizle
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          )}
 
           {activeTab === 'users' && (
             <div className="settings-panel-stack">
@@ -522,7 +524,7 @@ function SettingsPage() {
                         type="email"
                         value={newUser.Email}
                         onChange={event => handleChangeNewUser('Email', event.target.value)}
-                        placeholder="ornek@sirket.com"
+                        placeholder="kullanici@example.test"
                         required
                       />
                     </div>

@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from '../router'
 import Pagination from '../components/Pagination'
 import { projectService } from '../services/projectService'
-import { useAlert } from '../components/AlertProvider'
+import { useAlert } from '../components/alertContext'
 import {
   HEALTH_STATUS,
   HEALTH_STATUS_OPTIONS,
