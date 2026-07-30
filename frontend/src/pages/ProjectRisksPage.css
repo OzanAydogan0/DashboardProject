@@ -135,7 +135,8 @@
 
 .btn-primary,
 .btn-secondary,
-.btn-danger {
+.btn-danger,
+.btn-related {
   border: none;
   border-radius: 8px;
   padding: 9px 14px;
@@ -157,6 +158,21 @@
 .btn-danger {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+.risk-row-actions {
+  min-width: 210px;
+  flex-wrap: wrap;
+}
+
+.btn-related-issue {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.btn-related-action {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .permission-note,

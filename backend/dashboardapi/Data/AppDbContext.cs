@@ -65,6 +65,10 @@ public partial class AppDbContext : DbContext
 
             entity.HasIndex(e => new { e.ProjectId, e.ActionStatus, e.ActionDueDate }, "idx_actions_project_status_due");
 
+            entity.HasIndex(e => e.IssueId, "idx_actions_issue_id");
+
+            entity.HasIndex(e => e.RiskId, "idx_actions_risk_id");
+
             entity.Property(e => e.ActionId).HasColumnName("action_id");
             entity.Property(e => e.ActionDescription).HasColumnName("action_description");
             entity.Property(e => e.ActionDueDate)
@@ -87,7 +91,9 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("DATETIME")
                 .HasColumnName("created_at");
             entity.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
+            entity.Property(e => e.IssueId).HasColumnName("issue_id");
             entity.Property(e => e.ProjectId).HasColumnName("project_id");
+            entity.Property(e => e.RiskId).HasColumnName("risk_id");
             entity.Property(e => e.SourceReference).HasColumnName("source_reference");
             entity.Property(e => e.SourceType).HasColumnName("source_type");
             entity.Property(e => e.UpdatedAt)
@@ -104,7 +110,15 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.CreatedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            entity.HasOne(d => d.Issue).WithMany(p => p.Actions)
+                .HasForeignKey(d => d.IssueId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasOne(d => d.Project).WithMany(p => p.Actions).HasForeignKey(d => d.ProjectId);
+
+            entity.HasOne(d => d.Risk).WithMany(p => p.Actions)
+                .HasForeignKey(d => d.RiskId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasOne(d => d.UpdatedByUser).WithMany(p => p.ActionUpdatedByUsers)
                 .HasForeignKey(d => d.UpdatedByUserId)
@@ -230,6 +244,8 @@ public partial class AppDbContext : DbContext
 
             entity.HasIndex(e => new { e.ProjectId, e.IssueStatus, e.IssuePriority }, "idx_issues_project_status_priority");
 
+            entity.HasIndex(e => e.RiskId, "idx_issues_risk_id");
+
             entity.Property(e => e.IssueId).HasColumnName("issue_id");
             entity.Property(e => e.ClosedDate)
                 .HasColumnType("DATE")
@@ -255,6 +271,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("DATE")
                 .HasColumnName("opened_date");
             entity.Property(e => e.ProjectId).HasColumnName("project_id");
+            entity.Property(e => e.RiskId).HasColumnName("risk_id");
             entity.Property(e => e.RootCause).HasColumnName("root_cause");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
@@ -271,6 +288,10 @@ public partial class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(d => d.Project).WithMany(p => p.Issues).HasForeignKey(d => d.ProjectId);
+
+            entity.HasOne(d => d.Risk).WithMany(p => p.Issues)
+                .HasForeignKey(d => d.RiskId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasOne(d => d.UpdatedByUser).WithMany(p => p.IssueUpdatedByUsers)
                 .HasForeignKey(d => d.UpdatedByUserId)

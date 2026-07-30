@@ -74,6 +74,6 @@ public static class AuthEndpoints
         {
             var hash = BCrypt.Net.BCrypt.HashPassword(password);
             return Results.Ok(new { PlainText = password, BcryptHash = hash });
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("Sistem Yöneticisi"));
     }
 }

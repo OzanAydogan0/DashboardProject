@@ -159,6 +159,8 @@ function ActionsPage({ projectId }) {
               <tr>
                 <th>Aksiyon Tanımı</th>
                 <th>Proje</th>
+                <th>Bağlı Risk</th>
+                <th>Bağlı Sorun</th>
                 <th>Sorumlu</th>
                 <th className="text-center">Hedef Tarih</th>
                 <th className="text-center">Durum</th>
@@ -180,6 +182,15 @@ function ActionsPage({ projectId }) {
                     </td>
                     <td className="action-owner-cell">
                       {getProjectName(action)}
+                    </td>
+                    <td className="action-owner-cell">
+                      {action.riskTitle || action.RiskTitle || '-'}
+                    </td>
+                    <td className="action-owner-cell">
+                      <div>{action.issueTitle || action.IssueTitle || '-'}</div>
+                      {(action.issueId || action.IssueId) && (
+                        <small className="linked-record-id">Sorun ID: {action.issueId || action.IssueId}</small>
+                      )}
                     </td>
                     <td className="action-owner-cell">
                       {action.actionOwnerUserFullName || action.ActionOwnerUserFullName || action.actionOwnerUserId || 'Atanmamış'}
@@ -209,7 +220,7 @@ function ActionsPage({ projectId }) {
 
               {sortedActions.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="text-center status-message">
+                  <td colSpan="8" className="text-center status-message">
                     Veritabanında kayıtlı aksiyon bulunmamaktadır.
                   </td>
                 </tr>

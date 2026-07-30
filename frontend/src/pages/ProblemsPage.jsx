@@ -1,5 +1,5 @@
-import { useState, useEffect, useEffectEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
@@ -14,9 +14,11 @@ import { usePagination } from '../utils/usePagination';
 import './ProblemsPage.css';
 
 const emptyForm = {
+    riskId: '',
     issueTitle: '',
     issuePriority: 'Orta',
     issueOwnerUserId: '',
+    issueOwnerFullName: '',
     issueDueDate: '',
     issueStatus: 'Açık',
     issueImpact: 'Orta',
@@ -26,16 +28,23 @@ const emptyForm = {
 
 function ProblemsPage() {
     const { id: projectId } = useParams();
+    const location = useLocation();
+    const navigate = useNavigate();
     const { addAlert } = useAlert();
+    const consumedRiskCreateRef = useRef(null);
+    const issueFileInputRef = useRef(null);
 
     const [issues, setIssues] = useState([]);
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [formError, setFormError] = useState(null);
     const [form, setForm] = useState(emptyForm);
+    const [linkedRiskTitle, setLinkedRiskTitle] = useState('');
     const [editingIssueId, setEditingIssueId] = useState(null);
     const [showIssueModal, setShowIssueModal] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [isDeletingId, setIsDeletingId] = useState(null);
     const [priorityFilter, setPriorityFilter] = useState('Hepsi');
     const canWrite = canWriteProject();
@@ -112,11 +121,54 @@ function ProblemsPage() {
 
     const resetForm = () => {
         setEditingIssueId(null);
+        setLinkedRiskTitle('');
+        setFormError(null);
         setForm({
             ...emptyForm,
             issueOwnerUserId: getDefaultProjectAssigneeId(users)
         });
     };
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        const riskId = searchParams.get('createForRisk');
+
+        if (!riskId || consumedRiskCreateRef.current === riskId) return undefined;
+
+        const riskTitle = searchParams.get('riskTitle') || '';
+        const riskOwnerUserId = searchParams.get('riskOwnerUserId') || '';
+        const riskOwnerFullName = searchParams.get('riskOwnerFullName') || '';
+
+        const timeoutId = window.setTimeout(() => {
+            consumedRiskCreateRef.current = riskId;
+
+            if (canWrite) {
+                setEditingIssueId(null);
+                setLinkedRiskTitle(riskTitle);
+                setFormError(null);
+                setForm({
+                    ...emptyForm,
+                    riskId,
+                    issueOwnerUserId: riskOwnerUserId || getDefaultProjectAssigneeId(users),
+                    issueOwnerFullName: riskOwnerFullName
+                });
+                setShowIssueModal(true);
+            }
+
+            searchParams.delete('createForRisk');
+            searchParams.delete('riskTitle');
+            searchParams.delete('riskOwnerUserId');
+            searchParams.delete('riskOwnerFullName');
+
+            const nextSearch = searchParams.toString();
+            navigate(
+                `${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`,
+                { replace: true }
+            );
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [canWrite, location.pathname, location.search, navigate, users]);
 
     const openCreateModal = () => {
         resetForm();
@@ -133,11 +185,12 @@ function ProblemsPage() {
         if (!projectId) return;
 
         setIsSubmitting(true);
-        setError(null);
+        setFormError(null);
 
         try {
             const payload = {
                 projectId,
+                riskId: form.riskId || null,
                 issueTitle: form.issueTitle,
                 issuePriority: form.issuePriority,
                 issueOwnerUserId: form.issueOwnerUserId,
@@ -159,19 +212,63 @@ function ProblemsPage() {
             addAlert(editingIssueId ? 'Sorun kaydı güncellendi.' : 'Yeni sorun kaydı eklendi.', 'success');
         } catch (err) {
             const backendMessage = err.response?.data?.message || err.message || 'Sorun kaydı işlenemedi.';
-            setError(backendMessage);
+            setFormError(backendMessage);
             addAlert(backendMessage, 'error');
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    const handleExcelImport = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file || !projectId) return;
+
+        setIsImporting(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await projectService.importProjectIssuesExcel(projectId, formData);
+            const result = response.data || response;
+            const isSuccess = result.success ?? result.Success;
+            const importedCount = result.totalImported ?? result.TotalImported ?? 0;
+            const failedCount = result.totalFailed ?? result.TotalFailed ?? 0;
+            const errors = result.errors ?? result.Errors ?? [];
+
+            if (isSuccess && failedCount === 0) {
+                addAlert(`Excel içe aktarma tamamlandı. Eklenen sorun sayısı: ${importedCount}`, 'success');
+            } else {
+                const errorDetails = errors.length > 0 ? ` Hata detayları: ${errors.join(' • ')}` : '';
+                addAlert(
+                    `İşlem tamamlandı. Başarılı: ${importedCount}, Hatalı/Atlanan: ${failedCount}.${errorDetails}`,
+                    'info'
+                );
+            }
+
+            await fetchIssues();
+        } catch (err) {
+            const message = err.response?.data?.message || 'Excel dosyası yüklenirken sunucuda bir hata oluştu.';
+            addAlert(message, 'error');
+        } finally {
+            setIsImporting(false);
+            event.target.value = '';
+            if (issueFileInputRef.current) {
+                issueFileInputRef.current.value = '';
+            }
+        }
+    };
+
     const handleEdit = (issue) => {
         setEditingIssueId(issue.issueId);
+        setLinkedRiskTitle(issue.riskTitle || '');
+        setFormError(null);
         setForm({
+            riskId: issue.riskId || '',
             issueTitle: issue.issueTitle || '',
             issuePriority: issue.issuePriority || 'Orta',
-            issueOwnerUserId: getValidProjectAssigneeId(users, issue.issueOwnerUserId),
+            issueOwnerUserId: getValidProjectAssigneeId(users, issue.issueOwnerUserId) || issue.issueOwnerUserId || issue.IssueOwnerUserId || '',
+            issueOwnerFullName: issue.issueOwnerFullName || issue.IssueOwnerFullName || issue.issueOwnerUser?.fullName || '',
             issueDueDate: issue.issueDueDate ? new Date(issue.issueDueDate).toISOString().slice(0, 10) : '',
             issueStatus: issue.issueStatus || 'Açık',
             issueImpact: issue.issueImpact || 'Orta',
@@ -179,6 +276,24 @@ function ProblemsPage() {
             issueResolution: issue.issueResolution || ''
         });
         setShowIssueModal(true);
+    };
+
+    const handleCreateAction = (issue) => {
+        if (!projectId) return;
+
+        const searchParams = new URLSearchParams({
+            tab: 'actions',
+            createForIssue: issue.issueId,
+            issueTitle: issue.issueTitle || '',
+            issueOwnerUserId: issue.issueOwnerUserId || issue.IssueOwnerUserId || '',
+            issueOwnerFullName:
+                issue.issueOwnerFullName ||
+                issue.IssueOwnerFullName ||
+                issue.issueOwnerUser?.fullName ||
+                ''
+        });
+
+        navigate(`/projects/${projectId}?${searchParams.toString()}`);
     };
 
     const handleSoftDelete = async (issue) => {
@@ -191,6 +306,7 @@ function ProblemsPage() {
 
         try {
             await projectService.updateIssue(issue.issueId, {
+                riskId: issue.riskId || null,
                 issueStatus: 'Kapalı',
                 issueResolution: 'Soft delete ile kapatıldı',
                 issueTitle: issue.issueTitle || '',
@@ -217,9 +333,27 @@ function ProblemsPage() {
                 <div className="card-header problems-header">
                     <h2>Sorun (Issue) Kayıtları</h2>
                     {canWrite && (
-                        <button type="button" className="btn-primary" onClick={openCreateModal}>
-                            Yeni Sorun
-                        </button>
+                        <div className="problems-header-actions">
+                            <input
+                                ref={issueFileInputRef}
+                                type="file"
+                                accept=".xlsx"
+                                onChange={handleExcelImport}
+                                hidden
+                            />
+                            <button
+                                type="button"
+                                className="issue-import-btn"
+                                onClick={() => issueFileInputRef.current?.click()}
+                                disabled={isImporting}
+                                title="Zorunlu: Sorun Tanımı, Öncelik, Etki, Durum, Hedef Tarihi, Sorumlu. İsteğe bağlı: Kök Neden, Çözüm, aynı projeden Bağlı Risk ID."
+                            >
+                                {isImporting ? '⏳ Aktarılıyor...' : '📂 Excel İçe Aktar'}
+                            </button>
+                            <button type="button" className="btn-primary" onClick={openCreateModal}>
+                                Yeni Sorun
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -254,7 +388,16 @@ function ProblemsPage() {
                                 <button type="button" className="modal-close-btn" onClick={closeIssueModal}>×</button>
                             </div>
 
+                            {formError && <div className="form-error-message" role="alert">{formError}</div>}
+
                             <form className="issue-form" onSubmit={handleSubmit}>
+                                {form.riskId && (
+                                    <div className="linked-risk-info">
+                                        <span>Bağlı Risk</span>
+                                        <strong>{linkedRiskTitle || 'Risk başlığı bulunamadı'}</strong>
+                                        <small>Risk ID: {form.riskId}</small>
+                                    </div>
+                                )}
                                 <div className="form-grid">
                                     <label>
                                         <span>Sorun Tanımı</span>
@@ -281,18 +424,24 @@ function ProblemsPage() {
                                         <span>Durum</span>
                                         <select name="issueStatus" value={form.issueStatus} onChange={handleInputChange}>
                                             <option value="Açık">Açık</option>
-                                            <option value="İzleniyor">İzleniyor</option>
+                                            <option value="Devam Ediyor">Devam Ediyor</option>
+                                            <option value="Çözüldü">Çözüldü</option>
                                             <option value="Kapalı">Kapalı</option>
                                         </select>
                                     </label>
                                     <label>
                                         <span>Hedef Tarihi</span>
-                                        <input type="date" name="issueDueDate" value={form.issueDueDate} onChange={handleInputChange} />
+                                        <input type="date" name="issueDueDate" value={form.issueDueDate} onChange={handleInputChange} required />
                                     </label>
                                     <label>
                                         <span>Sorumlu Kullanıcı</span>
                                         <select name="issueOwnerUserId" value={form.issueOwnerUserId} onChange={handleInputChange} required>
                                             <option value="">-- Proje Yöneticisi Seçiniz --</option>
+                                            {form.issueOwnerUserId && !users.some((user) => getUserRecordId(user) === form.issueOwnerUserId) && (
+                                                <option value={form.issueOwnerUserId}>
+                                                    {form.issueOwnerFullName || form.issueOwnerUserId}
+                                                </option>
+                                            )}
                                             {users.map((user) => {
                                                 const userId = getUserRecordId(user);
                                                 const userName = user.fullName || user.FullName || user.userName || user.UserName || user.name || userId;
@@ -336,6 +485,7 @@ function ProblemsPage() {
                                 <tr>
                                     <th>ID</th>
                                     <th>Sorun Tanımı</th>
+                                    <th>Bağlı Risk</th>
                                     <th>Öncelik</th>
                                     <th>Etki</th>
                                     <th>Durum</th>
@@ -353,6 +503,12 @@ function ProblemsPage() {
                                         <tr key={i.issueId}>
                                             <td><strong>{i.issueId}</strong></td>
                                             <td><div className="font-medium">{i.issueTitle || '-'}</div></td>
+                                            <td>
+                                                <div>{i.riskTitle || '-'}</div>
+                                                {i.riskId && (
+                                                    <small className="owner-id-text">Risk ID: {i.riskId}</small>
+                                                )}
+                                            </td>
                                             <td>
                                                 <span className="priority-badge" style={{ backgroundColor: priorityBadge.bg, color: priorityBadge.text }}>
                                                     {i.issuePriority || 'Belirtilmemiş'}
@@ -380,6 +536,9 @@ function ProblemsPage() {
                                             {canWrite && (
                                                 <td>
                                                     <div className="row-actions">
+                                                        <button type="button" className="btn-action" onClick={() => handleCreateAction(i)}>
+                                                            Aksiyon Ekle
+                                                        </button>
                                                         <button type="button" className="btn-secondary" onClick={() => handleEdit(i)}>
                                                             Düzenle
                                                         </button>

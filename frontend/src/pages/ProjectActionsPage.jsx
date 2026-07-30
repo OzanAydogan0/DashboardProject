@@ -1,5 +1,5 @@
-import { useState, useEffect, useEffectEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
@@ -19,7 +19,12 @@ const emptyForm = {
     actionDescription: '',
     sourceType: 'Risk',
     sourceReference: '',
+    riskId: '',
+    riskTitle: '',
+    issueId: '',
+    issueTitle: '',
     actionOwnerUserId: '',
+    actionOwnerFullName: '',
     actionDueDate: '',
     actionStatus: 'Açık',
     actionProgress: 0,
@@ -28,19 +33,24 @@ const emptyForm = {
 
 function ProjectActionsPage() {
     const { id: projectId } = useParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { addAlert } = useAlert();
+    const fileInputRef = useRef(null);
 
     const [actions, setActions] = useState([]);
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [formError, setFormError] = useState(null);
     const [form, setForm] = useState(emptyForm);
     const [editingActionId, setEditingActionId] = useState(null);
     const [showActionModal, setShowActionModal] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [isDeletingId, setIsDeletingId] = useState(null);
     const actionPagination = usePagination(actions);
     const canWrite = canWriteProject();
+    const hasLinkedSource = Boolean(form.riskId || form.issueId);
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
@@ -102,6 +112,78 @@ function ProjectActionsPage() {
         return () => window.clearTimeout(timeoutId);
     }, [projectId]);
 
+    const consumeRiskCreateRequest = useEffectEvent(() => {
+        const riskId = searchParams.get('createForRisk');
+        if (!riskId) return;
+
+        if (canWrite) {
+            const riskOwnerUserId = searchParams.get('riskOwnerUserId') || getDefaultProjectAssigneeId(users);
+
+            setEditingActionId(null);
+            setFormError(null);
+            setForm({
+                ...emptyForm,
+                sourceType: 'Risk',
+                sourceReference: riskId,
+                riskId,
+                riskTitle: searchParams.get('riskTitle') || '',
+                actionOwnerUserId: riskOwnerUserId,
+                actionOwnerFullName: searchParams.get('riskOwnerFullName') || ''
+            });
+            setShowActionModal(true);
+        }
+
+        const nextSearchParams = new URLSearchParams(searchParams);
+        nextSearchParams.delete('createForRisk');
+        nextSearchParams.delete('riskTitle');
+        nextSearchParams.delete('riskOwnerUserId');
+        nextSearchParams.delete('riskOwnerFullName');
+        setSearchParams(nextSearchParams, { replace: true });
+    });
+
+    useEffect(() => {
+        if (!searchParams.get('createForRisk')) return undefined;
+
+        const timeoutId = window.setTimeout(consumeRiskCreateRequest, 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [searchParams]);
+
+    const consumeIssueCreateRequest = useEffectEvent(() => {
+        const issueId = searchParams.get('createForIssue');
+        if (!issueId) return;
+
+        if (canWrite) {
+            const issueOwnerUserId = searchParams.get('issueOwnerUserId') || getDefaultProjectAssigneeId(users);
+
+            setEditingActionId(null);
+            setFormError(null);
+            setForm({
+                ...emptyForm,
+                sourceType: 'Sorun',
+                sourceReference: issueId,
+                issueId,
+                issueTitle: searchParams.get('issueTitle') || '',
+                actionOwnerUserId: issueOwnerUserId,
+                actionOwnerFullName: searchParams.get('issueOwnerFullName') || ''
+            });
+            setShowActionModal(true);
+        }
+
+        const nextSearchParams = new URLSearchParams(searchParams);
+        nextSearchParams.delete('createForIssue');
+        nextSearchParams.delete('issueTitle');
+        nextSearchParams.delete('issueOwnerUserId');
+        nextSearchParams.delete('issueOwnerFullName');
+        setSearchParams(nextSearchParams, { replace: true });
+    });
+
+    useEffect(() => {
+        if (!searchParams.get('createForIssue')) return undefined;
+
+        const timeoutId = window.setTimeout(consumeIssueCreateRequest, 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [searchParams]);
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
@@ -109,6 +191,7 @@ function ProjectActionsPage() {
 
     const resetForm = () => {
         setEditingActionId(null);
+        setFormError(null);
         setForm({
             ...emptyForm,
             actionOwnerUserId: getDefaultProjectAssigneeId(users)
@@ -125,22 +208,62 @@ function ProjectActionsPage() {
         resetForm();
     };
 
+    const handleExcelImport = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file || !projectId) return;
+
+        setIsImporting(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await projectService.importProjectActionsExcel(projectId, formData);
+            const result = response.data || response;
+            const isSuccess = result.success ?? result.Success;
+            const importedCount = result.totalImported ?? result.TotalImported ?? 0;
+            const failedCount = result.totalFailed ?? result.TotalFailed ?? 0;
+            const errors = result.errors ?? result.Errors ?? [];
+
+            if (isSuccess && failedCount === 0) {
+                addAlert(`Excel içe aktarma tamamlandı. Eklenen aksiyon sayısı: ${importedCount}`, 'success');
+            } else {
+                const errorDetails = errors.length > 0 ? ` Hata detayları: ${errors.join(' • ')}` : '';
+                addAlert(
+                    `İşlem tamamlandı. Başarılı: ${importedCount}, Hatalı/Atlanan: ${failedCount}.${errorDetails}`,
+                    'info'
+                );
+            }
+
+            await fetchActions();
+        } catch (err) {
+            const message = err.response?.data?.message || 'Excel dosyası yüklenirken sunucuda bir hata oluştu.';
+            addAlert(message, 'error');
+        } finally {
+            setIsImporting(false);
+            event.target.value = '';
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!projectId) return;
 
         setIsSubmitting(true);
-        setError(null);
+        setFormError(null);
 
         try {
             if (!form.actionDueDate) {
-                setError('Bitiş tarihi zorunludur.');
+                setFormError('Bitiş tarihi zorunludur.');
                 setIsSubmitting(false);
                 return;
             }
 
             if (!form.sourceType || !SOURCE_TYPES.includes(form.sourceType)) {
-                setError('Geçerli bir Kaynak Türü seçiniz.');
+                setFormError('Geçerli bir Kaynak Türü seçiniz.');
                 setIsSubmitting(false);
                 return;
             }
@@ -150,6 +273,8 @@ function ProjectActionsPage() {
                 actionDescription: form.actionDescription,
                 sourceType: form.sourceType,
                 sourceReference: form.sourceReference || '',
+                riskId: form.riskId || null,
+                issueId: form.issueId || null,
                 actionOwnerUserId: form.actionOwnerUserId,
                 actionDueDate: new Date(form.actionDueDate).toISOString(),
                 actionStatus: form.actionStatus || 'Açık',
@@ -168,7 +293,7 @@ function ProjectActionsPage() {
             addAlert(editingActionId ? 'Aksiyon güncellendi.' : 'Yeni aksiyon eklendi.', 'success');
         } catch (err) {
             const backendMessage = err.response?.data?.message || err.message || 'Aksiyon kaydı işlenemedi.';
-            setError(backendMessage);
+            setFormError(backendMessage);
             addAlert(backendMessage, 'error');
         } finally {
             setIsSubmitting(false);
@@ -176,12 +301,31 @@ function ProjectActionsPage() {
     };
 
     const handleEdit = (action) => {
+        const actionOwnerUserId =
+            action.actionOwnerUserId ||
+            action.ActionOwnerUserId ||
+            action.issueOwnerUserId ||
+            action.IssueOwnerUserId ||
+            '';
+
         setEditingActionId(action.actionId);
+        setFormError(null);
         setForm({
             actionDescription: action.actionDescription || '',
             sourceType: action.sourceType || '',
             sourceReference: action.sourceReference || '',
-            actionOwnerUserId: getValidProjectAssigneeId(users, action.actionOwnerUserId),
+            riskId: action.riskId || action.RiskId || '',
+            riskTitle: action.riskTitle || action.RiskTitle || '',
+            issueId: action.issueId || action.IssueId || '',
+            issueTitle: action.issueTitle || action.IssueTitle || '',
+            actionOwnerUserId: getValidProjectAssigneeId(users, actionOwnerUserId) || actionOwnerUserId,
+            actionOwnerFullName:
+                action.actionOwnerFullName ||
+                action.ActionOwnerFullName ||
+                action.issueOwnerFullName ||
+                action.IssueOwnerFullName ||
+                action.actionOwnerUser?.fullName ||
+                '',
             actionDueDate: action.actionDueDate ? new Date(action.actionDueDate).toISOString().slice(0, 10) : '',
             actionStatus: action.actionStatus || 'Açık',
             actionProgress: action.actionProgress ?? 0,
@@ -227,9 +371,27 @@ function ProjectActionsPage() {
                 <div className="card-header action-header">
                     <h2>Proje Aksiyonları (Actions)</h2>
                     {canWrite && (
-                        <button type="button" className="btn-primary" onClick={openCreateModal}>
-                            Yeni Aksiyon
-                        </button>
+                        <div className="action-header-actions">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".xlsx"
+                                onChange={handleExcelImport}
+                                hidden
+                            />
+                            <button
+                                type="button"
+                                className="import-action-btn"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isImporting}
+                                title="Zorunlu: Aksiyon Tanımı, Kaynak Türü, Öncelik, Durum, İlerleme %, Hedef Tarihi, Sorumlu. İsteğe bağlı: Kaynak Referans, Bağlı Risk ID veya Bağlı Sorun ID; ikisi aynı satırda kullanılamaz."
+                            >
+                                {isImporting ? '⏳ Aktarılıyor...' : '📂 Excel İçe Aktar'}
+                            </button>
+                            <button type="button" className="btn-primary" onClick={openCreateModal}>
+                                Yeni Aksiyon
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -245,6 +407,8 @@ function ProjectActionsPage() {
                                 <button type="button" className="modal-close-btn" onClick={closeActionModal}>×</button>
                             </div>
 
+                            {formError && <div className="form-error-message" role="alert">{formError}</div>}
+
                             <form className="action-form" onSubmit={handleSubmit}>
                                 <div className="form-grid">
                                     <label className="full-width">
@@ -253,7 +417,13 @@ function ProjectActionsPage() {
                                     </label>
                                     <label>
                                         <span>Kaynak Türü</span>
-                                        <select name="sourceType" value={form.sourceType} onChange={handleInputChange} required>
+                                        <select
+                                            name="sourceType"
+                                            value={form.sourceType}
+                                            onChange={handleInputChange}
+                                            disabled={hasLinkedSource}
+                                            required
+                                        >
                                             {SOURCE_TYPES.map(type => (
                                                 <option key={type} value={type}>{type}</option>
                                             ))}
@@ -261,8 +431,26 @@ function ProjectActionsPage() {
                                     </label>
                                     <label>
                                         <span>Kaynak Referans</span>
-                                        <input name="sourceReference" value={form.sourceReference} onChange={handleInputChange} placeholder="Ref / Referans" />
+                                        <input
+                                            name="sourceReference"
+                                            value={form.sourceReference}
+                                            onChange={handleInputChange}
+                                            placeholder="Ref / Referans"
+                                            readOnly={hasLinkedSource}
+                                        />
                                     </label>
+                                    {form.riskId && (
+                                        <label>
+                                            <span>Bağlı Risk</span>
+                                            <input value={form.riskTitle || form.riskId} readOnly />
+                                        </label>
+                                    )}
+                                    {form.issueId && (
+                                        <label>
+                                            <span>Bağlı Sorun</span>
+                                            <input value={form.issueTitle || form.issueId} readOnly />
+                                        </label>
+                                    )}
                                     <label>
                                         <span>Öncelik</span>
                                         <select name="actionPriority" value={form.actionPriority} onChange={handleInputChange}>
@@ -287,12 +475,17 @@ function ProjectActionsPage() {
                                     </label>
                                     <label>
                                         <span>Hedef Tarihi</span>
-                                        <input type="date" name="actionDueDate" value={form.actionDueDate} onChange={handleInputChange} />
+                                        <input type="date" name="actionDueDate" value={form.actionDueDate} onChange={handleInputChange} required />
                                     </label>
                                     <label>
                                         <span>Sorumlu Kullanıcı</span>
                                         <select name="actionOwnerUserId" value={form.actionOwnerUserId} onChange={handleInputChange} required>
                                             <option value="">-- Proje Yöneticisi Seçiniz --</option>
+                                            {form.actionOwnerUserId && !users.some((user) => getUserRecordId(user) === form.actionOwnerUserId) && (
+                                                <option value={form.actionOwnerUserId}>
+                                                    {form.actionOwnerFullName || form.actionOwnerUserId}
+                                                </option>
+                                            )}
                                             {users.map((user) => {
                                                 const userId = getUserRecordId(user);
                                                 const userName = user.fullName || user.FullName || user.userName || user.UserName || user.name || userId;
@@ -329,6 +522,8 @@ function ProjectActionsPage() {
                                     <th>ID</th>
                                     <th>Aksiyon Tanımı</th>
                                     <th>Kaynak / Ref</th>
+                                    <th>Bağlı Risk</th>
+                                    <th>Bağlı Sorun</th>
                                     <th>Öncelik</th>
                                     <th>Durum / İlerleme</th>
                                     <th>Sorumlu</th>
@@ -348,6 +543,18 @@ function ProjectActionsPage() {
                                                 <div>{a.sourceType || '-'}</div>
                                                 {a.sourceReference && (
                                                     <small className="secondary-text">Ref: {a.sourceReference}</small>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <div>{a.riskTitle || a.RiskTitle || '-'}</div>
+                                                {(a.riskId || a.RiskId) && (
+                                                    <small className="secondary-text">Risk ID: {a.riskId || a.RiskId}</small>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <div>{a.issueTitle || a.IssueTitle || '-'}</div>
+                                                {(a.issueId || a.IssueId) && (
+                                                    <small className="secondary-text">Sorun ID: {a.issueId || a.IssueId}</small>
                                                 )}
                                             </td>
                                             <td>

@@ -17,7 +17,7 @@ namespace DashboardApi.Tests.Integration;
 public sealed class ExportSecurityTests
 {
         [Fact]
-    public async Task GenerateHashEndpoint_AnonymousRequest_ReturnsNotFound()
+    public async Task GenerateHashEndpoint_AnonymousRequest_ReturnsUnauthorized()
     {
         // Arrange
         await using var factory = new TestWebApplicationFactory();
@@ -41,7 +41,7 @@ public sealed class ExportSecurityTests
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.NotFound,
+            HttpStatusCode.Unauthorized,
             response.StatusCode);
 
         var responseBody =

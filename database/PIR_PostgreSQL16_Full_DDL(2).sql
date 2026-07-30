@@ -211,6 +211,7 @@ CREATE TABLE risks (
 CREATE TABLE issues (
     issue_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
+    risk_id TEXT,
     issue_title TEXT NOT NULL,
     issue_priority TEXT NOT NULL,
     issue_owner_user_id TEXT NOT NULL,
@@ -227,6 +228,7 @@ CREATE TABLE issues (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT pk_issues PRIMARY KEY (issue_id),
     CONSTRAINT fk_issues_project_id FOREIGN KEY (project_id) REFERENCES projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_issues_risk_id FOREIGN KEY (risk_id) REFERENCES risks (risk_id) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT ck_issues_issue_priority CHECK (issue_priority IN ('Düşük','Orta','Yüksek','Kritik')),
     CONSTRAINT fk_issues_issue_owner_user_id FOREIGN KEY (issue_owner_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT ck_issues_issue_status CHECK (issue_status IN ('Açık','Devam Ediyor','Çözüldü','Kapalı')),
@@ -239,6 +241,8 @@ CREATE TABLE issues (
 CREATE TABLE actions (
     action_id TEXT NOT NULL,
     project_id TEXT NOT NULL,
+    risk_id TEXT,
+    issue_id TEXT,
     action_description TEXT NOT NULL,
     source_type TEXT NOT NULL,
     source_reference TEXT,
@@ -254,6 +258,8 @@ CREATE TABLE actions (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT pk_actions PRIMARY KEY (action_id),
     CONSTRAINT fk_actions_project_id FOREIGN KEY (project_id) REFERENCES projects (project_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_actions_risk_id FOREIGN KEY (risk_id) REFERENCES risks (risk_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_actions_issue_id FOREIGN KEY (issue_id) REFERENCES issues (issue_id) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT ck_actions_source_type CHECK (source_type IN ('Risk','Sorun','Kilometre Taşı','PIR','Yönetim Kararı','Diğer')),
     CONSTRAINT fk_actions_action_owner_user_id FOREIGN KEY (action_owner_user_id) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT ck_actions_action_status CHECK (action_status IN ('Açık','Devam Ediyor','Tamamlandı','İptal')),
@@ -396,8 +402,11 @@ CREATE INDEX idx_risks_project_status_score ON risks (project_id, risk_status, r
 CREATE INDEX idx_risks_owner_due ON risks (risk_owner_user_id, risk_due_date) WHERE risk_status <> 'Kapalı';
 CREATE INDEX idx_issues_project_status_priority ON issues (project_id, issue_status, issue_priority);
 CREATE INDEX idx_issues_owner_due ON issues (issue_owner_user_id, issue_due_date) WHERE issue_status <> 'Kapalı';
+CREATE INDEX idx_issues_risk_id ON issues (risk_id);
 CREATE INDEX idx_actions_project_status_due ON actions (project_id, action_status, action_due_date);
 CREATE INDEX idx_actions_owner_due ON actions (action_owner_user_id, action_due_date) WHERE action_status <> 'Tamamlandı';
+CREATE INDEX idx_actions_risk_id ON actions (risk_id);
+CREATE INDEX idx_actions_issue_id ON actions (issue_id);
 CREATE INDEX idx_evm_records_project_period_desc ON evm_records (project_id, period DESC);
 CREATE INDEX idx_management_decisions_project_status_due ON management_decisions (project_id, decision_status, decision_due_date);
 CREATE INDEX idx_audit_logs_entity ON audit_logs (entity_name, entity_id, changed_at DESC);

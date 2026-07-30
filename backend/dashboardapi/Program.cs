@@ -112,6 +112,7 @@ app.MapPortfolioEndpoints();
 app.MapGovernanceEndpoints();
 app.MapSystemEndpoints();
 app.MapExcelImportEndpoints();
+app.MapProjectRecordExcelImportEndpoints();
 
 app.Run();
 

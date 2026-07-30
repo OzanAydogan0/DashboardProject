@@ -1,5 +1,5 @@
 import { useState, useEffect, useEffectEvent, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import Pagination from '../components/Pagination';
 import { projectService } from '../services/projectService';
 import { useAlert } from '../components/AlertProvider';
@@ -26,6 +26,7 @@ const emptyForm = {
 
 const ProjectRisksPage = () => {
     const { id: projectId } = useParams();
+    const navigate = useNavigate();
     const { addAlert } = useAlert();
     const fileInputRef = useRef(null);
 
@@ -102,6 +103,21 @@ const ProjectRisksPage = () => {
     const openCreateModal = () => {
         resetForm();
         setShowRiskModal(true);
+    };
+
+    const openRelatedCreateModal = (risk, relatedType) => {
+        if (!projectId || !risk?.riskId) return;
+
+        const targetTab = relatedType === 'issue' ? 'issues' : 'actions';
+        const query = new URLSearchParams({
+            tab: targetTab,
+            createForRisk: risk.riskId,
+            riskTitle: risk.riskTitle || risk.riskId,
+            riskOwnerUserId: risk.riskOwnerUserId || '',
+            riskOwnerFullName: risk.riskOwnerFullName || risk.RiskOwnerFullName || ''
+        });
+
+        navigate(`/projects/${projectId}?${query.toString()}`);
     };
 
     const closeRiskModal = () => {
@@ -400,7 +416,21 @@ const ProjectRisksPage = () => {
                                         </td>
                                         {canWrite && (
                                             <td>
-                                                <div className="row-actions">
+                                                <div className="row-actions risk-row-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="btn-related btn-related-issue"
+                                                        onClick={() => openRelatedCreateModal(risk, 'issue')}
+                                                    >
+                                                        Sorun Ekle
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-related btn-related-action"
+                                                        onClick={() => openRelatedCreateModal(risk, 'action')}
+                                                    >
+                                                        Aksiyon Ekle
+                                                    </button>
                                                     <button type="button" className="btn-secondary" onClick={() => handleEdit(risk)}>
                                                         Düzenle
                                                     </button>

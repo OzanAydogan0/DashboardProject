@@ -9,6 +9,8 @@ public partial class Issue
 
     public string ProjectId { get; set; } = null!;
 
+    public string? RiskId { get; set; }
+
     public string IssueTitle { get; set; } = null!;
 
     public string IssuePriority { get; set; } = null!;
@@ -37,11 +39,15 @@ public partial class Issue
 
     public DateTime UpdatedAt { get; set; }
 
+    public virtual ICollection<Action> Actions { get; set; } = new List<Action>();
+
     public virtual User CreatedByUser { get; set; } = null!;
 
     public virtual User IssueOwnerUser { get; set; } = null!;
 
     public virtual Project Project { get; set; } = null!;
+
+    public virtual Risk? Risk { get; set; }
 
     public virtual User UpdatedByUser { get; set; } = null!;
 }

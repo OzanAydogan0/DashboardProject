@@ -247,7 +247,7 @@ public static class GovernanceEndpoints
     string fileName = $"{reportData.ProjectCode ?? "PRJ"}_PIR_{reportData.Period}.pdf";
 
     return Results.File(pdfBytes, "application/pdf", fileName);
-});
+}).RequireAuthorization();
 
 // 6. PIR Raporunu Excel olarak dışa aktarma
         app.MapGet("pirs/{id}/export/excel", async (string id, AppDbContext db) =>
@@ -279,6 +279,6 @@ public static class GovernanceEndpoints
         contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
         fileDownloadName: fileName
     );
-});
+}).RequireAuthorization();
     }
 }

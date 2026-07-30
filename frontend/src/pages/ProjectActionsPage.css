@@ -20,6 +20,29 @@
   font-size: 18px;
 }
 
+.action-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.import-action-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  background: #10b981;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.import-action-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .action-modal-overlay {
   position: fixed;
   inset: 0;
@@ -155,6 +178,16 @@
 
 .error-text {
   color: #b91c1c;
+}
+
+.form-error-message {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
 }
 
 .action-table {

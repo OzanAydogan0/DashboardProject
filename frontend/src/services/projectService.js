@@ -167,6 +167,22 @@ importProjectsExcel: (formData) => {
     });
   },
 
+  importProjectIssuesExcel: (projectId, formData) => {
+    return api.post(`/projects/${projectId}/issues/import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  importProjectActionsExcel: (projectId, formData) => {
+    return api.post(`/projects/${projectId}/actions/import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
   // --- Sorunlar (Issues) ---
   getProjectIssues: async (projectId) => {
     const response = await api.get(`/projects/${projectId}/issues`);
