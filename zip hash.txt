@@ -1,0 +1,3 @@
+SHA256 hash of DashboardProject-v1.0.0-source.zip:
+866e9aaf2f64d661593dc5c7c858d6d4e4c16ddc9f8b9bbd25b4ef4e243dc572
+CertUtil: -hashfile command completed successfully.
